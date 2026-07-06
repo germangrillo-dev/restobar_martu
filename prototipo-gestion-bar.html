@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>El Mostrador — Prototipo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>body{margin:0;background:#1a1715}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const Ic = ({ paths, size = 16 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths.map((d, i) => <path key={i} d={d} />)}</svg>);
+const Plus = (p) => <Ic {...p} paths={["M12 5v14", "M5 12h14"]} />;
+const Minus = (p) => <Ic {...p} paths={["M5 12h14"]} />;
+const Trash2 = (p) => <Ic {...p} paths={["M3 6h18", "M8 6V4h8v2", "M6 6l1 14h10l1-14"]} />;
+const Send = (p) => <Ic {...p} paths={["M22 2L11 13", "M22 2l-7 20-4-9-9-4z"]} />;
+const RotateCcw = (p) => <Ic {...p} paths={["M3 3v6h6", "M3.5 9a9 9 0 1 0 2.1-3.4L3 9"]} />;
+const Package = (p) => <Ic {...p} paths={["M21 8l-9-5-9 5 9 5 9-5z", "M3 8v8l9 5 9-5V8", "M12 13v8"]} />;
+const ClipboardList = (p) => <Ic {...p} paths={["M9 4h6v3H9z", "M7 5H5v15h14V5h-2", "M9 11h6", "M9 15h6"]} />;
+const AlertTriangle = (p) => <Ic {...p} paths={["M12 3l10 18H2z", "M12 9v5", "M12 18h.01"]} />;
+const CheckCircle2 = (p) => <Ic {...p} paths={["M22 12a10 10 0 1 1-5-8.66", "M8 12l3 3 6-6"]} />;
+const X = (p) => <Ic {...p} paths={["M6 6l12 12", "M18 6L6 18"]} />;
+const Bike = (p) => <Ic {...p} paths={["M6 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M9 15l3-7h4", "M12 8l-2-3H7"]} />;
+const Printer = (p) => <Ic {...p} paths={["M6 9V3h12v6", "M6 18H4v-7h16v7h-2", "M8 14h8v6H8z"]} />;
+const MsgIcon = (p) => <Ic {...p} paths={["M21 11.5a8.4 8.4 0 0 1-9 8.3 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 12.5 3a8.4 8.4 0 0 1 8.5 8.5z"]} />;
+const User = (p) => <Ic {...p} paths={["M20 21a8 8 0 1 0-16 0", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"]} />;
+const LogOut = (p) => <Ic {...p} paths={["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"]} />;
+const Lock = (p) => <Ic {...p} paths={["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"]} />;
+const ArrowLeft = (p) => <Ic {...p} paths={["M19 12H5", "M12 19l-7-7 7-7"]} />;
+const Users = (p) => <Ic {...p} paths={["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M23 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"]} />;
+const Cart = (p) => <Ic {...p} paths={["M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M20 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M1 2h3l2.6 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"]} />;
+const FileText = (p) => <Ic {...p} paths={["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M8 13h8", "M8 17h8"]} />;
+const Truck = (p) => <Ic {...p} paths={["M1 3h15v13H1z", "M16 8h4l3 3v5h-7z", "M5.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M18.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"]} />;
+const Pencil = (p) => <Ic {...p} paths={["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"]} />;
+const Book = (p) => <Ic {...p} paths={["M4 19.5A2.5 2.5 0 0 1 6.5 17H20", "M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"]} />;
+const Smartphone = (p) => <Ic {...p} paths={["M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M10 17h4"]} />;
+const QrCode = (p) => <Ic {...p} paths={["M3 3h8v8H3z", "M13 3h8v8h-8z", "M3 13h8v8H3z", "M13 17h2", "M17 13h2", "M13 13h2v2h-2z", "M19 19h2v2h-2z"]} />;
+const Settings = (p) => <Ic {...p} paths={["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"]} />;
+const LayoutGrid = (p) => <Ic {...p} paths={["M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z"]} />;
+const Flame = (p) => <Ic {...p} paths={["M12 2c-4 4-6 8-6 12a6 6 0 0 0 12 0c0-4-2-8-6-12z", "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M10 18c-2 1.5-2 3.5 0 5"]} />;
+const DollarSign = (p) => <Ic {...p} paths={["M12 3v18", "M17 7.5C17 5.57 14.76 4 12 4c-2.76 0-5 1.57-5 3.5S9.24 11 12 11s5 1.57 5 3.5S14.76 18 12 18s-5-1.57-5-3.5"]} />;
+const Globe = (p) => <Ic {...p} paths={["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M2 12h20", "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"]} />;
+
+const C = { base: "#1a1715", raised: "#262120", raised2: "#2f2926", border: "#3a322e", text: "#f5efe6", muted: "#a89a8c", amber: "#e8a23d", green: "#6fa84a", red: "#d9543f", blue: "#5b8fd6" };
+const UNIDADES = ["g", "kg", "ml", "L", "u"];
+const CONDICIONES = ["Responsable Inscripto", "Monotributo", "Exento", "Consumidor Final"];
+
+const INSUMOS_INI = [
+  { id: "masa", nombre: "Masa de pizza", unidad: "u", presentacion: "Plancha x10", inicial: 30, min: 8, unidadCompra: "u", factorCompra: 1 },
+  { id: "muzza", nombre: "Muzzarella", unidad: "g", presentacion: "Horma 5 kg", inicial: 10000, min: 2000, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "tomate", nombre: "Tomate", unidad: "u", presentacion: "Cajón x20", inicial: 40, min: 10, unidadCompra: "kg", factorCompra: 3 },
+  { id: "cebolla", nombre: "Cebolla", unidad: "u", presentacion: "Bolsa x25", inicial: 20, min: 5, unidadCompra: "kg", factorCompra: 4 },
+  { id: "jamon", nombre: "Jamón", unidad: "g", presentacion: "Pieza 3 kg", inicial: 1500, min: 400, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "morron", nombre: "Morrón", unidad: "u", presentacion: "Cajón x15", inicial: 15, min: 4, unidadCompra: "u", factorCompra: 1 },
+  { id: "milcarne", nombre: "Milanesa cruda", unidad: "u", presentacion: "Caja x40", inicial: 40, min: 10, unidadCompra: "u", factorCompra: 1 },
+  { id: "huevo", nombre: "Huevo", unidad: "u", presentacion: "Maple x30", inicial: 60, min: 15, unidadCompra: "u", factorCompra: 1 },
+  { id: "noquis", nombre: "Ñoquis", unidad: "g", presentacion: "Pack 1 kg", inicial: 6000, min: 1500, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "ravioles", nombre: "Ravioles", unidad: "g", presentacion: "Pack 1 kg", inicial: 6000, min: 1500, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "tallarines", nombre: "Tallarines", unidad: "g", presentacion: "Pack 1 kg", inicial: 4000, min: 1000, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "salsa", nombre: "Salsa de tomate", unidad: "g", presentacion: "Lata 1 kg", inicial: 8000, min: 2000, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "pan", nombre: "Pan de hamburguesa", unidad: "u", presentacion: "Bolsa x12", inicial: 40, min: 10, unidadCompra: "u", factorCompra: 1 },
+  { id: "carne", nombre: "Carne hamburguesa", unidad: "g", presentacion: "Paquete 5 kg", inicial: 6000, min: 1500, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "cheddar", nombre: "Queso cheddar", unidad: "g", presentacion: "Sachet 3 kg", inicial: 2400, min: 600, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "panceta", nombre: "Panceta", unidad: "g", presentacion: "Paquete 1 kg", inicial: 1500, min: 400, unidadCompra: "kg", factorCompra: 1000 },
+  { id: "lechuga", nombre: "Lechuga", unidad: "u", presentacion: "Bolsa x12", inicial: 12, min: 3, unidadCompra: "u", factorCompra: 1 },
+  { id: "gaseosa", nombre: "Gaseosa lata", unidad: "u", presentacion: "Pack x6", inicial: 48, min: 12, unidadCompra: "u", factorCompra: 1 },
+  { id: "cerveza", nombre: "Cerveza botella", unidad: "u", presentacion: "Cajón x24", inicial: 36, min: 10, unidadCompra: "u", factorCompra: 1 },
+  { id: "agua", nombre: "Agua botella", unidad: "u", presentacion: "Pack x6", inicial: 24, min: 6, unidadCompra: "u", factorCompra: 1 },
+];
+const COSTOS_INI = { masa: 1500, muzza: 5, tomate: 300, cebolla: 200, jamon: 6.5, morron: 400, milcarne: 1800, huevo: 250, noquis: 3, ravioles: 4, tallarines: 3, salsa: 2, pan: 400, carne: 8, cheddar: 7.2, panceta: 9, lechuga: 350, gaseosa: 900, cerveza: 1200, agua: 700 };
+const CATEGORIAS_DEF = ["Pizzas", "Milanesas", "Pastas", "Hamburguesas", "Bebidas"];
+const PRODUCTOS_INI = [
+  { id: "pz-muzza", ref: 1, cat: "Pizzas", nombre: "Muzzarella", precio: 7000, receta: [["masa", 1], ["muzza", 250], ["salsa", 150]] },
+  { id: "pz-napo", ref: 2, cat: "Pizzas", nombre: "Napolitana", precio: 8000, receta: [["masa", 1], ["muzza", 250], ["salsa", 150], ["tomate", 2]] },
+  { id: "pz-fuga", ref: 3, cat: "Pizzas", nombre: "Fugazzeta", precio: 8500, receta: [["masa", 1], ["muzza", 300], ["cebolla", 2]] },
+  { id: "pz-esp", ref: 4, cat: "Pizzas", nombre: "Especial", precio: 9000, receta: [["masa", 1], ["muzza", 250], ["salsa", 150], ["jamon", 60], ["morron", 1]] },
+  { id: "mi-simple", ref: 5, cat: "Milanesas", nombre: "Mila simple c/ papas", precio: 6500, receta: [["milcarne", 1], ["huevo", 1]] },
+  { id: "mi-napo", ref: 6, cat: "Milanesas", nombre: "Mila napolitana", precio: 8000, receta: [["milcarne", 1], ["huevo", 1], ["muzza", 100], ["jamon", 60], ["tomate", 1]] },
+  { id: "mi-caballo", ref: 7, cat: "Milanesas", nombre: "Mila a caballo", precio: 7500, receta: [["milcarne", 1], ["huevo", 3]] },
+  { id: "pa-noquis", ref: 8, cat: "Pastas", nombre: "Ñoquis c/ salsa", precio: 6000, receta: [["noquis", 250], ["salsa", 150]] },
+  { id: "pa-ravioles", ref: 9, cat: "Pastas", nombre: "Ravioles c/ salsa", precio: 6500, receta: [["ravioles", 250], ["salsa", 150]] },
+  { id: "pa-tallarines", ref: 10, cat: "Pastas", nombre: "Tallarines c/ salsa", precio: 6000, receta: [["tallarines", 200], ["salsa", 150]] },
+  { id: "ha-simple", ref: 11, cat: "Hamburguesas", nombre: "Hamburguesa simple", precio: 4500, receta: [["pan", 1], ["carne", 120], ["cheddar", 40]] },
+  { id: "ha-completa", ref: 12, cat: "Hamburguesas", nombre: "Hamburguesa completa", precio: 6500, receta: [["pan", 1], ["carne", 120], ["cheddar", 80], ["panceta", 40], ["lechuga", 1]] },
+  { id: "be-gaseosa", ref: 13, cat: "Bebidas", nombre: "Gaseosa", precio: 2000, receta: [["gaseosa", 1]] },
+  { id: "be-cerveza", ref: 14, cat: "Bebidas", nombre: "Cerveza", precio: 3000, receta: [["cerveza", 1]] },
+  { id: "be-agua", ref: 15, cat: "Bebidas", nombre: "Agua", precio: 1800, receta: [["agua", 1]] },
+];
+const PROVEEDORES_INI = [
+  { id: "sinrival", nombre: "SIN RIVAL SRL", cuit: "30-11111111-7", condicion: "Responsable Inscripto", rubro: "Fiambres y quesos", direccion: "Av. Mitre 1234", localidad: "Lomas de Zamora", telefono: "11-4444-5555", email: "ventas@sinrival.com" },
+  { id: "bebidas", nombre: "Reginald Lee S.A.", cuit: "30-53662310-4", condicion: "Responsable Inscripto", rubro: "Bebidas", direccion: "Ruta 205 Km 99", localidad: "Lobos", telefono: "02227-43-0018", email: "rlee@relesa.com.ar" },
+  { id: "lacteos", nombre: "Lácteos del Sur", cuit: "30-33333333-3", condicion: "Responsable Inscripto", rubro: "Lácteos", direccion: "Calle 12 N° 567", localidad: "Cañuelas", telefono: "11-3333-2222", email: "pedidos@lacteosdelsur.com" },
+];
+const ARTICULOS = [
+  { codigo: "05003076", desc: "Cheddar Tonadita 3kg sachet", prov: "sinrival", insumo: "cheddar", factor: 3000, bulto: "sachet" },
+  { codigo: "05003080", desc: "Cheddar Tonadita 140 fetas", prov: "sinrival", insumo: "cheddar", factor: 2800, bulto: "paquete" },
+  { codigo: "03002030", desc: "Jamón cocido pieza x3kg", prov: "sinrival", insumo: "jamon", factor: 3000, bulto: "pieza" },
+  { codigo: "05001010", desc: "Muzzarella horma x5kg", prov: "lacteos", insumo: "muzza", factor: 5000, bulto: "horma" },
+  { codigo: "0159", desc: "Coca-Cola 2250 P6", prov: "bebidas", insumo: "gaseosa", factor: 6, bulto: "P6" },
+  { codigo: "0359", desc: "Fanta Nar 2250 P6", prov: "bebidas", insumo: "gaseosa", factor: 6, bulto: "P6" },
+  { codigo: "07001001", desc: "Cerveza cajón x24", prov: "bebidas", insumo: "cerveza", factor: 24, bulto: "cajón" },
+  { codigo: "07001003", desc: "Agua 1500 P6", prov: "bebidas", insumo: "agua", factor: 6, bulto: "P6" },
+];
+const MESAS = [{ id: 1, asientos: 2 }, { id: 2, asientos: 2 }, { id: 3, asientos: 4 }, { id: 4, asientos: 4 }, { id: 5, asientos: 4 }, { id: 6, asientos: 6 }, { id: 7, asientos: 2 }, { id: 8, asientos: 4 }, { id: 9, asientos: 6 }, { id: 10, asientos: 4 }];
+const TIPOS_FAC = ["Factura A", "Factura B", "Factura C", "Pedido / Remito"];
+
+const peso = (n) => (Number.isInteger(n) ? n : Math.round(n));
+const pesos = (n) => "$" + Math.round(n).toLocaleString("es-AR");
+const dinero = (n) => "$" + (n || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+const hoy = () => new Date().toISOString().slice(0, 10);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const USUARIOS = [{ nombre: "Sofía (dueña)", rol: "admin", clave: "1234" }, { nombre: "Caja 1", rol: "cajero", clave: "1234" }, { nombre: "Visor Remoto", rol: "visor", clave: "1234" }];
+const lineaVacia = () => ({ lid: uid(), codigo: "", cantidad: "", unitario: "", descuento: "", internos: "" });
+const provVacio = () => ({ nombre: "", cuit: "", condicion: CONDICIONES[0], rubro: "", direccion: "", localidad: "", telefono: "", email: "" });
+let WA_NUMERO = (() => { try { return localStorage.getItem("elmo_wa_numero") || "5491155551234"; } catch { return "5491155551234"; } })();
+
+const generarMenuTexto = (prods, cats) => {
+  let txt = "🍕 *EL MOSTRADOR - MENÚ*\n\n";
+  cats.forEach(cat => {
+    const items = prods.filter(p => p.cat === cat);
+    if (!items.length) return;
+    txt += `*${cat.toUpperCase()}*\n`;
+    items.forEach(p => { txt += `${p.ref}. ${p.nombre} ${" ".repeat(Math.max(1, 28 - p.nombre.length - String(p.ref).length))}$${Math.round(p.precio).toLocaleString("es-AR")}\n`; });
+    txt += "\n";
+  });
+  txt += "📲 *Para pedir:* mandá los números separados por coma\n";
+  txt += "Ej: *1, 2, Germán, calle Siempre Viva 123*\n";
+  txt += "Para *cantidad* usá el formato *NxM* (ej: 2x1 = dos Muzzarella)\n";
+  return encodeURIComponent(txt);
+};
+
+const parsearPedidoWhatsApp = (texto, prods) => {
+  const datos = { cliente: "", direccion: "", telefono: "" };
+  const items = [];
+  const lineas = texto.split("\n").map(l => l.trim()).filter(Boolean);
+  for (const l of lineas) {
+    const cli = l.match(/^(?:cliente|nombre)[:\s]+(.+)/i);
+    if (cli) { datos.cliente = cli[1].trim(); continue; }
+    const dir = l.match(/^(?:direcci[oó]n|direccion|domicilio)[:\s]+(.+)/i);
+    if (dir) { datos.direccion = dir[1].trim(); continue; }
+    const tel = l.match(/^(?:tel[eé]fono|tel|telefono|celular|cel)[:\s]+(.+)/i);
+    if (tel) { datos.telefono = tel[1].trim(); continue; }
+  }
+  // Si no hay formato "Clave: Valor", tratar como formato numérico "1, 2, nombre, calle..."
+  const partes = texto.split(/[,;\n]+/).map(l => l.trim()).filter(Boolean);
+  if (partes.length > 0 && !datos.cliente) {
+    const partesTexto = [];
+    for (const p of partes) {
+      const cantNum = p.match(/^(\d+)\s*x\s*(\d{1,3})$/i);
+      if (cantNum) {
+        const prod = prods.find(pr => pr.ref === parseInt(cantNum[2]));
+        if (prod) { items.push({ pid: prod.id, cant: parseInt(cantNum[1]), nota: "", nombre: prod.nombre, precio: prod.precio }); continue; }
+      }
+      const soloNum = p.match(/^(\d{1,3})$/);
+      if (soloNum) {
+        const prod = prods.find(pr => pr.ref === parseInt(soloNum[1]));
+        if (prod) { items.push({ pid: prod.id, cant: 1, nota: "", nombre: prod.nombre, precio: prod.precio }); continue; }
+      }
+      const notaMatch = p.match(/^(.+?)\((.+?)\)$/);
+      const sinNota = notaMatch ? notaMatch[1].trim() : p;
+      const nota = notaMatch ? notaMatch[2].trim() : "";
+      let cant = 1, nombre = sinNota;
+      const m1 = sinNota.match(/^(\d+)\s*x\s*(.+)/i) || sinNota.match(/^(\d+)\s+(.+)/);
+      if (m1) { cant = parseInt(m1[1]); nombre = m1[2].trim(); }
+      else { const m2 = sinNota.match(/^(.+?)\s*x\s*(\d+)$/i); if (m2) { cant = parseInt(m2[2]); nombre = m2[1].trim(); } }
+      const nlow = nombre.toLowerCase();
+      const prod = prods.find(p => p.nombre.toLowerCase() === nlow || nlow.includes(p.nombre.toLowerCase()) || p.nombre.toLowerCase().includes(nlow));
+      if (prod) { items.push({ pid: prod.id, cant, nota, nombre: prod.nombre, precio: prod.precio }); continue; }
+      partesTexto.push(p);
+    }
+    if (partesTexto.length >= 2) {
+      datos.cliente = partesTexto.slice(0, -1).join(", ");
+      datos.direccion = partesTexto[partesTexto.length - 1];
+    } else if (partesTexto.length === 1) {
+      datos.cliente = partesTexto[0];
+    }
+  } else if (!datos.cliente && items.length === 0) {
+    for (const l of lineas) {
+      if (/^(?:cliente|nombre|direcci[oó]n|tel)/i.test(l)) continue;
+      const notaMatch = l.match(/^(.+?)\((.+?)\)$/);
+      const sinNota = notaMatch ? notaMatch[1].trim() : l;
+      const nota = notaMatch ? notaMatch[2].trim() : "";
+      let cant = 1, nombre = sinNota;
+      const m1 = sinNota.match(/^(\d+)\s*x\s*(.+)/i) || sinNota.match(/^(\d+)\s+(.+)/);
+      if (m1) { cant = parseInt(m1[1]); nombre = m1[2].trim(); }
+      else { const m2 = sinNota.match(/^(.+?)\s*x\s*(\d+)$/i); if (m2) { cant = parseInt(m2[2]); nombre = m2[1].trim(); } }
+      const nlow = nombre.toLowerCase();
+      const prod = prods.find(p => p.nombre.toLowerCase() === nlow || nlow.includes(p.nombre.toLowerCase()) || p.nombre.toLowerCase().includes(nlow));
+      if (prod) items.push({ pid: prod.id, cant, nota, nombre: prod.nombre, precio: prod.precio });
+    }
+  }
+  return { datos, items };
+};
+
+function App() {
+  const cargar = (key, def) => { try { const v = localStorage.getItem("elmo_" + key); return v ? JSON.parse(v) : def; } catch { return def; } };
+  const guardar = (opts) => {
+    const datos = { insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config };
+    for (const [k, v] of Object.entries(datos)) { try { localStorage.setItem("elmo_" + k, JSON.stringify(v)); } catch {} }
+    if (opts?.skipServer) return;
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja, cajaIniciada, historialCierres, mesas, deliveries, orden }) }).catch(() => { console.warn("sync: fallo al guardar en servidor"); try { setToast({ tipo: "error", texto: "Error al sincronizar con el servidor. Los cambios se guardan localmente." }); } catch {} });
+  };
+  const [usuario, setUsuario] = useState(() => cargar("usuario", null));
+  const [tab, setTab] = useState("pedido");
+  const [insumos, setInsumos] = useState(() => cargar("insumos", INSUMOS_INI));
+  const [stock, setStock] = useState(() => cargar("stock", Object.fromEntries(INSUMOS_INI.map((i) => [i.id, i.inicial]))));
+  const [costos, setCostos] = useState(() => cargar("costos", { ...COSTOS_INI }));
+  const [productos, setProductos] = useState(() => { const local = cargar("productos", null); if (local && local.length) { return local.map((p, i) => p.ref ? p : { ...p, ref: (i + 1) }); } return PRODUCTOS_INI; });
+  const [categorias, setCategorias] = useState(() => cargar("categorias", CATEGORIAS_DEF));
+  const [proveedores, setProveedores] = useState(() => cargar("proveedores", PROVEEDORES_INI));
+  const [facturas, setFacturas] = useState(() => cargar("facturas", []));
+  const [fac, setFac] = useState({ provId: "", tipo: TIPOS_FAC[0], numero: "", fecha: hoy(), items: [lineaVacia()] });
+  const [mesas, setMesas] = useState(() => { const d = cargar("mesas", {}); const def = { lineas: [], enviado: [], despachado: [], bebidas: [] }; return Object.fromEntries(MESAS.map((m) => [m.id, { ...def, ...(d[m.id] || {}) }])); });
+  const [deliveries, setDeliveries] = useState(() => cargar("deliveries", []));
+  const deliveriesRef = React.useRef(deliveries); deliveriesRef.current = deliveries;
+  const [vista, setVista] = useState("mapa");
+  const [salonVista, setSalonVista] = useState("salon");
+  const [orden, setOrden] = useState(() => cargar("orden", null));
+  const [cat, setCat] = useState("Pizzas");
+  const [ticket, setTicket] = useState(null);
+  const [abmIns, setAbmIns] = useState(null);
+  const [abmProd, setAbmProd] = useState(null);
+  const [abmProv, setAbmProv] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [whatsappModal, setWhatsappModal] = useState(null);
+  const [pedidoRaw, setPedidoRaw] = useState("");
+  const [qrMesa, setQrMesa] = useState(null);
+  const [waPedidos, setWaPedidos] = useState([]);
+  const [showWaPopup, setShowWaPopup] = useState(false);
+  const [showCocinaPopup, setShowCocinaPopup] = useState(false);
+  const [loginUsuario, setLoginUsuario] = useState(null);
+  const [loginClave, setLoginClave] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [serverUrl, setServerUrl] = useState(() => { try { return JSON.parse(localStorage.getItem("elmo_serverUrl")) || window.location.origin; } catch { return window.location.origin; } });
+  const [publicUrl, setPublicUrl] = useState(() => cargar("publicUrl", window.location.origin));
+  const [showEgresoModal, setShowEgresoModal] = useState(false);
+  const [egresoConcepto, setEgresoConcepto] = useState("");
+  const [egresoMonto, setEgresoMonto] = useState("");
+  const [editEgresoId, setEditEgresoId] = useState(null);
+  const [caja, setCaja] = useState(() => cargar("caja", { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "" }));
+  const [cajaIniciada, setCajaIniciada] = useState(() => cargar("cajaIniciada", false));
+  const [historialCierres, setHistorialCierres] = useState(() => cargar("historialCierres", []));
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [showCierreModal, setShowCierreModal] = useState(false);
+  const [showCobroModal, setShowCobroModal] = useState(false);
+  const [cobroMetodo, setCobroMetodo] = useState(null);
+  const [cobroPago, setCobroPago] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
+  const [config, setConfig] = useState(() => cargar("config", { destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false }));
+  const [cajaIniciadaRef, setCajaIniciadaRef] = useState(cajaIniciada);
+
+  const insumoById = useMemo(() => Object.fromEntries(insumos.map((i) => [i.id, i])), [insumos]);
+  const prodById = useMemo(() => Object.fromEntries(productos.map((p) => [p.id, p])), [productos]);
+  const sumLin = (ls) => ls.reduce((a, l) => a + (prodById[l.pid] ? prodById[l.pid].precio : 0) * l.cant, 0);
+  const productosCat = productos.filter((p) => p.cat === cat);
+  const waLink = (tel, msg) => { let n = (tel || "").replace(/[^0-9]/g, ""); if (!n.startsWith("54")) n = "549" + n; return "whatsapp://send?phone=" + n + "&text=" + encodeURIComponent(msg); };
+  const abrirWA = (tel, msg) => { window.location.href = waLink(tel, msg); };
+  const mesaTotal = (id) => sumLin(mesas[id].enviado) + sumLin(mesas[id].lineas) + sumLin(mesas[id].despachado || []) + sumLin(mesas[id].bebidas || []);
+  const mesaEstado = (id) => mesas[id].despachado && mesas[id].despachado.length ? "despachado" : (mesas[id].enviado.length ? "cocina" : (mesas[id].lineas.length ? "abierta" : "libre"));
+  const costoReceta = (rec) => rec.reduce((a, [iid, c]) => a + (costos[iid] || 0) * c, 0);
+  const unidadDe = (iid) => insumoById[iid] ? insumoById[iid].unidad : "";
+  const nombreIns = (iid) => insumoById[iid] ? insumoById[iid].nombre : "(borrado)";
+  const cajaMovs = (caja && caja.movimientos) ? caja.movimientos : [];
+  const cajaVentas = cajaMovs.filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0);
+  const cajaEgresos = cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
+  const cajaEsperado = (caja ? caja.apertura : 0) + cajaVentas - cajaEgresos;
+  const cajaAbierta = cajaIniciada;
+  const activeTab = !cajaAbierta ? "caja" : tab;
+
+  const abrirMesa = (id) => { setOrden({ tipo: "mesa", mesaId: id, lineas: [...mesas[id].lineas], datos: { cliente: "", direccion: "", telefono: "" } }); setCat("Pizzas"); setVista("orden"); };
+  const abrirDelivery = () => { setOrden({ tipo: "delivery", mesaId: null, lineas: [], datos: { cliente: "", direccion: "", telefono: "" } }); setCat("Pizzas"); setVista("orden"); };
+  const volver = () => { if (orden && orden.tipo === "mesa") setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: orden.lineas } })); setOrden(null); setVista("mapa"); };
+  const add = (pid) => {
+    if (orden.tipo === "mesa" && prodById[pid]?.cat === "Bebidas") {
+      setMesas((ms) => {
+        const bev = ms[orden.mesaId].bebidas || [];
+        const i = bev.findIndex((l) => l.pid === pid && !l.nota);
+        let nb;
+        if (i >= 0) { nb = [...bev]; nb[i] = { ...nb[i], cant: nb[i].cant + 1 }; }
+        else nb = [...bev, { lid: uid(), pid, cant: 1, nota: "" }];
+        return { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: nb } };
+      });
+      return;
+    }
+    setOrden((o) => { const i = o.lineas.findIndex((l) => l.pid === pid && !l.nota); let nl; if (i >= 0) { nl = [...o.lineas]; nl[i] = { ...nl[i], cant: nl[i].cant + 1 }; } else nl = [...o.lineas, { lid: uid(), pid, cant: 1, nota: "" }]; return { ...o, lineas: nl }; });
+  };
+  const cant = (lid, d) => setOrden((o) => ({ ...o, lineas: o.lineas.map((l) => l.lid === lid ? { ...l, cant: l.cant + d } : l).filter((l) => l.cant > 0) }));
+  const setNota = (lid, v) => setOrden((o) => ({ ...o, lineas: o.lineas.map((l) => l.lid === lid ? { ...l, nota: v } : l) }));
+  const setD = (k, v) => setOrden((o) => ({ ...o, datos: { ...o.datos, [k]: v } }));
+
+  const enviar = () => {
+    if (!orden || orden.lineas.length === 0) return;
+    if (orden.tipo === "delivery" && (!orden.datos.cliente.trim() || !orden.datos.direccion.trim())) { setToast({ tipo: "error", texto: "Para delivery cargá nombre del cliente y dirección." }); return; }
+    const req = {};
+    for (const l of orden.lineas) if (prodById[l.pid]?.receta) for (const [iid, c] of prodById[l.pid].receta) req[iid] = (req[iid] || 0) + c * l.cant;
+    const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
+    let descuentaStock = true;
+    if (faltan.length) {
+      const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ");
+      if (!window.confirm("Stock insuficiente:\n\n" + txt + "\n\n¿Enviar igual a cocina? (no se descuenta stock)")) return;
+      descuentaStock = false;
+    }
+    if (descuentaStock) setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+    const itemsTicket = orden.lineas.map((l) => ({ nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
+    const total = sumLin(orden.lineas);
+    setTicket({ tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket });
+    if (orden.tipo === "mesa") { setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas] } })); setOrden((o) => ({ ...o, lineas: [] })); }
+    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); setDeliveries((d) => [{ id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, hora: hora(), total, items: delItems, estado: "cocina" }, ...d]); setOrden((o) => ({ ...o, lineas: [] })); }
+  };
+  const cerrarTicket = () => { const eraDelivery = ticket && ticket.tipo === "delivery"; setTicket(null); setToast({ tipo: "ok", texto: "Comanda enviada a cocina y stock actualizado." }); if (eraDelivery) { setOrden(null); setSalonVista("delivery"); setVista("mapa"); } };
+  const cerrarMesa = (id) => { setShowCobroModal({ id, total: mesaTotal(id) }); setCobroMetodo(null); setCobroPago(""); };
+  const limpiarMesa = (id) => { if (!window.confirm("¿Limpiar mesa " + id + "? Se borran todos los items.")) return; setMesas((ms) => ({ ...ms, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } })); setToast({ tipo: "ok", texto: "Mesa " + id + " limpiada." }); if (orden && orden.mesaId === id) setOrden((o) => ({ ...o, lineas: [] })); };
+  const confirmarCobro = (id, metodo) => {
+    const total = mesaTotal(id);
+    setCaja((c) => ({ ...c, movimientos: [...c.movimientos, { id: uid(), tipo: "venta", concepto: "Mesa " + id, monto: total, metodo, hora: hora(), usuario: usuario.nombre }] }));
+    setMesas((ms) => ({ ...ms, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } })); setOrden(null); setVista("mapa"); setShowCobroModal(null);
+    setToast({ tipo: "ok", texto: "Mesa " + id + " cobrada ($" + total.toLocaleString("es-AR") + " " + metodo + ")." });
+  };
+  const entregarDelivery = (id, metodoPago) => {
+    const found = deliveriesRef.current.find(x => x.id === id);
+    if (!found || found.estado === "entregado") return;
+    const nuevoEstado = found.estado === "despachado" ? "entregado" : "despachado";
+    setDeliveries((ds) => ds.map((x) => x.id !== id ? x : { ...x, estado: nuevoEstado }));
+    if (found.estado === "despachado") {
+      setCaja((c) => ({ ...c, movimientos: [...c.movimientos, { id: uid(), tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", hora: hora(), usuario: usuario.nombre }] }));
+      setToast({ tipo: "ok", texto: "Pedido marcado como entregado." });
+    } else {
+      setToast({ tipo: "ok", texto: "Pedido despachado." });
+    }
+  };
+  const [showPagoDelivery, setShowPagoDelivery] = useState(null);
+  const despacharMesa = (id) => { setMesas((ms) => ({ ...ms, [id]: { ...ms[id], despachado: [...(ms[id].despachado || []), ...ms[id].enviado], enviado: [] } })); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); };
+
+  // ABM Insumos
+  const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "", factorCompra: "" });
+  const editarInsumo = (i) => setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", factorCompra: i.factorCompra || "" });
+  const guardarInsumo = () => {
+    if (!abmIns.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del insumo." }); return; }
+    const sa = parseFloat(abmIns.stockActual) || 0, mn = parseFloat(abmIns.min) || 0;
+    const uc = abmIns.unidadCompra || abmIns.unidad;
+    const fc = parseFloat(abmIns.factorCompra) || 1;
+    if (abmIns.id) { setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, factorCompra: fc } : i)); setStock((s) => ({ ...s, [abmIns.id]: sa })); }
+    else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: sa, min: mn, unidadCompra: uc, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: sa })); setCostos((c) => ({ ...c, [id]: 0 })); }
+    setAbmIns(null); setToast({ tipo: "ok", texto: "Insumo guardado." });
+  };
+  const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); setStock((s) => { const n = { ...s }; delete n[id]; return n; }); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
+
+  // ABM Productos
+  const nuevoProducto = () => setAbmProd({ nombre: "", cat: categorias[0], precio: "", receta: [{ rid: uid(), insumoId: "", cantidad: "" }] });
+  const editarProducto = (p) => setAbmProd({ id: p.id, nombre: p.nombre, cat: p.cat, precio: p.precio, receta: p.receta.map(([iid, c]) => ({ rid: uid(), insumoId: iid, cantidad: c })) });
+  const setProdF = (k, v) => setAbmProd((p) => ({ ...p, [k]: v }));
+  const setIng = (rid, k, v) => setAbmProd((p) => ({ ...p, receta: p.receta.map((r) => r.rid === rid ? { ...r, [k]: v } : r) }));
+  const addIng = () => setAbmProd((p) => ({ ...p, receta: [...p.receta, { rid: uid(), insumoId: "", cantidad: "" }] }));
+  const delIng = (rid) => setAbmProd((p) => ({ ...p, receta: p.receta.filter((r) => r.rid !== rid) }));
+  const recetaActual = () => (abmProd ? abmProd.receta.filter((r) => r.insumoId && parseFloat(r.cantidad) > 0).map((r) => [r.insumoId, parseFloat(r.cantidad)]) : []);
+  const syncProductosAlServer = (ps) => {
+    const paraServer = ps.map(p => ({ id: p.id, ref: p.ref, nombre: p.nombre, cat: p.cat, precio: p.precio, receta: p.receta || [] }));
+    fetch(serverUrl + "/api/productos", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(paraServer) }).catch(() => { try { setToast({ tipo: "error", texto: "Error al sincronizar productos con el servidor." }); } catch {} });
+  };
+  const guardarProducto = () => {
+    if (!abmProd.nombre.trim()) { setToast({ tipo: "error", texto: "El nombre del producto es obligatorio." }); return; }
+    const precio = parseFloat(abmProd.precio) || 0, receta = recetaActual();
+    if (abmProd.id) { setProductos((ps) => { const nps = ps.map((p) => p.id === abmProd.id ? { ...p, nombre: abmProd.nombre, cat: abmProd.cat, precio, receta } : p); syncProductosAlServer(nps); return nps; }); }
+    else { setProductos((ps) => { const maxRef = Math.max(0, ...ps.map(p => p.ref || 0)); const nps = [...ps, { id: uid(), ref: maxRef + 1, nombre: abmProd.nombre, cat: abmProd.cat, precio, receta }]; syncProductosAlServer(nps); return nps; }); }
+    setAbmProd(null); setToast({ tipo: "ok", texto: "Producto guardado." });
+  };
+  const borrarProducto = (id) => { setProductos((ps) => { const nps = ps.filter((p) => p.id !== id); syncProductosAlServer(nps); return nps; }); setAbmProd(null); setToast({ tipo: "ok", texto: "Producto eliminado." }); };
+
+  // ABM Proveedores
+  const guardarProveedor = () => {
+    if (!abmProv.nombre.trim()) { setToast({ tipo: "error", texto: "La razón social es obligatoria." }); return; }
+    if (abmProv.id) setProveedores((ps) => ps.map((p) => p.id === abmProv.id ? abmProv : p));
+    else setProveedores((ps) => [...ps, { ...abmProv, id: uid() }]);
+    setAbmProv(null); setToast({ tipo: "ok", texto: "Proveedor guardado." });
+  };
+  const borrarProveedor = (id) => { setProveedores((ps) => ps.filter((p) => p.id !== id)); setFac((f) => f.provId === id ? { ...f, provId: "" } : f); setToast({ tipo: "ok", texto: "Proveedor eliminado." }); };
+
+  // Factura
+  const esA = fac.tipo === "Factura A";
+  const setFacCab = (k, v) => setFac((f) => ({ ...f, [k]: v }));
+  const setProv = (v) => setFac((f) => ({ ...f, provId: v, items: [lineaVacia()] }));
+  const setFacItem = (lid, k, v) => setFac((f) => ({ ...f, items: f.items.map((it) => it.lid === lid ? { ...it, [k]: v } : it) }));
+  const addFacItem = () => setFac((f) => ({ ...f, items: [...f.items, lineaVacia()] }));
+  const delFacItem = (lid) => setFac((f) => { const its = f.items.filter((it) => it.lid !== lid); return { ...f, items: its.length ? its : [lineaVacia()] }; });
+  const articulosProv = (() => { const byInsumo = {}; ARTICULOS.forEach(a => { byInsumo[a.insumo] = true; }); const extras = insumos.filter(i => !byInsumo[i.id]).map(i => ({ codigo: "INS-" + i.id, desc: i.nombre, prov: "", insumo: i.id, factor: i.factorCompra || 1, bulto: i.unidadCompra || i.unidad })); return [...ARTICULOS, ...extras]; })();
+  const artByCodigo = useMemo(() => Object.fromEntries(articulosProv.map((a) => [a.codigo, a])), [insumos]);
+  const calcItem = (it) => { const a = it.codigo ? artByCodigo[it.codigo] : null; const cantB = parseFloat(it.cantidad) || 0, unit = parseFloat(it.unitario) || 0, desc = parseFloat(it.descuento) || 0, internos = parseFloat(it.internos) || 0; const neto = cantB * unit - desc, ivaL = esA ? neto * 0.21 : 0, sub = neto + internos + ivaL, ingreso = a ? cantB * a.factor : 0; return { a, cantB, unit, desc, internos, neto, ivaL, sub, ingreso }; };
+  const tot = fac.items.reduce((acc, it) => { const c = calcItem(it); return { neto: acc.neto + c.neto, internos: acc.internos + c.internos, iva: acc.iva + c.ivaL, total: acc.total + c.sub }; }, { neto: 0, internos: 0, iva: 0, total: 0 });
+  const provSel = proveedores.find((p) => p.id === fac.provId);
+  const cargarFactura = () => {
+    if (!fac.provId) { setToast({ tipo: "error", texto: "Elegí un proveedor." }); return; }
+    const validos = fac.items.filter((it) => it.codigo && (parseFloat(it.cantidad) || 0) > 0);
+    if (validos.length === 0) { setToast({ tipo: "error", texto: "Agregá al menos un artículo con cantidad." }); return; }
+    setStock((s) => { const n = { ...s }; for (const it of validos) { const c = calcItem(it); n[c.a.insumo] = +((n[c.a.insumo] || 0) + c.ingreso).toFixed(2); } return n; });
+    setCostos((cs) => { const n = { ...cs }; for (const it of validos) { const c = calcItem(it); if (c.sub > 0 && c.cantB > 0) n[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } return n; });
+    setFacturas((fs) => [{ id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, insumoUn: unidadDe(c.a.insumo) }; }) }, ...fs]);
+    setFac({ provId: fac.provId, tipo: fac.tipo, numero: "", fecha: hoy(), items: [lineaVacia()] });
+    setToast({ tipo: "ok", texto: validos.length + " artículo(s) cargados. Stock y costos actualizados." });
+  };
+
+  const reponer = () => { setStock(Object.fromEntries(insumos.map((i) => [i.id, i.inicial || 0]))); setToast({ tipo: "ok", texto: "Stock reiniciado." }); };
+  const login = (u) => {
+    if (u.clave) { setLoginUsuario(u); setLoginClave(""); setLoginError(""); return; }
+    setUsuario(u); localStorage.setItem("elmo_usuario", JSON.stringify({ nombre: u.nombre, rol: u.rol })); setTab("pedido"); setVista("mapa"); setSalonVista("salon");
+  };
+  const confirmarLogin = () => {
+    if (loginUsuario.clave === loginClave) { setUsuario(loginUsuario); localStorage.setItem("elmo_usuario", JSON.stringify({ nombre: loginUsuario.nombre, rol: loginUsuario.rol })); setLoginUsuario(null); setLoginClave(""); setLoginError(""); setTab("pedido"); setVista("mapa"); setSalonVista("salon"); }
+    else { setLoginError("Contraseña incorrecta"); setLoginClave(""); }
+  };
+  const logout = () => { setUsuario(null); localStorage.removeItem("elmo_usuario"); setOrden(null); setVista("mapa"); };
+  React.useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3800); return () => clearTimeout(t); }, [toast]);
+  React.useEffect(() => { guardar({ skipServer: true }); }, []);
+  React.useEffect(() => { const t = setTimeout(() => guardar(), 1000); return () => clearTimeout(t); }, [insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config]);
+  React.useEffect(() => { if (!cajaAbierta && tab !== "caja") setTab("caja"); }, [cajaAbierta]);
+  // Sincronizar productos desde el servidor (precios, nombres, etc.) cada 10s
+  const prodRef = React.useRef(productos);
+  prodRef.current = productos;
+  React.useEffect(() => {
+    const fn = () => fetch(serverUrl + "/api/productos").then(r => r.json()).then(prods => {
+      if (!prods || !prods.length) return;
+      setProductos(prev => {
+        const map = Object.fromEntries(prev.map(p => [p.id, p]));
+        const merged = prods.map(sp => { const lp = map[sp.id]; return lp ? { ...lp, nombre: sp.nombre, cat: sp.cat, precio: sp.precio, receta: sp.receta || [] } : { ...sp, receta: sp.receta || [] }; });
+        const localOnly = prev.filter(lp => !prods.find(sp => sp.id === lp.id));
+        return [...merged, ...localOnly];
+      });
+    }).catch(() => { console.warn("sync productos: no se pudo leer del servidor"); });
+    fn();
+    const t = setInterval(fn, 10000);
+    return () => clearInterval(t);
+  }, []);
+  // Sync caja state from server on login (shared across devices)
+  // Sync from server on login + periodic (safe: no overwrite of pending local changes)
+  const cajaRef = React.useRef(caja);
+  cajaRef.current = caja;
+  React.useEffect(() => { if (!usuario) return; fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (data.caja) { setCaja(data.caja); setCajaIniciada(data.cajaIniciada); if (data.historialCierres) setHistorialCierres(data.historialCierres); if (data.deliveries) { setDeliveries((prev) => { const prevIds = new Set(prev.map(d => d.id)); const newDels = data.deliveries.filter(d => !prevIds.has(d.id)); return newDels.length > 0 ? [...prev, ...newDels] : prev; }); } } }).catch(() => console.warn("sync: no se pudo leer del servidor")); const t = setInterval(() => { fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (!data.caja) return; if (data.historialCierres) setHistorialCierres(data.historialCierres); const localMovs = (cajaRef.current?.movimientos || []).length; const serverMovs = (data.caja?.movimientos || []).length; if (serverMovs > localMovs) { const localIds = new Set((cajaRef.current?.movimientos || []).map(m => m.id)); const serverOnly = (data.caja.movimientos || []).filter(m => !localIds.has(m.id)); if (serverOnly.length > 0) setCaja((c) => ({ ...c, movimientos: [...c.movimientos, ...serverOnly] })); } }).catch(() => {}); }, 5000); return () => clearInterval(t); }, [usuario]);
+  React.useEffect(() => { const t = setInterval(() => { fetch(serverUrl + "/api/pedidos/pendientes").then(r => r.json()).then(d => setWaPedidos(d)).catch(() => {}); }, 4000); return () => clearInterval(t); }, []);
+  const importarWAPedido = (wp, items) => {
+    setWaPedidos((ps) => ps.filter(p => p.id !== wp.id));
+    fetch(serverUrl + "/api/pedidos/" + wp.id + "/enviado", { method: "POST" }).catch(() => {});
+    if (wp.mesa && wp.mesa > 0) {
+      const req = {};
+      for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
+      const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
+      if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "No alcanza el stock: " + txt }); return; }
+      setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+      setMesas((ms) => ({ ...ms, [wp.mesa]: { ...ms[wp.mesa], enviado: [...ms[wp.mesa].enviado, ...items] } }));
+      const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
+      const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
+      setTicket({ tipo: "mesa", mesaId: wp.mesa, cliente: "Mesa " + wp.mesa, direccion: "", telefono: "", hora: hora(), total, items: totalItems });
+      setSalonVista("salon"); setVista("mapa"); setTab("pedido");
+      setToast({ tipo: "ok", texto: "Pedido de Mesa " + wp.mesa + " enviado a cocina." });
+    } else {
+      const nombre = wp.nombre || "";
+      const direccion = wp.direccion || "";
+      if (nombre && direccion) {
+        const req = {};
+        for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
+        const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
+        if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "No alcanza el stock: " + txt }); return; }
+        setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+        const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota }));
+        const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
+        setDeliveries((d) => [{ id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems, estado: "cocina" }, ...d]);
+        setTicket({ tipo: "delivery", mesaId: null, cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems });
+        setSalonVista("delivery"); setVista("mapa"); setTab("pedido");
+        setToast({ tipo: "ok", texto: "Pedido de " + nombre + " enviado a cocina." });
+      } else {
+        setOrden({ tipo: "delivery", mesaId: null, lineas: items, datos: { cliente: nombre, direccion, telefono: wp.telefono || "" } });
+        setCat("Pizzas"); setVista("orden");
+        setToast({ tipo: "ok", texto: "Pedido importado. Completá los datos y enviá a cocina." });
+      }
+    }
+  };
+
+  const inputStyle = { background: C.base, border: "1px solid " + C.border, color: C.text, borderRadius: 8, padding: "8px 10px", fontSize: 14, width: "100%", outline: "none" };
+  const miniInput = { ...inputStyle, padding: "6px 8px", fontSize: 13 };
+  const lbl = { color: C.muted, fontSize: 11, marginBottom: 3, display: "block" };
+
+  if (!usuario) {
+    return (
+      <div style={{ background: C.base, color: C.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+        <div className="w-full max-w-sm px-6">
+          <div className="text-center mb-7"><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>El Mostrador</h1></div>
+          {loginUsuario ? (
+            <div>
+              <p style={{ color: C.muted, fontSize: 14, marginBottom: 12 }}>Ingresá la contraseña para <strong>{loginUsuario.nombre}</strong></p>
+              <input type="password" autoFocus style={inputStyle} placeholder="Contraseña" value={loginClave} onChange={(e) => { setLoginClave(e.target.value); setLoginError(""); }} onKeyDown={(e) => e.key === "Enter" && confirmarLogin()} />
+              {loginError && <p style={{ color: "#ef4444", fontSize: 13, marginTop: 6 }}>{loginError}</p>}
+              <div className="flex gap-2 mt-3">
+                <button onClick={confirmarLogin} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><Lock size={16} /> Entrar</button>
+                <button onClick={() => setLoginUsuario(null)} className="px-4 rounded-lg" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Volver</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p style={{ color: C.muted, fontSize: 14, marginTop: 4, marginBottom: 12 }}>Elegí con qué usuario entrás</p>
+              <div className="flex flex-col gap-3">{USUARIOS.map((u) => (<button key={u.nombre} onClick={() => login(u)} className="flex items-center gap-3 p-4 rounded-xl text-left" style={{ background: C.raised, border: "1px solid " + C.border }}><div style={{ background: C.raised2, borderRadius: 99, padding: 10, color: C.amber }}>{u.rol === "admin" ? <User size={20} /> : u.rol === "visor" ? <ClipboardList size={20} /> : <Lock size={20} />}</div><div><div style={{ fontWeight: 700 }}>{u.nombre}</div><div style={{ color: C.muted, fontSize: 13 }}>{u.rol === "admin" ? "Acceso total" : u.rol === "visor" ? "Solo lectura + precios" : "Solo ventas"}</div></div></button>))}</div>
+                  </div>
+                )}
+        </div>
+      </div>
+    );
+  }
+
+  const esAdmin = usuario.rol === "admin";
+  const esVisor = usuario.rol === "visor";
+  const puedeCarta = esAdmin || esVisor;
+  const tabsAll = [
+    { id: "pedido", label: "Vender", icon: ClipboardList, admin: false },
+    { id: "estado", label: "Estado", icon: LayoutGrid, admin: false },
+    { id: "caja", label: "Caja", icon: DollarSign, admin: false },
+    { id: "compras", label: "Compras", icon: Cart, admin: true },
+    { id: "proveedores", label: "Proveedores", icon: Truck, admin: true },
+    { id: "insumos", label: "Insumos", icon: Package, admin: true },
+    { id: "carta", label: "Carta", icon: Book, admin: true },
+  ];
+  const tabs = tabsAll.filter((t) => {
+    if (!cajaAbierta) return false;
+    if (t.admin && !esAdmin && !(esVisor && t.id === "carta")) return false;
+    return true;
+  }).concat(cajaAbierta ? [] : [tabsAll.find(t => t.id === "caja")]);
+  const colorEstado = (e) => e === "cocina" ? C.amber : e === "despachado" ? C.green : e === "abierta" ? C.blue : C.border;
+  const costoProd = (p) => costoReceta(p.receta);
+
+  return (
+    <div style={{ background: C.base, color: C.text, minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      <div className="max-w-5xl mx-auto px-4 py-5">
+        <header className="flex items-center justify-between mb-5">
+          <div><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>El Mostrador</h1></div>
+            <div className="flex items-center gap-1 flex-wrap"><div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Globe size={12} /><input value={publicUrl} placeholder="https://..." onChange={(e) => { setPublicUrl(e.target.value); try { localStorage.setItem("elmo_publicUrl", JSON.stringify(e.target.value)); fetch("/api/public-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: e.target.value }) }).catch(() => {}); } catch {} }} style={{ background: "transparent", border: "none", color: C.text, width: 190, outline: "none", fontSize: 11 }} /></div><div className="flex items-center gap-1"><div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: C.raised, border: "1px solid " + C.border }}><span style={{ color: C.amber }}>{esAdmin ? <User size={15} /> : esVisor ? <ClipboardList size={15} /> : <Lock size={15} />}</span><span style={{ fontSize: 13 }}>{usuario.nombre}</span></div><button onClick={() => window.open("/qr", "_blank")} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><QrCode size={15} /></button>{esAdmin && <button onClick={() => setShowConfig(true)} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Settings size={15} /></button>}<button onClick={() => setShowCocinaPopup(!showCocinaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Flame size={15} />{(deliveries.filter(d => (d.estado || "cocina") !== "entregado").length + MESAS.filter(m => mesaEstado(m.id) === "cocina" || mesaEstado(m.id) === "despachado").length) > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-xs font-bold" style={{ background: C.amber, color: "#241a0c", width: 18, height: 18 }}>{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length + MESAS.filter(m => mesaEstado(m.id) === "cocina" || mesaEstado(m.id) === "despachado").length}</span>}</button><button onClick={() => setShowWaPopup(!showWaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Smartphone size={15} />{waPedidos.length > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-xs font-bold" style={{ background: "#25D366", color: "#fff", width: 18, height: 18 }}>{waPedidos.length}</span>}</button><button onClick={() => { setWhatsappModal("config"); setPedidoRaw(WA_NUMERO); }} className="flex items-center px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Configurar número WhatsApp"><Pencil size={13} /></button><button onClick={logout} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><LogOut size={15} /></button></div></div>
+        </header>
+
+        <nav className="flex gap-1 mb-3 p-1 rounded-xl overflow-x-auto" style={{ background: C.raised, width: "fit-content", maxWidth: "100%" }}>
+          {tabs.map((t) => { const on = tab === t.id; return (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === "pedido") setVista("mapa"); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.amber : "transparent", color: on ? "#241a0c" : C.muted }}><t.icon size={16} /> {t.label}</button>); })}
+        </nav>
+        {!cajaAbierta && <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: C.amber + "22", color: C.amber, border: "1px solid " + C.amber }}><AlertTriangle size={16} /> Tenés que abrir la caja para empezar a operar</div>}
+
+        {/* VENDER mapa (salón + delivery) */}
+        {activeTab === "pedido" && vista === "mapa" && (
+          <div>
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+              <div className="flex gap-1 p-1 rounded-lg" style={{ background: C.raised }}>
+                <button onClick={() => setSalonVista("salon")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "salon" ? C.amber : "transparent", color: salonVista === "salon" ? "#241a0c" : C.muted }}><LayoutGrid size={15} /> Salón</button>
+                <button onClick={() => setSalonVista("delivery")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "delivery" ? C.amber : "transparent", color: salonVista === "delivery" ? "#241a0c" : C.muted }}><Bike size={15} /> Delivery{deliveries.filter(d => (d.estado||"cocina")!=="entregado").length ? " (" + deliveries.filter(d => (d.estado||"cocina")!=="entregado").length + ")" : ""}</button>
+              </div>
+              {!esVisor && <div className="flex gap-2"><button onClick={() => { const win = window.open("", "_blank"); let html = "<html><head><style>body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:20px;justify-content:center} .qr{text-align:center;border:1px solid #ddd;border-radius:12px;padding:16px;page-break-inside:avoid} .qr img{width:200px;height:200px} .qr p{margin:6px 0 0;font-size:12px;color:#555} h1{width:100%;text-align:center}</style></head><body><h1>QR Mesas</h1>"; MESAS.forEach(m => { html += "<div class='qr'><img src='https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(publicUrl + "/menu-mesa.html?mesa=" + m.id) + "'/><p>Mesa " + m.id + "</p><p style='font-size:10px;color:#999;word-break:break-all'>" + publicUrl + "/menu-mesa.html?mesa=" + m.id + "</p></div>"; }); html += "</body></html>"; win.document.write(html); win.print(); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}><Printer size={16} /> Imprimir QR</button>
+              <button onClick={abrirDelivery} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo delivery</button></div>}
+            </div>
+
+
+            {salonVista === "salon" ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">{MESAS.map((m) => { const e = mesaEstado(m.id); return (<div key={m.id} className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: C.raised, border: "1.5px solid " + colorEstado(e), minHeight: 92, cursor: esVisor ? "default" : "pointer" }} onClick={() => !esVisor && abrirMesa(m.id)}><div style={{ fontWeight: 800, fontSize: 18 }}>Mesa {m.id}</div><div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 12 }}><Users size={12} /> {m.asientos}</div>{e === "libre" ? <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Libre</div> : <div style={{ color: e === "cocina" ? C.amber : C.blue, fontSize: 12, fontWeight: 700, marginTop: 4 }}>{pesos(mesaTotal(m.id))}</div>}{!esVisor && <button onClick={(e) => { e.stopPropagation(); setQrMesa(m.id); }} className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><QrCode size={12} /> QR</button>}</div>); })}</div>
+            ) : (
+              <div>
+                {waPedidos.length > 0 && (
+                  <div className="mb-4">
+                    <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: C.amber }}><Smartphone size={15} style={{ marginRight: 6 }} />Pedidos de WhatsApp pendientes</h3>
+                    <div className="grid sm:grid-cols-2 gap-3">{waPedidos.map((wp) => (
+                      <div key={wp.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.amber }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div><div style={{ fontWeight: 700, fontSize: 15 }}>{wp.mesa ? "Mesa " + wp.mesa : (wp.nombre || "Cliente")}</div>{wp.mesa ? "" : (wp.direccion ? <div style={{ color: C.muted, fontSize: 13 }}>{wp.direccion}</div> : "")}{wp.telefono ? <div style={{ color: C.muted, fontSize: 12 }}>{wp.telefono}</div> : ""}</div>
+                          <div style={{ fontSize: 12, color: C.muted }}>{wp.hora}</div>
+                        </div>
+                        <div className="flex flex-col gap-1 mt-2" style={{ fontSize: 13 }}>{wp.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>))}</div>
+                        {!esVisor && <div className="flex gap-2 mt-3">
+                          <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Importar y enviar</button>
+                          <button onClick={() => { fetch(serverUrl + "/api/pedidos/" + wp.id + "/enviado", { method: "POST" }).then(() => setWaPedidos((ps) => ps.filter(p => p.id !== wp.id))); }} className="px-3 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Ignorar</button>
+                        </div>}
+                      </div>
+                    ))}</div>
+                  </div>
+                )}
+                {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 && (
+                  <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid sm:grid-cols-2 gap-3">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
+                    const esDespachado = d.estado === "despachado";
+                    return (
+                    <div key={d.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15 }}><Bike size={15} style={{ color: esDespachado ? C.green : C.amber }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
+                        <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
+                      </div>
+                      <div className="mt-2">{esDespachado ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={11} /> En camino</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#3a2a10", color: C.amber }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, display: "inline-block" }} /> En cocina</span>
+                      )}</div>
+                      <div className="mt-3 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}>{d.items.map((it, k) => (<div key={k} style={{ fontSize: 13 }}><span>{it.cant}x {it.nombre}</span>{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> · {it.nota}</span>}</div>))}</div>
+                      {!esVisor && <div className="flex gap-2 mt-3">{!esDespachado ? <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button> : <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>}</div>}
+                    </div>
+                  );})}</div></div>
+                )}
+                {deliveries.filter(d => d.estado === "entregado").length === 0 && deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? (
+                  <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos de delivery en curso.</p>
+                ) : (
+                  deliveries.filter(d => d.estado === "entregado").length > 0 && (
+                    <div><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.green }}>Entregados</h3><div className="grid sm:grid-cols-2 gap-3">{deliveries.filter(d => d.estado === "entregado").map((d) => (
+                      <div key={d.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.green, opacity: 0.75 }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15, color: C.muted }}><Bike size={15} style={{ color: C.green }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
+                          <div style={{ textAlign: "right" }}><div style={{ color: C.muted, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
+                        </div>
+                        <div className="mt-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={11} /> Entregado</span></div>
+                        <div className="mt-3 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}>{d.items.map((it, k) => (<div key={k} style={{ fontSize: 13 }}><span>{it.cant}x {it.nombre}</span>{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> · {it.nota}</span>}</div>))}</div>
+                      </div>
+                    ))}</div></div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Historial de ventas del día */}
+        {activeTab === "pedido" && vista === "mapa" && (
+          <div className="mt-6 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+            <div className="flex items-center gap-2 mb-3"><DollarSign size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Ventas del día</h3><span className="ml-auto" style={{ fontWeight: 800, fontSize: 18, color: C.amber }}>{dinero(cajaVentas)}</span></div>
+            {cajaVentas === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Todavía no se registraron ventas hoy.</p> : (
+              <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta").slice().reverse().map((m) => (
+                <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
+                  <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.usuario ? " · " + m.usuario : ""}</div></div>
+                  <span style={{ fontWeight: 700, color: C.green }}>+{dinero(m.monto)}</span>
+                </div>
+              ))}</div>
+            )}
+          </div>
+        )}
+
+        {/* VENDER orden */}
+        {activeTab === "pedido" && vista === "orden" && orden && (
+          <div>
+            <button onClick={volver} className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><ArrowLeft size={15} /> Volver</button>
+            <div className="flex flex-col lg:flex-row gap-5">
+              <div className="flex-1">
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-1">{categorias.map((c) => { const on = cat === c; return <button key={c} onClick={() => setCat(c)} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.amber : C.muted, border: "1px solid " + (on ? C.amber : C.border) }}>{c}</button>; })}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, minHeight: 34 }}>{p.nombre}</div><div style={{ color: C.amber, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
+              </div>
+              <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <button onClick={() => limpiarMesa(orden.mesaId)} className="ml-auto px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar</button>}</div>
+                {orden.tipo === "delivery" && (<div className="flex flex-col gap-2 mb-3">{esVisor ? (<div className="flex flex-col gap-1 rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 13, fontWeight: 600 }}>{orden.datos.cliente}</div><div style={{ fontSize: 12, color: C.muted }}>{orden.datos.direccion}{orden.datos.telefono ? " · " + orden.datos.telefono : ""}</div></div>) : (<><input style={inputStyle} placeholder="Nombre del cliente" value={orden.datos.cliente} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="Dirección" value={orden.datos.direccion} onChange={(e) => setD("direccion", e.target.value)} /><input style={inputStyle} placeholder="Teléfono (opcional)" value={orden.datos.telefono} onChange={(e) => setD("telefono", e.target.value)} /></>)}</div>)}
+                {orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0) && (
+                  <div className="rounded-lg p-3 mb-3" style={{ background: C.base }}>
+                    {mesas[orden.mesaId].enviado.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 6 }}>En cocina:</div>
+                        <div className="flex flex-col gap-1">{mesas[orden.mesaId].enviado.map((l, i) => (
+                          <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}{l.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({l.nota})</span> : ""}</span>
+                            <div className="flex items-center gap-1">
+                              <span style={{ color: C.muted, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                              {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], enviado: ms[orden.mesaId].enviado.map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
+                              {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], enviado: ms[orden.mesaId].enviado.map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
+                            </div>
+                          </div>
+                        ))}</div>
+                      </div>
+                    )}
+                    {(mesas[orden.mesaId].despachado || []).length > 0 && (
+                      <div style={{ marginTop: mesas[orden.mesaId].enviado.length > 0 ? 8 : 0 }}>
+                        <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6 }}>Despachado:</div>
+                        <div className="flex flex-col gap-1">{mesas[orden.mesaId].despachado.map((l, i) => (
+                          <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.75 }}>
+                            <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}{l.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({l.nota})</span> : ""}</span>
+                            <span style={{ color: C.muted }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                          </div>
+                        ))}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, textAlign: "right" }}>Total despachado: {pesos(sumLin(mesas[orden.mesaId].despachado))}</div>
+                      </div>
+                    )}
+                    {orden.tipo === "mesa" && (mesas[orden.mesaId].bebidas || []).length > 0 && (
+                      <div className="flex flex-col gap-1" style={{ marginTop: 8 }}>{(mesas[orden.mesaId].bebidas || []).map((l, i) => (
+                        <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}</span>
+                          <div className="flex items-center gap-1">
+                            <span style={{ color: C.muted, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
+                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
+                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).filter((_, j) => j !== i) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.base, color: C.red, border: "none", cursor: "pointer" }}><X size={12} /></button>}
+                          </div>
+                        </div>
+                      ))}</div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-2"><span style={{ fontWeight: 700, fontSize: 14 }}>{orden.tipo === "mesa" ? "Ronda actual" : "Pedido"}</span>{!esVisor && orden.lineas.length > 0 && <button onClick={() => setOrden((o) => ({ ...o, lineas: [] }))} style={{ color: C.muted }}><Trash2 size={16} /></button>}</div>
+                {orden.lineas.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>Elegí productos para agregar.</p>) : (<div className="flex flex-col gap-3">{orden.lineas.map((l) => (<div key={l.lid} className="rounded-lg p-2" style={{ background: C.base }}><div className="flex items-center justify-between gap-2"><div style={{ fontSize: 13, fontWeight: 600 }} className="flex-1">{prodById[l.pid] ? prodById[l.pid].nombre : "—"}</div><div className="flex items-center gap-1">{!esVisor && <button onClick={() => cant(l.lid, -1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Minus size={14} /></button>}<span style={{ width: 18, textAlign: "center", fontWeight: 700 }}>{l.cant}</span>{!esVisor && <button onClick={() => cant(l.lid, 1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Plus size={14} /></button>}{!esVisor && <button onClick={() => setOrden((o) => ({ ...o, lineas: o.lineas.filter((x) => x.lid !== l.lid) }))} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red, border: "1px solid " + C.red }}><X size={13} /></button>}</div></div>{!esVisor && prodById[l.pid]?.cat !== "Bebidas" && <div className="flex items-center gap-2 mt-2"><span style={{ color: C.muted, flexShrink: 0 }}><MsgIcon size={14} /></span><input value={l.nota} onChange={(e) => setNota(l.lid, e.target.value)} placeholder="Observación: sin aderezo, a punto…" style={{ background: "transparent", border: "none", color: C.text, fontSize: 12, width: "100%", outline: "none" }} /></div>}</div>))}</div>)}
+                <div className="flex justify-between items-baseline mt-3 pt-3" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13 }}>{orden.tipo === "mesa" ? "Total mesa" : "Total"}</span><span style={{ fontWeight: 800, fontSize: 20, color: C.amber }}>{pesos(orden.tipo === "mesa" ? mesaTotal(orden.mesaId) : sumLin(orden.lineas))}</span></div>
+                {!esVisor && (() => { const hayComidas = orden.lineas.some((l) => prodById[l.pid]?.cat !== "Bebidas"); return hayComidas && <button onClick={enviar} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-2" style={{ background: C.amber, color: "#241a0c" }}><Send size={16} /> Enviar a cocina</button>; })()}
+                {!esVisor && orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0 || (mesas[orden.mesaId].bebidas || []).length > 0) && (<button onClick={() => cerrarMesa(orden.mesaId)} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-2 w-full" style={{ background: "transparent", border: "1px solid " + C.border, color: C.text }}>Cobrar y cerrar mesa</button>)}
+              </aside>
+            </div>
+          </div>
+        )}
+
+        {/* ESTADO dashboard */}
+        {activeTab === "estado" && (
+          <div>
+            <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 12 }}><LayoutGrid size={20} style={{ marginRight: 8 }} />Estado de pedidos</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {/* WhatsApp pendientes */}
+              <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <div className="flex items-center gap-2 mb-3"><Smartphone size={18} style={{ color: "#25D366" }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>WhatsApp</h3><span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: waPedidos.length > 0 ? "#25D366" : C.border, color: waPedidos.length > 0 ? "#fff" : C.muted }}>{waPedidos.length}</span></div>
+                {waPedidos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin pedidos pendientes</p> : (
+                  <div className="flex flex-col gap-2">{waPedidos.slice(0, 3).map((wp) => (
+                    <div key={wp.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
+                      <div><div style={{ fontSize: 13, fontWeight: 600 }}>{wp.nombre || "Cliente"}</div><div style={{ fontSize: 11, color: C.muted }}>{wp.items.length} ítem(s) · {wp.hora}{wp.telefono ? " · " + wp.telefono : ""}</div></div>
+                      <button onClick={() => { setShowWaPopup(true); setTab("estado"); }} className="px-2 py-1 rounded-md text-xs font-semibold" style={{ background: C.amber, color: "#241a0c" }}>Ver</button>
+                    </div>
+                  ))}{waPedidos.length > 3 && <p style={{ color: C.muted, fontSize: 11, textAlign: "center" }}>+{waPedidos.length - 3} más</p>}</div>
+                )}
+              </div>
+              {/* Mesas activas */}
+              <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <div className="flex items-center gap-2 mb-3"><Users size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Mesas</h3></div>
+                  {MESAS.filter((m) => mesaEstado(m.id) !== "libre").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Todas las mesas libres</p> : (
+                  <div className="grid grid-cols-2 gap-2">{MESAS.filter((m) => mesaEstado(m.id) !== "libre").map((m) => {
+                    const e = mesaEstado(m.id);
+                    return (
+                      <div key={m.id} className="relative rounded-lg p-3 text-center w-full" style={{ background: C.base, border: "1px solid " + colorEstado(e), cursor: esVisor ? "default" : "pointer" }} onClick={() => { if (!esVisor) { setTab("pedido"); abrirMesa(m.id); } }}>
+                        <div style={{ fontWeight: 800, fontSize: 15 }}>Mesa {m.id}</div>
+                        <div className="flex items-center justify-center gap-1 mt-1"><span style={{ width: 6, height: 6, borderRadius: "50%", background: e === "cocina" ? C.amber : e === "despachado" ? C.green : C.blue, display: "inline-block" }} /><span style={{ fontSize: 11, color: C.muted }}>{e === "cocina" ? "En cocina" : e === "despachado" ? "Despachado" : "Abierta"}</span></div>
+                        <div style={{ color: C.amber, fontWeight: 700, fontSize: 13, marginTop: 2 }}>{pesos(mesaTotal(m.id))}</div>
+                        {!esVisor && <button onClick={(e) => { e.stopPropagation(); limpiarMesa(m.id); }} className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-xs" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }} title="Limpiar mesa">✕</button>}
+                      </div>
+                    );
+                  })}</div>
+                )}
+              </div>
+              {/* Delivery en proceso */}
+              <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <div className="flex items-center gap-2 mb-3"><Bike size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Delivery</h3><span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? C.amber : C.border, color: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? "#241a0c" : C.muted }}>{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length}</span></div>
+                {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin deliveries activos</p> : (
+                  <div className="flex flex-col gap-2">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").slice(0, 3).map((d) => (
+                    <div key={d.id} className="rounded-lg p-2" style={{ background: C.base, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
+                      <div className="flex items-center justify-between"><span style={{ fontSize: 13, fontWeight: 600 }}>{d.cliente}</span><span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pesos(d.total)}</span></div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{d.direccion} · {d.hora} hs <span style={{ color: d.estado === "despachado" ? C.green : C.amber }}>({d.estado === "despachado" ? "En camino" : "En cocina"})</span></div>
+                    </div>
+                  ))}{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 3 && <p style={{ color: C.muted, fontSize: 11, textAlign: "center" }}>+{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length - 3} más</p>}</div>
+                )}
+              </div>
+              {/* Últimos entregados */}
+              <div className="rounded-xl p-4 sm:col-span-2 xl:col-span-3" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <div className="flex items-center gap-2 mb-3"><CheckCircle2 size={18} style={{ color: C.green }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Últimos entregados</h3></div>
+                {deliveries.filter(d => d.estado === "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Ninguno aún</p> : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{deliveries.filter(d => d.estado === "entregado").slice(0, 6).map((d) => (
+                    <div key={d.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base, opacity: 0.7 }}>
+                      <div><span style={{ fontSize: 13, fontWeight: 600 }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>{d.hora}</span></div>
+                      <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{pesos(d.total)}</span>
+                    </div>
+                  ))}</div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* COMPRAS */}
+        {activeTab === "compras" && esAdmin && (
+          <div className="flex flex-col gap-5">
+            <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <div className="flex items-center gap-2 mb-4"><span style={{ color: C.amber }}><FileText size={18} /></span><h3 style={{ fontWeight: 800, fontSize: 17 }}>Cargar factura de proveedor</h3></div>
+              <select style={{ ...inputStyle, marginBottom: 6 }} value={fac.provId} onChange={(e) => setProv(e.target.value)}><option value="">Elegí proveedor…</option>{proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+              {provSel && <div style={{ color: C.muted, fontSize: 12, marginBottom: 10 }}>{provSel.condicion}{provSel.cuit ? " · CUIT " + provSel.cuit : ""}</div>}
+              <div className="grid sm:grid-cols-3 gap-2 mb-4"><select style={inputStyle} value={fac.tipo} onChange={(e) => setFacCab("tipo", e.target.value)}>{TIPOS_FAC.map((t) => <option key={t} value={t}>{t}</option>)}</select><input style={inputStyle} placeholder="N° comprobante" value={fac.numero} onChange={(e) => setFacCab("numero", e.target.value)} /><input style={inputStyle} type="date" value={fac.fecha} onChange={(e) => setFacCab("fecha", e.target.value)} /></div>
+              <div className="flex flex-col gap-2">{fac.items.map((it) => { const c = calcItem(it); return (<div key={it.lid} className="rounded-lg p-3" style={{ background: C.base, border: "1px solid " + C.border }}><div className="flex items-center gap-2"><select style={{ ...miniInput, flex: 1 }} value={it.codigo} onChange={(e) => setFacItem(it.lid, "codigo", e.target.value)}><option value="">Artículo…</option>{articulosProv.map((ar) => <option key={ar.codigo} value={ar.codigo}>{ar.desc} ({proveedores.find(p => p.id === ar.prov)?.nombre || ar.prov})</option>)}</select><button onClick={() => delFacItem(it.lid)} className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: C.raised2, color: C.muted }}><X size={15} /></button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2"><div><label style={lbl}>Cantidad</label><input style={miniInput} type="number" placeholder="0" value={it.cantidad} onChange={(e) => setFacItem(it.lid, "cantidad", e.target.value)} /></div><div><label style={lbl}>Unitario</label><input style={miniInput} type="number" placeholder="0" value={it.unitario} onChange={(e) => setFacItem(it.lid, "unitario", e.target.value)} /></div><div><label style={lbl}>Descuento</label><input style={miniInput} type="number" placeholder="0" value={it.descuento} onChange={(e) => setFacItem(it.lid, "descuento", e.target.value)} /></div><div><label style={lbl}>Internos</label><input style={miniInput} type="number" placeholder="0" value={it.internos} onChange={(e) => setFacItem(it.lid, "internos", e.target.value)} /></div></div><div className="flex flex-wrap justify-between gap-x-4 mt-2" style={{ fontSize: 12, color: C.muted }}><span>Neto {dinero(c.neto)}{esA ? " · IVA " + dinero(c.ivaL) : ""}{c.internos ? " · Int. " + dinero(c.internos) : ""}</span><span style={{ fontWeight: 700, color: C.text }}>Subtotal {dinero(c.sub)}</span></div>{c.a && c.cantB > 0 && <div style={{ color: C.green, fontSize: 12, marginTop: 4 }}>→ ingresan {peso(c.ingreso)} {unidadDe(c.a.insumo)} de {nombreIns(c.a.insumo)}</div>}</div>); })}</div>
+              <button onClick={addFacItem} className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={15} /> Agregar artículo</button>
+              <div className="mt-4 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}><div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Neto</span><span>{dinero(tot.neto)}</span></div>{tot.internos > 0 && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Impuestos internos</span><span>{dinero(tot.internos)}</span></div>}{esA && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>IVA 21%</span><span>{dinero(tot.iva)}</span></div>}<div className="flex justify-between items-baseline"><span style={{ fontWeight: 700 }}>Total</span><span style={{ fontWeight: 800, fontSize: 20, color: C.amber }}>{dinero(tot.total)}</span></div></div>
+              <button onClick={cargarFactura} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-3" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Cargar y sumar al stock</button>
+            </div>
+            <div><h3 style={{ fontWeight: 700, marginBottom: 12 }}>Facturas cargadas</h3>{facturas.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>Cargá una factura y la vas a ver acá; el stock se actualiza solo.</p>) : (<div className="flex flex-col gap-2">{facturas.map((f) => (<div key={f.id} className="rounded-lg p-3" style={{ background: C.raised, border: "1px solid " + C.border }}><div className="flex items-center justify-between"><span style={{ fontWeight: 700 }}>{f.proveedor}</span><span style={{ color: C.amber, fontWeight: 700 }}>{f.total > 0 ? dinero(f.total) : "—"}</span></div><div style={{ color: C.muted, fontSize: 12, marginBottom: 8 }}>{f.fecha} · {f.tipo}{f.numero ? " · " + f.numero : ""}</div><div className="flex flex-col gap-1">{f.items.map((it, k) => (<div key={k} className="flex justify-between" style={{ fontSize: 13 }}><span style={{ color: C.muted }}>{peso(it.cantidad)} {it.bulto} · {it.desc}</span><span style={{ color: C.green, fontWeight: 700 }}>+{peso(it.ingreso)} {it.insumoUn}</span></div>))}</div></div>))}</div>)}</div>
+          </div>
+        )}
+
+        {/* PROVEEDORES (ABM) */}
+        {activeTab === "proveedores" && esAdmin && (
+          <div>
+            <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Proveedores</h2><button onClick={() => setAbmProv(provVacio())} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo proveedor</button></div>
+            {proveedores.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>No hay proveedores. Tocá "Nuevo proveedor".</p>) : (
+              <div className="flex flex-col gap-2">{proveedores.map((p) => (
+                <div key={p.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1"><div className="flex items-center gap-2 flex-wrap"><span style={{ fontWeight: 700, fontSize: 15 }}>{p.nombre}</span>{p.rubro && <span style={{ color: C.amber, fontSize: 11, fontWeight: 700, border: "1px solid " + C.border, borderRadius: 6, padding: "1px 7px" }}>{p.rubro}</span>}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 4, lineHeight: 1.6 }}>{p.condicion}{p.cuit ? " · CUIT " + p.cuit : ""}<br />{(p.direccion || p.localidad) && <span>{[p.direccion, p.localidad].filter(Boolean).join(", ")}<br /></span>}{[p.telefono, p.email].filter(Boolean).join(" · ")}</div></div>
+                    <div className="flex gap-1"><button onClick={() => setAbmProv({ ...p })} className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.muted }}><Pencil size={15} /></button><button onClick={() => borrarProveedor(p.id)} className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red }}><Trash2 size={15} /></button></div>
+                  </div>
+                </div>
+              ))}</div>
+            )}
+          </div>
+        )}
+
+        {/* INSUMOS (ABM) */}
+        {activeTab === "insumos" && esAdmin && (
+          <div>
+            <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Insumos</h2><div className="flex gap-2"><button onClick={nuevoInsumo} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo insumo</button></div></div>
+            <div className="flex flex-col gap-1.5">{insumos.map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{peso(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
+          </div>
+        )}
+
+        {/* CARTA */}
+        {activeTab === "carta" && puedeCarta && (
+          <div>
+            <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Carta · productos de venta</h2><button onClick={nuevoProducto} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo producto</button></div>
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid " + C.border }}>
+              <div className="flex items-center gap-2 px-3 py-2" style={{ background: C.raised2, color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}><span className="flex-1">Producto</span><span style={{ width: 92 }}>Categoría</span><span style={{ width: 70, textAlign: "right" }}>Precio</span><span style={{ width: 64, textAlign: "right" }}>Costo</span><span style={{ width: 64, textAlign: "right" }}>Margen</span><span style={{ width: 22 }}></span></div>
+              {productos.map((p, idx) => { const costo = costoProd(p); const mg = p.precio ? Math.round((p.precio - costo) / p.precio * 100) : 0; return (<button key={p.id} onClick={() => editarProducto(p)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ background: idx % 2 ? C.base : C.raised, borderTop: "1px solid " + C.border }}><span className="flex-1 truncate" style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span><span style={{ width: 92, color: C.muted, fontSize: 12 }}>{p.cat}</span><span style={{ width: 70, textAlign: "right", fontSize: 13, fontWeight: 700, color: C.amber }}>{pesos(p.precio)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, color: C.muted }}>{pesos(costo)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, fontWeight: 700, color: mg >= 0 ? C.green : C.red }}>{mg}%</span><span style={{ width: 22, color: C.muted }}><Pencil size={13} /></span></button>); })}
+            </div>
+          </div>
+        )}
+
+        {/* CAJA */}
+        {activeTab === "caja" && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 style={{ fontWeight: 700, fontSize: 18 }}><DollarSign size={20} style={{ marginRight: 6 }} />Caja del día</h2>
+              <div className="flex items-center gap-2">
+                {historialCierres.length > 0 && <button onClick={() => setShowHistorial(true)} className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Historial</button>}
+                <span style={{ color: C.muted, fontSize: 13 }}>{caja.fecha}{caja.turno ? " · " + caja.turno : ""}</span>
+              </div>
+            </div>
+
+            {!cajaIniciada ? (
+              /* Apertura form */
+              esVisor ? (
+                <div className="max-w-md mx-auto rounded-xl p-6 text-center" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Esperando apertura de caja</h3>
+                  <p style={{ color: C.muted, fontSize: 13 }}>La caja no está abierta. Un administrador o cajero debe abrir la caja para comenzar la operación.</p>
+                </div>
+              ) : (
+              <div className="max-w-md mx-auto rounded-xl p-6" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Abrir caja</h3>
+                <div className="flex flex-col gap-3">
+                  <div><label style={lbl}>Turno</label>
+                    <select style={inputStyle} value={caja.turno} onChange={(e) => setCaja((c) => ({ ...c, turno: e.target.value }))}>
+                      <option value="">Seleccionar…</option>
+                      <option value="Mañana">Mañana</option>
+                      <option value="Tarde">Tarde</option>
+                      <option value="Noche">Noche</option>
+                    </select>
+                  </div>
+                  <div><label style={lbl}>Efectivo inicial</label><input style={inputStyle} type="number" value={caja.apertura || ""} onChange={(e) => setCaja((c) => ({ ...c, apertura: parseFloat(e.target.value) || 0 }))} placeholder="0" /></div>
+                  <div><label style={lbl}>Usuario</label><input style={inputStyle} type="text" value={caja.usuario} onChange={(e) => setCaja((c) => ({ ...c, usuario: e.target.value }))} placeholder="Nombre del cajero" /></div>
+                  <button onClick={() => { if (!caja.turno) { setToast({ tipo: "error", texto: "Seleccioná el turno." }); return; } if (!caja.usuario.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del usuario." }); return; } if (!caja.apertura || caja.apertura <= 0) { setToast({ tipo: "error", texto: "Poné el efectivo inicial." }); return; } const turno = caja.turno; const apertura = caja.apertura; const usuario = caja.usuario; const nuevaCaja = { fecha: hoy(), apertura, movimientos: [], cierre: null, saldoFinal: null, turno, usuario, arqueo: {} }; setCaja(nuevaCaja); try { localStorage.setItem("elmo_caja", JSON.stringify(nuevaCaja)); } catch {} setCajaIniciada(true); setDeliveries([]); setMesas(Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }]))); setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno + " (mesas y deliveries limpiados)" }); }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold mt-2" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Abrir caja</button>
+                </div>
+              </div>
+            )) : (
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 style={{ fontWeight: 700, fontSize: 15 }}>Resumen del turno</h3>
+                    {!esVisor && <button onClick={() => { if (!window.confirm("¿Reiniciar caja? Se perderán los movimientos actuales.")) return; const cajaLimpia = { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} }; setCaja(cajaLimpia); try { localStorage.setItem("elmo_caja", JSON.stringify(cajaLimpia)); } catch {} setCajaIniciada(false); setToast({ tipo: "ok", texto: "Caja reiniciada" }); }} className="flex items-center gap-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><RotateCcw size={11} /> Reiniciar</button>}
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div style={{ fontSize: 13, color: C.muted }}>{caja.turno}{caja.usuario ? " · " + caja.usuario : ""}</div>
+                    <div className="rounded-lg p-3" style={{ background: C.base }}>
+                      <div className="flex justify-between" style={{ fontSize: 13 }}><span>Apertura</span><span style={{ fontWeight: 700 }}>{dinero(caja.apertura)}</span></div>
+                      <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Ventas del día</span><span style={{ color: C.green, fontWeight: 700 }}>{dinero(cajaVentas)}</span></div>
+                      <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos del día</span><span style={{ color: C.red, fontWeight: 700 }}>{dinero(cajaEgresos)}</span></div>
+                      <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
+                      <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado en caja</span><span style={{ color: C.amber, fontWeight: 800, fontSize: 15 }}>{dinero(cajaEsperado)}</span></div>
+                    </div>
+                    {(deliveries.some(d => d.estado !== "entregado") || Object.values(mesas).some(m => m.lineas.length || m.enviado.length)) && (
+                <div className="rounded-lg p-3 text-xs mb-2" style={{ background: "rgba(217,84,63,.15)", border: "1px solid " + C.red, color: C.red }}>
+                  <strong style={{ display: "block", marginBottom: 4 }}>⚠️ Pedidos pendientes</strong>
+                  {deliveries.filter(d => d.estado !== "entregado").map(d => <div key={d.id}>Delivery · {d.cliente} ({d.estado})</div>)}
+                  {Object.entries(mesas).filter(([, m]) => m.lineas.length || m.enviado.length).map(([id]) => <div key={id}>Mesa {id}</div>)}
+                </div>
+              )}
+              {!esVisor && <button onClick={() => setShowCierreModal(true)} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.red, color: "#fff" }}><CheckCircle2 size={16} /> Cerrar caja</button>}
+                  </div>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 700, fontSize: 15 }}>Movimientos</h3>{!esVisor && <button onClick={() => { setEgresoConcepto(""); setEgresoMonto(""); setEditEgresoId(null); setShowEgresoModal(true); }} className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold" style={{ background: C.red, color: "#fff" }}>+ Egreso</button>}</div>
+                  {cajaMovs.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin movimientos hoy.</p> : (
+                    <div className="flex flex-col gap-1.5 max-h-96 overflow-y-auto">{cajaMovs.slice().reverse().map((m) => (<div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base, cursor: m.tipo === "egreso" ? "pointer" : "default" }} onClick={() => { if (m.tipo === "egreso") { setEgresoConcepto(m.concepto); setEgresoMonto(String(m.monto)); setEditEgresoId(m.id); setShowEgresoModal(true); } }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.usuario ? " · " + m.usuario : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: m.tipo === "venta" ? C.green : C.red }}>{m.tipo === "venta" ? "+" : "-"}{dinero(m.monto)}</span></div>))}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cierre modal */}
+            {showCierreModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowCierreModal(false)}>
+                <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Cerrar caja</h3><button onClick={() => setShowCierreModal(false)} style={{ color: C.muted }}><X size={18} /></button></div>
+                  <div className="rounded-lg p-3 mb-4" style={{ background: C.base }}>
+                    <div className="flex justify-between" style={{ fontSize: 13 }}><span>Apertura</span><span>{dinero(caja.apertura)}</span></div>
+                    <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Ventas</span><span style={{ color: C.green }}>{dinero(cajaVentas)}</span></div>
+                    <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos</span><span style={{ color: C.red }}>{dinero(cajaEgresos)}</span></div>
+                    <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
+                    <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado</span><span style={{ fontWeight: 800, color: C.amber }}>{dinero(cajaEsperado)}</span></div>
+                  </div>
+                  {(deliveries.some(d => d.estado !== "entregado") || Object.values(mesas).some(m => m.lineas.length || m.enviado.length)) && (
+                    <div className="rounded-lg p-3 mb-3 text-xs" style={{ background: "rgba(217,84,63,.15)", border: "1px solid " + C.red, color: C.red }}>
+                      ⚠️ Hay pedidos sin entregar. Al cerrar caja se bloquearán los demás módulos hasta reabrir.
+                    </div>
+                  )}
+
+                  <div><label style={lbl}>Arqueo (contar billetes)</label></div>
+                  {[1000, 500, 200, 100, 50, 20, 10, 5, 2, 1].map((billete) => {
+                    const cant = caja.arqueo?.[billete] || 0;
+                    const subtotal = cant * billete;
+                    return (
+                      <div key={billete} className="flex items-center gap-2 mb-1">
+                        <span style={{ fontSize: 13, minWidth: 60 }}>${billete}</span>
+                        <input type="number" min="0" style={{ ...inputStyle, flex: 1 }} placeholder="cant." value={caja.arqueo?.[billete] ?? ""} onChange={(e) => setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), [billete]: parseInt(e.target.value) || 0 } }))} />
+                        <span style={{ fontSize: 12, color: C.muted, minWidth: 70, textAlign: "right" }}>{dinero(subtotal)}</span>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const totalArqueo = Object.entries(caja.arqueo || {}).reduce((a, [b, c]) => a + parseInt(b) * c, 0);
+                    return <div className="flex justify-between rounded-lg p-2 mt-2" style={{ background: C.base, fontSize: 13 }}>
+                      <span>Total arqueo</span><span style={{ fontWeight: 800, fontSize: 15, color: C.amber }}>{dinero(totalArqueo)}</span>
+                    </div>;
+                  })()}
+
+                  <div className="mt-3"><label style={lbl}>Cierre (efectivo contado)</label><input style={inputStyle} type="number" value={caja.cierre || ""} onChange={(e) => setCaja((c) => ({ ...c, cierre: parseFloat(e.target.value) || 0 }))} placeholder="0" /></div>
+                  {caja.cierre > 0 && <div className="rounded-lg p-3 text-center mt-2" style={{ background: C.base }}><span style={{ fontSize: 13, color: C.muted }}>Diferencia: </span><span style={{ fontWeight: 800, fontSize: 18, color: (caja.cierre - cajaEsperado) >= 0 ? C.green : C.red }}>{dinero(caja.cierre - cajaEsperado)}</span></div>}
+                  <button onClick={() => {
+                    if (caja.cierre === null || caja.cierre <= 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre primero." }); return; }
+                    const pendientes = deliveries.filter(d => d.estado !== "entregado");
+                    const mesasAbiertas = Object.entries(mesas).filter(([, m]) => m.lineas.length || m.enviado.length);
+                    if (pendientes.length || mesasAbiertas.length) {
+                      const lista = [...pendientes.map(d => "• Delivery: " + d.cliente), ...mesasAbiertas.map(([id]) => "• Mesa " + id)].join("\n");
+                      if (!window.confirm("Hay pedidos sin entregar:\n\n" + lista + "\n\n¿Cerrar caja igual? Se limpiarán automáticamente.")) return;
+                    }
+                    const diff = caja.cierre - cajaEsperado;
+                    const cierreCompleto = { ...caja, diff, fechaCierre: hoy() + " " + hora() };
+                    setHistorialCierres((h) => [cierreCompleto, ...h]);
+                    const cajaLimpia = { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
+                    setCaja(cajaLimpia);
+                    try { localStorage.setItem("elmo_caja", JSON.stringify(cajaLimpia)); } catch {}
+                    setCajaIniciada(false);
+                    setDeliveries((d) => d.filter(x => x.estado === "entregado"));
+                    setMesas((ms) => Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }])));
+                    setShowCierreModal(false);
+                    setToast({ tipo: "ok", texto: "Caja cerrada. Diferencia: " + dinero(diff) + ". Pedidos pendientes limpiados." });
+                  }} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-4" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Confirmar cierre</button>
+                </div>
+              </div>
+            )}
+
+            {/* Historial modal */}
+            {showHistorial && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowHistorial(false)}>
+                <div className="w-full max-w-2xl rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Historial de cierres</h3><button onClick={() => setShowHistorial(false)} style={{ color: C.muted }}><X size={18} /></button></div>
+                  {historialCierres.length === 0 ? (
+                    <p style={{ color: C.muted, fontSize: 14 }}>No hay cierres guardados.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3">{historialCierres.map((hc, i) => {
+                      const ventas = (hc.movimientos || []).filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0);
+                      const egresos = (hc.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
+                      const esperado = hc.apertura + ventas - egresos;
+                      return <div key={i} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                        <div className="flex items-center justify-between">
+                          <div><span style={{ fontWeight: 800, fontSize: 15 }}>{hc.fecha}</span><span style={{ color: C.muted, fontSize: 12, marginLeft: 8 }}>{hc.fechaCierre || ""}</span></div>
+                          <span className="px-2 py-0.5 rounded-md text-xs" style={{ background: hc.turno === "Mañana" ? "#fef3c7" : hc.turno === "Tarde" ? "#fde68a" : "#dbeafe", color: "#241a0c" }}>{hc.turno}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2" style={{ fontSize: 13 }}>
+                          <span>Usuario: {hc.usuario || "—"}</span>
+                          <span>Apertura: {dinero(hc.apertura)}</span>
+                          <span>Ventas: <span style={{ color: C.green }}>{dinero(ventas)}</span></span>
+                          <span>Egresos: <span style={{ color: C.red }}>{dinero(egresos)}</span></span>
+                          <span>Esperado: {dinero(esperado)}</span>
+                          <span>Cierre: {dinero(hc.cierre || 0)}</span>
+                          <span style={{ fontWeight: 700 }}>Diferencia: <span style={{ color: (hc.diff || 0) >= 0 ? C.green : C.red }}>{dinero(hc.diff || 0)}</span></span>
+                        </div>
+                        {hc.movimientos && hc.movimientos.length > 0 && <button onClick={() => { const el = document.getElementById("hc_movs_" + i); el.style.display = el.style.display === "none" ? "" : "none"; }} className="mt-2 text-xs" style={{ color: C.muted }}>Ver movimientos</button>}
+                        <div id={"hc_movs_" + i} style={{ display: "none" }} className="mt-2 flex flex-col gap-1">{hc.movimientos.map((m, j) => (
+                          <div key={j} style={{ fontSize: 12, color: C.muted }}>{m.hora} · {m.concepto} · {m.tipo === "venta" ? "+" : "-"}{dinero(m.monto)}</div>
+                        ))}</div>
+                      </div>;
+                    })}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modal ABM proveedor */}
+      {abmProv && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setAbmProv(null)}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProv.id ? "Editar proveedor" : "Nuevo proveedor"}</h3><button onClick={() => setAbmProv(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div className="flex flex-col gap-3">
+              <div><label style={lbl}>Razón social *</label><input style={inputStyle} value={abmProv.nombre} onChange={(e) => setAbmProv((p) => ({ ...p, nombre: e.target.value }))} /></div>
+              <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>CUIT</label><input style={inputStyle} value={abmProv.cuit} onChange={(e) => setAbmProv((p) => ({ ...p, cuit: e.target.value }))} /></div><div><label style={lbl}>Rubro</label><input style={inputStyle} value={abmProv.rubro} onChange={(e) => setAbmProv((p) => ({ ...p, rubro: e.target.value }))} /></div></div>
+              <div><label style={lbl}>Condición frente al IVA</label><select style={inputStyle} value={abmProv.condicion} onChange={(e) => setAbmProv((p) => ({ ...p, condicion: e.target.value }))}>{CONDICIONES.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+              <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Dirección</label><input style={inputStyle} value={abmProv.direccion} onChange={(e) => setAbmProv((p) => ({ ...p, direccion: e.target.value }))} /></div><div><label style={lbl}>Localidad</label><input style={inputStyle} value={abmProv.localidad} onChange={(e) => setAbmProv((p) => ({ ...p, localidad: e.target.value }))} /></div></div>
+              <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Teléfono</label><input style={inputStyle} value={abmProv.telefono} onChange={(e) => setAbmProv((p) => ({ ...p, telefono: e.target.value }))} /></div><div><label style={lbl}>Email</label><input style={inputStyle} value={abmProv.email} onChange={(e) => setAbmProv((p) => ({ ...p, email: e.target.value }))} /></div></div>
+              <button onClick={guardarProveedor} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-1" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar proveedor</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ABM insumo */}
+      {abmIns && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setAbmIns(null)}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => setAbmIns(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div className="flex flex-col gap-3">
+              <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
+              <div><label style={lbl}>Presentación (cómo viene)</label><input style={inputStyle} placeholder="Ej: Sachet 3 kg, Cajón x24, Bolsa 1 kg" value={abmIns.presentacion} onChange={(e) => setAbmIns((p) => ({ ...p, presentacion: e.target.value }))} /></div>
+               <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se mide en</label><select style={inputStyle} value={abmIns.unidad} onChange={(e) => setAbmIns((p) => ({ ...p, unidad: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Stock actual</label><input style={inputStyle} type="number" value={abmIns.stockActual} onChange={(e) => setAbmIns((p) => ({ ...p, stockActual: e.target.value }))} /></div><div><label style={lbl}>Mínimo</label><input style={inputStyle} type="number" value={abmIns.min} onChange={(e) => setAbmIns((p) => ({ ...p, min: e.target.value }))} /></div></div>
+              <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Se compra en</label><select style={inputStyle} value={abmIns.unidadCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, unidadCompra: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Factor conversión (1 compra = ? stock)</label><input style={inputStyle} type="number" placeholder="Ej: 3 (1kg = 3u)" value={abmIns.factorCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, factorCompra: e.target.value }))} /></div></div>
+              <button onClick={guardarInsumo} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-1" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar insumo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ABM producto */}
+      {abmProd && (() => {
+        const costo = costoReceta(recetaActual()); const precio = parseFloat(abmProd.precio) || 0; const mg = precio ? Math.round((precio - costo) / precio * 100) : 0;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setAbmProd(null)}>
+            <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProd.id ? "Editar producto" : "Nuevo producto"}</h3><button onClick={() => setAbmProd(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+              <div className="flex flex-col gap-3">
+                <div><label style={lbl}>Nombre *</label><input style={inputStyle} placeholder="Ej: Milanesa napolitana" value={abmProd.nombre} onChange={(e) => setProdF("nombre", e.target.value)} /></div>
+                <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Categoría</label><div className="flex gap-1"><select style={{ ...inputStyle, flex: 1 }} value={abmProd.cat} onChange={(e) => { setProdF("cat", e.target.value); }}>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}<option value="__new__">+ Nueva…</option></select></div></div><div><label style={lbl}>Precio de venta</label><input style={inputStyle} type="number" value={abmProd.precio} onChange={(e) => setProdF("precio", e.target.value)} /></div></div>
+                {abmProd.cat === "__new__" && <div className="flex gap-2 items-center"><input style={{ ...inputStyle, flex: 1 }} placeholder="Nombre de la nueva categoría" value={abmProd.nuevaCat || ""} onChange={(e) => setProdF("nuevaCat", e.target.value)} /><button onClick={() => { if (!abmProd.nuevaCat?.trim()) return; const c = abmProd.nuevaCat.trim(); if (categorias.includes(c)) { setProdF("cat", c); setProdF("nuevaCat", ""); return; } setCategorias((prev) => { const next = [...prev, c]; try { localStorage.setItem("elmo_categorias", JSON.stringify(next)); } catch {} return next; }); setProdF("cat", c); setProdF("nuevaCat", ""); }} className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: C.amber, color: "#241a0c" }}>Agregar</button></div>}
+                <div><label style={lbl}>Receta (ingredientes)</label><div className="flex flex-col gap-2">{abmProd.receta.map((r) => (<div key={r.rid} className="flex items-center gap-2"><select style={{ ...miniInput, flex: 1 }} value={r.insumoId} onChange={(e) => setIng(r.rid, "insumoId", e.target.value)}><option value="">Insumo…</option>{insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}</select><input style={{ ...miniInput, width: 70 }} type="number" placeholder="cant" value={r.cantidad} onChange={(e) => setIng(r.rid, "cantidad", e.target.value)} /><span style={{ width: 22, color: C.muted, fontSize: 12 }}>{r.insumoId ? unidadDe(r.insumoId) : ""}</span><button onClick={() => delIng(r.rid)} className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><X size={14} /></button></div>))}</div><button onClick={addIng} className="flex items-center gap-1 mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={14} /> Agregar ingrediente</button></div>
+                <div className="flex justify-between items-baseline pt-2" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13 }}>Costo {pesos(costo)} · Margen</span><span style={{ fontWeight: 800, color: mg >= 0 ? C.green : C.red }}>{precio ? pesos(precio - costo) : "—"} ({mg}%)</span></div>
+                <div className="flex gap-2"><button onClick={guardarProducto} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar</button>{abmProd.id && <button onClick={() => borrarProducto(abmProd.id)} className="px-4 rounded-lg" style={{ background: C.base, color: C.red, border: "1px solid " + C.border }}><Trash2 size={16} /></button>}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Comanda */}
+      {ticket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
+          <div className="w-full max-w-xs rounded-lg p-5" style={{ background: "#fbf9f4", color: "#1a1715", fontFamily: "'Courier New', monospace" }}>
+            <div className="text-center" style={{ borderBottom: "1px dashed #999", paddingBottom: 10, marginBottom: 10 }}><div style={{ fontWeight: 700, fontSize: 18, letterSpacing: 2 }}>COMANDA</div><div style={{ fontSize: 12, textTransform: "uppercase", marginTop: 2 }}>{ticket.tipo === "mesa" ? "Mesa " + ticket.mesaId : "Delivery"}</div><div style={{ fontSize: 12 }}>{ticket.hora} hs</div></div>
+            {ticket.tipo === "delivery" && (<div style={{ fontSize: 13, borderBottom: "1px dashed #999", paddingBottom: 10, marginBottom: 10 }}><div><b>Cliente:</b> {ticket.cliente}</div><div><b>Dirección:</b> {ticket.direccion}</div>{ticket.telefono && <div><b>Tel:</b> {ticket.telefono}</div>}</div>)}
+            <div style={{ fontSize: 13 }}>{ticket.items.map((it, k) => (<div key={k} style={{ marginBottom: 6 }}><div className="flex justify-between"><span>{it.cant}x {it.nombre}</span><span>{pesos(it.precio * it.cant)}</span></div>{it.nota && <div style={{ fontSize: 12, fontStyle: "italic", paddingLeft: 16 }}>&gt; {it.nota}</div>}</div>))}</div>
+            <div className="flex justify-between" style={{ borderTop: "1px dashed #999", marginTop: 6, paddingTop: 8, fontWeight: 700 }}><span>SUBTOTAL</span><span>{pesos(ticket.total)}</span></div>
+            <button onClick={cerrarTicket} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md mt-4 font-bold" style={{ background: "#1a1715", color: "#fbf9f4" }}><Printer size={15} /> Imprimir y enviar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Cobro modal */}
+      {showCobroModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowCobroModal(null)}>
+          <div className="w-full max-w-xs rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              {cobroMetodo ? <button onClick={() => setCobroMetodo(null)} className="flex items-center gap-1" style={{ color: C.muted }}><ArrowLeft size={15} /> Atrás</button> : <div />}
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cobrar Mesa {showCobroModal.id}</h3>
+              <button onClick={() => setShowCobroModal(null)} style={{ color: C.muted }}><X size={18} /></button>
+            </div>
+            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total a cobrar</span><div style={{ fontWeight: 800, fontSize: 28, color: C.amber }}>{pesos(showCobroModal.total)}</div></div>
+            {!cobroMetodo ? (
+              <>
+                <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago:</p>
+                <div className="flex flex-col gap-2">{["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
+                  <button key={met} onClick={() => met === "Efectivo" ? setCobroMetodo("Efectivo") : confirmarCobro(showCobroModal.id, met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber }} />
+                    {met}
+                  </button>
+                ))}</div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <input style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
+                {cobroPago && parseFloat(cobroPago) >= showCobroModal.total && (
+                  <div className="rounded-lg p-3 text-center" style={{ background: C.base }}>
+                    <span style={{ fontSize: 13, color: C.muted }}>Vuelto</span>
+                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(parseFloat(cobroPago) - showCobroModal.total)}</div>
+                  </div>
+                )}
+                <button onClick={() => confirmarCobro(showCobroModal.id, "Efectivo")} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Confirmar pago en efectivo</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal forma de pago delivery */}
+      {showPagoDelivery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowPagoDelivery(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Delivery: {showPagoDelivery.cliente}</h3>
+            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total</span><div style={{ fontWeight: 800, fontSize: 24, color: C.amber }}>{pesos(showPagoDelivery.total)}</div></div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>
+            <div className="flex flex-col gap-2">
+              {["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
+                <button key={met} onClick={() => { entregarDelivery(showPagoDelivery.id, met); setShowPagoDelivery(null); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>{met}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp recibir pedido */}
+      {whatsappModal === "recibir" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setWhatsappModal(null)}>
+          <div className="w-full max-w-lg rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Recibir pedido por WhatsApp</h3><button onClick={() => setWhatsappModal(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <p style={{ color: C.muted, fontSize: 13, marginBottom: 10 }}>Pegá acá el mensaje de WhatsApp. Reconozco formato numérico (ej: "1, 2, nombre, calle...") o por nombres (ej: "2x Muzzarella").</p>
+            <textarea style={{ ...inputStyle, minHeight: 180, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} value={pedidoRaw} onChange={(e) => setPedidoRaw(e.target.value)} placeholder={"1, 2, Germán, calle Siempre Viva 123 — o — Cliente: Juan Perez — Direccion: Av Siempre Viva 123 — Tel: 11-5555-5555 — 2x Muzzarella (sin cebolla) — 1x Napolitana"} />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { const res = parsearPedidoWhatsApp(pedidoRaw, productos); if (!res.datos.cliente) { setToast({ tipo: "error", texto: "No encontré nombre del cliente. Escribí \"Cliente: ...\" en el mensaje." }); return; } if (!res.items.length) { setToast({ tipo: "error", texto: "No pude identificar productos. Revisá que los nombres coincidan con la carta." }); return; } setOrden({ tipo: "delivery", mesaId: null, lineas: res.items.map(l => ({ lid: uid(), ...l })), datos: res.datos }); setCat("Pizzas"); setVista("orden"); setWhatsappModal(null); setToast({ tipo: "ok", texto: "Pedido parseado: " + res.items.length + " producto(s) de " + res.datos.cliente + ". Revisá y enviá a cocina." }); }} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><Smartphone size={16} /> Parsear y cargar pedido</button>
+              <button onClick={() => setWhatsappModal(null)} className="px-4 rounded-lg" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp config número */}
+      {whatsappModal === "config" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setWhatsappModal(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Número de WhatsApp</h3><button onClick={() => setWhatsappModal(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <p style={{ color: C.muted, fontSize: 13, marginBottom: 10 }}>Ingresá el número del bar (con código de país y sin +). Ej: 5491155551234</p>
+            <input style={inputStyle} value={pedidoRaw} onChange={(e) => setPedidoRaw(e.target.value)} placeholder="5491155551234" />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { WA_NUMERO = pedidoRaw; localStorage.setItem("elmo_wa_numero", pedidoRaw); setWhatsappModal(null); setToast({ tipo: "ok", texto: "Número actualizado. Compartí el menú para probar." }); }} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar</button>
+              <button onClick={() => setWhatsappModal(null)} className="px-4 rounded-lg" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+       {/* QR por mesa */}
+      {qrMesa !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setQrMesa(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5 text-center" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Mesa {qrMesa}</h3><button onClick={() => setQrMesa(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div>
+              <p style={{ color: C.muted, fontSize: 11, marginBottom: 8 }}>📱 Escaneá para pedir</p>
+              <img id={"qr-img-" + qrMesa} src={"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(publicUrl + "/menu-mesa.html?mesa=" + qrMesa)} alt={"QR Web Mesa " + qrMesa} style={{ width: 200, height: 200, margin: "0 auto", borderRadius: 12, background: "#fff", padding: 6 }} />
+              <p style={{ color: "#a89a8c", fontSize: 10, marginTop: 6, wordBreak: "break-all" }}>{publicUrl}/menu-mesa.html?mesa={qrMesa}</p>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => { window.open("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(publicUrl + "/menu-mesa.html?mesa=" + qrMesa), "_blank"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Printer size={15} /> Descargar QR</button>
+              <button onClick={() => setQrMesa(null)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWaPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowWaPopup(false)}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}><Smartphone size={16} style={{ marginRight: 6 }} />Pedidos WhatsApp</h3><button onClick={() => setShowWaPopup(false)} style={{ color: C.muted }}><X size={18} /></button></div>
+            {waPedidos.length === 0 ? (
+              <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos pendientes.</p>
+            ) : (
+              <div className="flex flex-col gap-3">{waPedidos.map((wp) => (
+                <div key={wp.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div><div style={{ fontWeight: 700, fontSize: 15 }}>{wp.mesa ? "Mesa " + wp.mesa : (wp.nombre || "Cliente")}</div>{wp.mesa ? "" : (wp.direccion ? <div style={{ color: C.muted, fontSize: 13 }}>{wp.direccion}</div> : "")}{wp.telefono ? <div style={{ color: C.muted, fontSize: 12 }}>{wp.telefono}</div> : ""}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{wp.hora}</div>
+                  </div>
+                  <div className="flex flex-col gap-1 mt-2" style={{ fontSize: 13 }}>{wp.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>))}</div>
+                  {!esVisor && <div className="flex gap-2 mt-3">
+                    <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); setShowWaPopup(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Importar</button>
+                    <button onClick={() => { fetch(serverUrl + "/api/pedidos/" + wp.id + "/enviado", { method: "POST" }).then(() => setWaPedidos((ps) => ps.filter(p => p.id !== wp.id))); }} className="px-3 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Ignorar</button>
+                  </div>}
+                </div>
+              ))}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cocina popup */}
+      {showCocinaPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowCocinaPopup(false)}>
+          <div className="w-full max-w-lg rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}><Flame size={16} style={{ marginRight: 6 }} />Cocina</h3><button onClick={() => setShowCocinaPopup(false)} style={{ color: C.muted }}><X size={18} /></button></div>
+            {(() => {
+              const enCocina = [];
+              const despachados = [];
+              for (const m of MESAS) {
+                if (mesas[m.id].enviado.length > 0) enCocina.push({ tipo: "mesa", id: m.id, label: "Mesa " + m.id, items: mesas[m.id].enviado, total: sumLin(mesas[m.id].enviado) });
+                if ((mesas[m.id].despachado || []).length > 0) despachados.push({ tipo: "mesa", id: m.id, label: "Mesa " + m.id, items: mesas[m.id].despachado, total: sumLin(mesas[m.id].despachado) });
+              }
+              for (const d of deliveries) {
+                if (d.estado === "cocina") enCocina.push({ tipo: "delivery", id: d.id, label: d.cliente, direccion: d.direccion, items: d.items, total: d.total, hora: d.hora, telefono: d.telefono });
+                if (d.estado === "despachado") despachados.push({ tipo: "delivery", id: d.id, label: d.cliente, direccion: d.direccion, items: d.items, total: d.total, hora: d.hora, telefono: d.telefono });
+              }
+              return (
+                <div className="flex flex-col gap-4">
+                  {enCocina.length === 0 && despachados.length === 0 ? (
+                    <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos en cocina.</p>
+                  ) : (
+                    <>
+                      {enCocina.length > 0 && (
+                        <div>
+                          <h4 style={{ fontWeight: 700, fontSize: 14, color: C.amber, marginBottom: 8 }}>En cocina ({enCocina.length})</h4>
+                          <div className="flex flex-col gap-2">{enCocina.map((oc) => (
+                            <div key={oc.tipo + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.amber }}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div style={{ fontWeight: 700, fontSize: 14 }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
+                                <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
+                              </div>
+                              <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
+                                <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
+                              ))}</div>
+                              {!esVisor && <div className="flex gap-2 mt-2"><button onClick={() => { if (oc.tipo === "mesa") despacharMesa(oc.id); else { entregarDelivery(oc.id); if (oc.telefono) abrirWA(oc.telefono, "¡Hola " + oc.label + "! Tu pedido de " + pesos(oc.total) + " fue despachado. ¡Gracias por tu compra!"); } setShowCocinaPopup(true); }} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button></div>}
+                            </div>
+                          ))}</div>
+                        </div>
+                      )}
+                      {despachados.length > 0 && (
+                        <div>
+                          <h4 style={{ fontWeight: 700, fontSize: 14, color: C.green, marginBottom: 8 }}>Despachados ({despachados.length})</h4>
+                          <div className="flex flex-col gap-2">{despachados.map((oc) => (
+                            <div key={oc.tipo + "-d-" + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.green, opacity: 0.85 }}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div style={{ fontWeight: 700, fontSize: 14, color: C.muted }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
+                                <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
+                              </div>
+                              <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
+                                <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
+                              ))}</div>
+                              {!esVisor && oc.tipo === "delivery" && (
+                                <button onClick={() => { setShowCocinaPopup(false); setShowPagoDelivery({ id: oc.id, cliente: oc.label, total: oc.total, telefono: oc.telefono }); }} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm mt-2" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>
+                              )}
+                            </div>
+                          ))}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Egreso modal */}
+      {showEgresoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={() => setShowEgresoModal(false)}>
+          <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{editEgresoId ? "Editar egreso" : "Nuevo egreso"}</h3><button onClick={() => setShowEgresoModal(false)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div className="flex flex-col gap-3">
+              <div><label style={lbl}>Concepto</label><input style={inputStyle} placeholder="Ej: Pan, verduras..." value={egresoConcepto} onChange={(e) => setEgresoConcepto(e.target.value)} autoFocus /></div>
+              <div><label style={lbl}>Monto ($)</label><input style={inputStyle} type="number" min="0" placeholder="0" value={egresoMonto} onChange={(e) => setEgresoMonto(e.target.value)} /></div>
+              <button onClick={() => {
+                const concepto = egresoConcepto.trim();
+                const monto = parseFloat(egresoMonto);
+                if (!concepto) { setToast({ tipo: "error", texto: "Falta el concepto." }); return; }
+                if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Monto inválido." }); return; }
+                setCaja((c) => {
+                  if (editEgresoId) {
+                    return { ...c, movimientos: c.movimientos.map(m => m.id === editEgresoId ? { ...m, concepto, monto } : m) };
+                  }
+                  return { ...c, movimientos: [...c.movimientos, { id: uid(), tipo: "egreso", concepto, monto, metodo: "Efectivo", hora: hora(), usuario: usuario.nombre }] };
+                });
+                setShowEgresoModal(false);
+                setToast({ tipo: "ok", texto: editEgresoId ? "Egreso actualizado." : "Egreso registrado: $" + monto.toLocaleString("es-AR") });
+              }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-1" style={{ background: C.red, color: "#fff" }}><span>{editEgresoId ? "Guardar cambios" : "Registrar egreso"}</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowConfig(false)}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}><Settings size={16} style={{ marginRight: 6 }} />Configuraciones</h3>
+              <button onClick={() => setShowConfig(false)} style={{ color: C.muted }}><X size={18} /></button>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Destino de impresión — Comandas (cocina)</label>
+                <select value={config.destinoComanda} onChange={(e) => setConfig((c) => ({ ...c, destinoComanda: e.target.value }))} style={inputStyle}>
+                  <option value="default">Impresora predeterminada</option>
+                  <option value="cocina1">Cocina 1</option>
+                  <option value="cocina2">Cocina 2</option>
+                  <option value="bar">Bar / Bebidas</option>
+                  <option value="salon">Salón</option>
+                  <option value="ninguna">No imprimir</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Destino de impresión — Facturación</label>
+                <select value={config.destinoFacturacion} onChange={(e) => setConfig((c) => ({ ...c, destinoFacturacion: e.target.value }))} style={inputStyle}>
+                  <option value="default">Impresora predeterminada</option>
+                  <option value="caja1">Caja 1</option>
+                  <option value="caja2">Caja 2</option>
+                  <option value="facturacion">Facturación</option>
+                  <option value="ninguna">No imprimir</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Enviar bebidas a comandera</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>Si está activo, las bebidas también se envían a cocina al presionar "Enviar"</div>
+                </div>
+                <button onClick={() => setConfig((c) => ({ ...c, enviarBebidas: !c.enviarBebidas }))} className="relative w-11 h-6 rounded-full transition-colors" style={{ background: config.enviarBebidas ? C.amber : C.border }}>
+                  <div className="absolute top-0.5 w-5 h-5 rounded-full transition-transform" style={{ background: "#fff", left: config.enviarBebidas ? 22 : 2 }} />
+                </button>
+              </div>
+              <div>
+                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Nombre del destino personalizado</label>
+                <div className="flex gap-2">
+                  <input value={(config.nombresDestinos || {}).personal || ""} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personal: e.target.value } }))} placeholder="Ej: Cocina 3, Terraza..." style={{ ...inputStyle, flex: 1 }} />
+                  <select value={(config.nombresDestinos || {}).personalTipo || "cocina"} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personalTipo: e.target.value } }))} style={{ ...inputStyle, width: 120 }}>
+                    <option value="cocina">Cocina</option>
+                    <option value="facturacion">Facturación</option>
+                    <option value="bar">Bar</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 mt-1 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
+                <span style={{ fontSize: 12, color: C.muted }}>Los destinos se usan para identificar la impresora en el navegador. Configuralas desde la impresora del sistema.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed left-1/2 bottom-6 -translate-x-1/2 px-4 py-3 rounded-xl flex items-center gap-2 max-w-md z-50" style={{ background: toast.tipo === "ok" ? C.raised2 : "#3a201c", border: "1px solid " + (toast.tipo === "ok" ? C.green : C.red), boxShadow: "0 8px 30px rgba(0,0,0,.5)" }}>
+          {toast.tipo === "ok" ? <CheckCircle2 size={18} style={{ color: C.green, flexShrink: 0 }} /> : <AlertTriangle size={18} style={{ color: C.red, flexShrink: 0 }} />}
+          <span style={{ fontSize: 13 }}>{toast.texto}</span><button onClick={() => setToast(null)} style={{ color: C.muted }}><X size={15} /></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>El Mostrador — Recepción WhatsApp</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body{margin:0;background:#1a1715;color:#f5efe6;font-family:'Segoe UI',system-ui,sans-serif}
+@keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
+.nuevo{animation:pulse 1s ease-in-out 3}
+</style>
+</head>
+<body>
+<header></header>
+<main class="max-w-3xl mx-auto px-4 py-2">
+  <div id="lista"></div>
+</main>
+<script>
+const API = "http://localhost:3456/api";
+const C = { base: "#1a1715", raised: "#262120", raised2: "#2f2926", border: "#3a322e", text: "#f5efe6", muted: "#a89a8c", amber: "#e8a23d", green: "#6fa84a", red: "#d9543f", blue: "#5b8fd6" };
+
+const $ = (id) => document.getElementById(id);
+const pesos = (n) => "$" + Math.round(n).toLocaleString("es-AR");
+
+let pedidos = [];
+let ultimoId = "";
+let sonido = true;
+
+function mostrar() {
+  const lista = $("lista");
+  if (!pedidos.length) {
+    lista.innerHTML = `<div style="text-align:center;padding:40px;color:${C.muted}"><div style="font-size:40px;margin-bottom:12px">📲</div><div style="font-weight:700">Esperando pedidos...</div><div style="font-size:13px;margin-top:4px">Los pedidos de WhatsApp aparecen acá automáticamente</div></div>`;
+    return;
+  }
+  lista.innerHTML = pedidos.map(p => `
+    <div class="rounded-xl p-4 ${p.id === ultimoId ? 'nuevo' : ''}" style="background:${C.raised};border:1px solid ${C.border};transition:all .3s">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div style="font-weight:700;font-size:16px">${p.nombre}</div>
+          ${p.direccion ? `<div style="color:${C.muted};font-size:13px;margin-top:2px">📍 ${p.direccion}</div>` : ""}
+          ${p.telefono ? `<div style="color:${C.muted};font-size:12px">📞 ${p.telefono}</div>` : ""}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:12px;color:${C.muted}">${p.hora} hs</div>
+          <button onclick="marcarLeido('${p.id}')" class="mt-1 px-2 py-1 rounded-md text-xs" style="background:${C.base};border:1px solid ${C.border};color:${C.muted};cursor:pointer">✓ Leído</button>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1 mt-3 pt-3" style="border-top:1px solid ${C.border}">
+        ${p.items.map(i => `
+          <div class="flex justify-between items-center" style="font-size:14px">
+            <span>${i.cant}x ${i.nombre}${i.nota ? ` <span style="color:${C.muted};font-style:italic">(${i.nota})</span>` : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+      <button onclick="entregar('${p.id}')" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-3 text-sm" style="background:${C.base};border:1px solid ${C.green};color:${C.green};cursor:pointer">
+        ✓ Marcar entregado
+      </button>
+    </div>
+  `).join("");
+}
+
+async function cargar() {
+  try {
+    const res = await fetch(API + "/pedidos");
+    const nuevos = await res.json();
+    if (nuevos.length > pedidos.length) {
+      ultimoId = nuevos[0].id;
+      if (sonido) {
+        try { new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIA=").play(); } catch {}
+      }
+    }
+    pedidos = nuevos;
+    mostrar();
+  } catch {}
+}
+
+function marcarLeido(id) {
+  fetch(API + "/pedidos/" + id + "/leido", { method: "POST" }).then(cargar);
+}
+
+function entregar(id) {
+  fetch(API + "/pedidos/" + id + "/entregado", { method: "POST" }).then(cargar);
+}
+
+cargar();
+setInterval(cargar, 3000);
+
+document.querySelector("header").innerHTML = `
+  <div class="max-w-3xl mx-auto px-4 py-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <div style="color:${C.amber};letter-spacing:.18em;font-size:11px;font-weight:700">EL MOSTRADOR</div>
+        <h1 style="font-size:24px;font-weight:800;line-height:1.1;margin-top:2px">Recepción WhatsApp</h1>
+      </div>
+      <div class="flex gap-2">
+        <button id="toggleSonido" class="px-3 py-2 rounded-lg text-sm" style="background:${C.raised};border:1px solid ${C.border};color:${C.muted};cursor:pointer">🔊 Sonido ON</button>
+        <a href="/" target="_blank" class="px-3 py-2 rounded-lg text-sm" style="background:${C.raised};border:1px solid ${C.border};color:${C.amber};text-decoration:none">Abrir sistema</a>
+      </div>
+    </div>
+    <div id="status" class="mt-3 flex items-center gap-2" style="font-size:13px;color:${C.muted}">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:${C.green}"></span>
+      Conectado al servidor
+    </div>
+  </div>
+`;
+document.getElementById("toggleSonido").onclick = () => { sonido = !sonido; document.getElementById("toggleSonido").textContent = sonido ? "🔊 Sonido ON" : "🔇 Sonido OFF"; };
+</script>
+</body>
+</html>

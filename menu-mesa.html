@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>El Mostrador — Menú</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f5f0eb;color:#1a1715;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:100px}
+.header{background:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5ddd5;position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.header h1{font-size:22px;font-weight:800;color:#241a0c}
+.header h1 span{color:#c8a87c}
+.header .badge{background:#241a0c;color:#f5f0eb;font-size:12px;font-weight:700;padding:6px 14px;border-radius:99px;display:flex;align-items:center;gap:5px;cursor:pointer;position:relative;transition:all .15s}
+.header .badge.has-items{background:#c8a87c;color:#241a0c}
+.sub{background:#fff;padding:8px 18px 12px;border-bottom:1px solid #e5ddd5;display:flex;align-items:center;gap:10px;font-size:14px;color:#8a7a6a}
+.sub .mesa-tag{background:#241a0c;color:#f5f0eb;font-weight:700;padding:3px 12px;border-radius:99px;font-size:13px}
+.cats{display:flex;gap:6px;padding:12px 18px;overflow-x:auto;scrollbar-width:none;background:#fff;border-bottom:1px solid #e5ddd5;position:sticky;top:108px;z-index:19}
+.cats::-webkit-scrollbar{display:none}
+.cat-btn{padding:7px 18px;border-radius:99px;font-size:13px;font-weight:600;border:none;cursor:pointer;white-space:nowrap;background:#f0ebe6;color:#8a7a6a;transition:all .15s}
+.cat-btn.on{background:#241a0c;color:#f5f0eb}
+.prods{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.prod{background:#fff;border:1px solid #e5ddd5;border-radius:14px;padding:14px 16px;display:flex;align-items:center;cursor:pointer;transition:transform .1s,box-shadow .15s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.prod:active{transform:scale(.98);box-shadow:0 1px 6px rgba(0,0,0,.08)}
+.prod-info{flex:1}
+.prod h3{font-size:15px;font-weight:700;line-height:1.3}
+.prod .precio{color:#c8a87c;font-weight:800;font-size:17px;margin-top:2px}
+.prod .add-btn{width:36px;height:36px;border-radius:99px;border:none;background:#f0ebe6;color:#241a0c;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
+.prod .add-btn:active{background:#e0d5ca}
+.cart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:30;opacity:0;pointer-events:none;transition:opacity .25s}
+.cart-overlay.show{opacity:1;pointer-events:auto}
+.cart-panel{position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;z-index:31;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -4px 20px rgba(0,0,0,.12)}
+.cart-panel.show{transform:translateY(0)}
+.cart-handle{width:40px;height:4px;border-radius:99px;background:#e5ddd5;margin:10px auto 6px}
+.cart-header{display:flex;justify-content:space-between;align-items:center;padding:4px 20px 12px;border-bottom:1px solid #f0ebe6}
+.cart-header h3{font-size:18px;font-weight:800}
+.cart-header button{background:none;border:none;color:#8a7a6a;font-size:20px;cursor:pointer;padding:4px}
+.cart-items{padding:8px 20px;overflow-y:auto;flex:1}
+.cart-item{padding:8px 0;border-bottom:1px solid #f5f0eb}
+.cart-item-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cart-item .name{font-size:14px;font-weight:600;flex:1;line-height:1.2}
+.cart-item .qty{display:flex;align-items:center;gap:6px;background:#f5f0eb;border-radius:99px;padding:2px}
+.nota-input{width:100%;margin-top:6px;padding:6px 10px;border-radius:8px;border:1px solid #e5ddd5;background:#f5f0eb;font-size:12px;outline:none;color:#241a0c;box-sizing:border-box}
+.nota-input:focus{border-color:#c8a87c}
+.cart-item .qty button{width:28px;height:28px;border-radius:99px;border:none;font-weight:700;font-size:16px;cursor:pointer;background:transparent;color:#241a0c;display:flex;align-items:center;justify-content:center}
+.cart-item .qty span{width:20px;text-align:center;font-weight:700;font-size:14px}
+.cart-item .item-total{font-weight:700;font-size:14px;color:#c8a87c;min-width:50px;text-align:right}
+.cart-footer{border-top:1px solid #f0ebe6;padding:12px 20px;padding-bottom:max(12px,env(safe-area-inset-bottom));background:#fff;border-radius:0 0 20px 20px}
+.cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cart-total-row span:first-child{font-size:14px;color:#8a7a6a}
+.cart-total-row .total-val{font-weight:800;font-size:22px;color:#241a0c}
+.cart-input{margin-bottom:10px}
+.cart-input input{width:100%;padding:10px 14px;border-radius:10px;border:1px solid #e5ddd5;background:#f5f0eb;font-size:14px;outline:none;color:#241a0c}
+.cart-input input:focus{border-color:#c8a87c}
+.cart-submit{width:100%;padding:14px;border-radius:12px;border:none;background:#241a0c;color:#f5f0eb;font-size:16px;font-weight:700;cursor:pointer;transition:background .15s}
+.cart-submit:active{background:#3a2e22}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#241a0c;color:#f5f0eb;padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;z-index:40;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.toast.show{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal.show{opacity:1;pointer-events:auto}
+.modal-inner{background:#fff;border-radius:20px;padding:32px 28px;width:100%;max-width:340px;text-align:center}
+.modal-inner .icon{font-size:48px;margin-bottom:8px}
+.modal-inner h2{font-size:20px;font-weight:800;margin-bottom:6px}
+.modal-inner p{color:#8a7a6a;font-size:14px;margin:4px 0 16px;line-height:1.4}
+.modal-inner button{display:block;width:100%;padding:13px;border-radius:12px;border:none;font-weight:700;font-size:15px;cursor:pointer}
+.modal-inner .btn-primary{background:#241a0c;color:#f5f0eb;margin-bottom:8px}
+.modal-inner .btn-sec{background:transparent;color:#8a7a6a;border:1px solid #e5ddd5}
+.loading{text-align:center;padding:40px 20px;color:#8a7a6a;font-size:15px}
+.empty-cat{text-align:center;padding:30px 20px;color:#8a7a6a;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>El Mostrador <span>menú</span></h1>
+  <div class="badge" id="cartBadge" onclick="toggleCart()">🛒 <span id="cartCount">0</span></div>
+</div>
+
+<div class="sub">
+  <span class="mesa-tag" id="mesaTag">Mesa</span>
+  <span>Elegí tus productos y envianos el pedido</span>
+</div>
+
+<div class="cats" id="cats"></div>
+
+<div class="prods" id="prods">
+  <div class="loading">Cargando productos…</div>
+</div>
+
+<!-- Cart -->
+<div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+<div class="cart-panel" id="cartPanel">
+  <div class="cart-handle"></div>
+  <div class="cart-header">
+    <h3>Tu pedido</h3>
+    <button onclick="toggleCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems">
+    <p style="text-align:center;color:#8a7a6a;padding:20px 0;font-size:14px">Todavía no elegiste nada</p>
+  </div>
+  <div class="cart-footer" id="cartFooter">
+    <div class="cart-input" id="nombreInput" style="display:none">
+      <input id="nameInput" type="text" placeholder="Tu nombre" oninput="nombre=this.value" />
+    </div>
+    <div class="cart-input" id="dirInput" style="display:none">
+      <input id="addressInput" type="text" placeholder="Dirección" oninput="direccion=this.value" />
+    </div>
+    <div class="cart-input">
+      <input id="telInput" type="tel" placeholder="Tu celular (opcional)" oninput="telefono=this.value" />
+    </div>
+    <div class="cart-total-row">
+      <span>Total</span>
+      <span class="total-val" id="cartTotal">$0</span>
+    </div>
+    <button class="cart-submit" onclick="submitOrder()">Enviar pedido</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <div class="icon">✅</div>
+    <h2 id="modalTitle">Pedido enviado</h2>
+    <p id="modalText">Tu pedido llegó a la cocina.</p>
+    <button class="btn-primary" onclick="closeModal()">Seguir pidiendo</button>
+    <button class="btn-sec" onclick="closeModal();clearCart()">Empezar de nuevo</button>
+  </div>
+</div>
+
+<script>
+let productos = [];
+let categorias = [];
+let catAct = "";
+let cart = {};
+let telefono = "";
+let nombre = "";
+let direccion = "";
+
+const mesa = parseInt(new URLSearchParams(location.search).get("mesa")) || 0;
+document.getElementById("mesaTag").textContent = mesa ? "Mesa " + mesa : "Para llevar";
+if (!mesa) {
+  document.getElementById("nombreInput").style.display = "";
+  document.getElementById("dirInput").style.display = "";
+}
+
+fetch("/api/menu").then(r => r.json()).then(prods => {
+  productos = prods;
+  const cats = [...new Set(productos.map(p => p.cat))];
+  categorias = cats;
+  if (cats.length) catAct = cats[0];
+  renderCats();
+  renderProds();
+}).catch(() => {
+  document.getElementById("prods").innerHTML = '<div class="empty-cat">No se pudo cargar el menú.<br>Verificá que el servidor esté funcionando.</div>';
+});
+
+function renderCats() {
+  const el = document.getElementById("cats");
+  if (!categorias.length) { el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.innerHTML = categorias.map(c =>
+    `<button class="cat-btn${c === catAct ? ' on' : ''}" onclick="setCat('${c}')">${c}</button>`
+  ).join("");
+}
+
+function setCat(c) {
+  catAct = c;
+  renderCats();
+  renderProds();
+}
+
+function renderProds() {
+  const el = document.getElementById("prods");
+  const ps = productos.filter(p => p.cat === catAct);
+  if (!ps.length) {
+    el.innerHTML = '<div class="empty-cat">No hay productos en esta categoría</div>';
+    return;
+  }
+  el.innerHTML = ps.map(p => {
+    const price = p.precio || 0;
+    return `<div class="prod" onclick="add('${p.id}','${p.nombre.replace(/'/g,"\\'")}',${price},'${p.cat}')">
+      <div class="prod-info">
+        <h3>${p.nombre}</h3>
+        <div class="precio">$${price.toLocaleString()}</div>
+      </div>
+      <button class="add-btn" onclick="event.stopPropagation();add('${p.id}','${p.nombre.replace(/'/g,"\\'")}',${price},'${p.cat}')">+</button>
+    </div>`;
+  }).join("");
+}
+
+function add(id, nombre, precio, cat) {
+  if (!cart[id]) cart[id] = { nombre, precio, cat, cant: 0, nota: "" };
+  cart[id].cant++;
+  updateBadge();
+  showToast("✓ " + nombre);
+}
+
+function updateBadge() {
+  const count = Object.values(cart).reduce((a, c) => a + c.cant, 0);
+  document.getElementById("cartCount").textContent = count;
+  document.getElementById("cartBadge").classList.toggle("has-items", count > 0);
+}
+
+function renderCart() {
+  const items = document.getElementById("cartItems");
+  const entries = Object.entries(cart).filter(([_, v]) => v.cant > 0);
+  if (!entries.length) {
+    items.innerHTML = '<p style="text-align:center;color:#8a7a6a;padding:20px 0;font-size:14px">Todavía no elegiste nada</p>';
+    document.getElementById("cartTotal").textContent = "$0";
+    return;
+  }
+  let total = 0;
+  items.innerHTML = entries.map(([id, v]) => {
+    total += v.precio * v.cant;
+    return `<div class="cart-item">
+      <div class="cart-item-row">
+        <span class="name">${v.nombre}</span>
+        <div class="qty">
+          <button onclick="adj('${id}',-1)">−</button>
+          <span>${v.cant}</span>
+          <button onclick="adj('${id}',1)">+</button>
+        </div>
+        <span class="item-total">$${(v.precio * v.cant).toLocaleString()}</span>
+      </div>
+      <input class="nota-input" id="nota_${id}" type="text" placeholder="Observaciones" value="${v.nota}" oninput="cart['${id}'].nota=this.value" ${v.cat === "Bebidas" ? 'style="display:none"' : ''} />
+    </div>`;
+  }).join("");
+  document.getElementById("cartTotal").textContent = "$" + total.toLocaleString();
+}
+
+function adj(id, d) {
+  if (!cart[id]) return;
+  cart[id].cant += d;
+  if (cart[id].cant <= 0) delete cart[id];
+  updateBadge();
+  renderCart();
+}
+
+function toggleCart() {
+  const panel = document.getElementById("cartPanel");
+  const overlay = document.getElementById("cartOverlay");
+  const show = !panel.classList.contains("show");
+  panel.classList.toggle("show", show);
+  overlay.classList.toggle("show", show);
+  if (show) renderCart();
+}
+
+function showToast(t) {
+  const el = document.getElementById("toast");
+  el.textContent = t;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1500);
+}
+
+function submitOrder() {
+  const btn = document.querySelector(".cart-submit");
+  const items = Object.values(cart).filter(v => v.cant > 0);
+  if (!items.length) { showToast("Agregá productos al pedido"); return; }
+  if (!mesa) {
+    if (!nombre.trim()) { showToast("Decinos tu nombre"); return; }
+    if (!direccion.trim()) { showToast("Decinos tu dirección"); return; }
+  }
+  if (!mesa && !telefono.trim()) { showToast("Dejá tu celular"); return; }
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+  fetch("/api/pedidos/mesa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mesa,
+      nombrePedido: nombre.trim(),
+      telefono: telefono.trim(),
+      direccion: direccion.trim(),
+      items: items.map(v => ({ nombre: v.nombre, cant: v.cant, precio: v.precio, nota: v.nota || "" }))
+    })
+  }).then(r => r.json()).then(d => {
+    btn.disabled = false;
+    btn.textContent = "Enviar pedido";
+    if (d.ok) {
+      document.getElementById("modalTitle").textContent = "✅ Pedido enviado";
+      document.getElementById("modalText").textContent = mesa
+        ? "Mesa " + mesa + " — ya sale a cocina. 📍"
+        : "Tu pedido para llevar fue recibido. Te avisamos cuando esté listo.";
+      document.getElementById("modal").classList.add("show");
+      toggleCart();
+      clearCart();
+      setTimeout(() => { document.getElementById("modal").classList.remove("show"); }, 3500);
+    }
+  }).catch(() => { btn.disabled = false; btn.textContent = "Enviar pedido"; showToast("Error al enviar el pedido"); });
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("show");
+}
+
+function clearCart() {
+  cart = {};
+  updateBadge();
+  renderCart();
+}
+</script>
+</body>
+</html>
