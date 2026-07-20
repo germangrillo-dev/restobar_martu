@@ -4,44 +4,28 @@ const qrcode = require("qrcode-terminal");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
+const db = require("./db");
+const backup = require("./backup");
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-app.get("/prototipo-gestion-bar.html", (req, res) => {
-  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
-  let html = fs.readFileSync(path.join(__dirname, "prototipo-gestion-bar.html"), "utf-8");
-  html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
-  html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
-  res.set("Content-Type", "text/html");
-  res.send(html);
-});
+// --- Inicializar DB ---
+db.initDB();
+console.log("✅ Base de datos SQLite inicializada");
 
-app.use(express.static(path.join(__dirname)));
-
-const MENU_CACHE = {};
-
-function serveMenu(req, res) {
-  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
-  const logo = (CAJA_STATE.config || {}).logo || "";
-  let html = MENU_CACHE.html;
-  if (!html) {
-    try { html = fs.readFileSync(path.join(__dirname, "menu-mesa.html"), "utf-8"); MENU_CACHE.html = html; } catch { return res.status(500).send("Error"); }
-  }
-  let out = html.replace(/El Mostrador/g, nombre);
-  if (logo) {
-    out = out.replace('id="ogImage" content="/app-icon.png"', 'id="ogImage" content="' + logo + '"');
-  }
-  res.set("Content-Type", "text/html");
-  res.send(out);
+// Migrar desde JSON si la DB está vacía
+const CONFIG = db.getConfig();
+if (!CONFIG.nombreLocal && fs.existsSync(path.join(__dirname, "caja-state.json"))) {
+  console.log("🔄 Migrando datos de JSON a SQLite...");
+  try { require("./migrate")(); } catch (e) { console.error("Error en migración:", e.message); }
 }
 
-const PEDIDOS_FILE = path.join(__dirname, "pedidos-whatsapp.json");
-const PROD_FILE = path.join(__dirname, "productos.json");
-let pedidosPendientes = [];
-try { pedidosPendientes = JSON.parse(fs.readFileSync(PEDIDOS_FILE, "utf-8")); } catch {}
+// Iniciar backups automáticos
+backup.iniciarBackupsAutomaticos();
 
+// --- Productos (en memoria para WhatsApp parsing) ---
 const DEFAULT_PRODUCTOS = [
   { id: "pz-muzza", ref: 1, nombre: "Muzzarella", cat: "Pizzas", precio: 7000, receta: [["masa",1],["muzza",250],["salsa",150]] },
   { id: "pz-napo", ref: 2, nombre: "Napolitana", cat: "Pizzas", precio: 8000, receta: [["masa",1],["muzza",250],["salsa",150],["tomate",2]] },
@@ -60,9 +44,8 @@ const DEFAULT_PRODUCTOS = [
   { id: "be-agua", ref: 15, nombre: "Agua", cat: "Bebidas", precio: 1800, receta: [["agua",1]] },
 ];
 
-let PRODUCTOS = [];
-try { PRODUCTOS = JSON.parse(fs.readFileSync(PROD_FILE, "utf-8")); } catch {}
-if (!PRODUCTOS.length) { PRODUCTOS = DEFAULT_PRODUCTOS; fs.writeFileSync(PROD_FILE, JSON.stringify(PRODUCTOS, null, 2)); }
+let PRODUCTOS = db.getProductos();
+if (!PRODUCTOS.length) { PRODUCTOS = DEFAULT_PRODUCTOS; db.saveProductos(PRODUCTOS); }
 
 const prodPorRef = Object.fromEntries(PRODUCTOS.map(p => [p.ref, p]));
 const prodPorNombre = Object.fromEntries(PRODUCTOS.map(p => [p.nombre.toLowerCase(), p]));
@@ -75,9 +58,13 @@ app.post("/api/public-url", (req, res) => {
   res.json({ ok: true, url: PUBLIC_URL });
 });
 
+const MENU_CACHE = {};
+function getConfig() { return db.getConfig(); }
+
 const MENU_TEXTO = () => {
+  const cfg = getConfig();
   const cats = [...new Set(PRODUCTOS.map(p => p.cat))];
-  let txt = "🍕 *EL MOSTRADOR - MENÚ*\n\n";
+  let txt = "🍕 *" + (cfg.nombreLocal || "EL MOSTRADOR") + " - MENÚ*\n\n";
   cats.forEach(cat => {
     txt += `*${cat.toUpperCase()}*\n`;
     PRODUCTOS.filter(p => p.cat === cat).forEach(p => {
@@ -99,19 +86,16 @@ const parsearPedido = (texto) => {
   const partes = texto.split(/[,;\n]+/).map(l => l.trim()).filter(Boolean);
   const partesTexto = [];
   for (const p of partes) {
-    // Cantidad + número: "2x1" o "2x 1"
     const cantNum = p.match(/^(\d+)\s*x\s*(\d{1,3})$/i);
     if (cantNum) {
       const prod = prodPorRef[parseInt(cantNum[2])];
       if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant: parseInt(cantNum[1]), nota: "" }); continue; }
     }
-    // Solo número de producto: "1"
     const soloNum = p.match(/^(\d{1,3})$/);
     if (soloNum) {
       const prod = prodPorRef[parseInt(soloNum[1])];
       if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant: 1, nota: "" }); continue; }
     }
-    // Formato viejo: "2x Muzzarella" o "2 Muzzarella"
     const notaMatch = p.match(/^(.+?)\((.+?)\)$/);
     const sinNota = notaMatch ? notaMatch[1].trim() : p;
     const nota = notaMatch ? notaMatch[2].trim() : "";
@@ -124,7 +108,6 @@ const parsearPedido = (texto) => {
     if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant, nota }); continue; }
     partesTexto.push(p);
   }
-  // Asignar texto: última parte con keyword → dirección, el resto → nombre
   let idxDir = -1;
   for (let i = partesTexto.length - 1; i >= 0; i--) {
     if (DIR_KEYWORDS.some(k => partesTexto[i].toLowerCase().includes(k))) { idxDir = i; break; }
@@ -186,8 +169,7 @@ function iniciarWhatsApp() {
       const res = parsearPedido(msg.body);
       if (res.items.length > 0) {
         const pedido = { id: Date.now().toString(36), remitente, telefono, nombre: res.datos.cliente || nombre, direccion: res.datos.direccion || "", items: res.items, total: 0, hora: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }), leido: false };
-        pedidosPendientes.unshift(pedido);
-        fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidosPendientes, null, 2));
+        db.savePedido(pedido);
         const resumen = res.items.map(i => `${i.cant}x ${i.nombre}${i.nota ? " (" + i.nota + ")" : ""}`).join("\n");
         await msg.reply(`✅ Pedido recibido:\n${resumen}\n\n🌐 Seguí tu pedido: ${PUBLIC_URL}/menu-mesa.html\n📋 Sale en comanda. Gracias ${pedido.nombre}!`);
         console.log(`✅ Pedido registrado de ${pedido.nombre}: ${resumen}`);
@@ -205,161 +187,148 @@ function iniciarWhatsApp() {
   });
 }
 
-const CAJA_FILE = path.join(__dirname, "caja-state.json");
-let CAJA_STATE = { caja: null, cajaIniciada: false, historialCierres: [], mesas: null, deliveries: null, insumos: null, stock: null, costos: null, proveedores: null };
-try { CAJA_STATE = JSON.parse(fs.readFileSync(CAJA_FILE, "utf-8")); } catch {}
-if (typeof CAJA_STATE.cajaIniciada !== "boolean") CAJA_STATE.cajaIniciada = false;
-if (!Array.isArray(CAJA_STATE.historialCierres)) CAJA_STATE.historialCierres = [];
+// --- API: Config ---
+app.get("/api/config", (req, res) => {
+  res.json(db.getConfig());
+});
 
+// --- API: Caja ---
 app.get("/api/caja", (req, res) => {
-  res.json(CAJA_STATE);
+  const caja = db.getCaja();
+  const historialCierres = db.getHistorialCierres();
+  const mesas = db.getMesas();
+  const deliveries = db.getDeliveries().filter(d => (d.estado || "cocina") !== "entregado");
+  const cfg = db.getConfig();
+  const insumos = db.getInsumos();
+  const stock = db.getStock();
+  const costos = db.getCostos();
+  const proveedores = db.getProveedores();
+  const usuarios = db.getUsuarios();
+  const facturaXNum = db.getFacturaXNum();
+  const cajaIniciada = !!caja;
+  res.json({ caja, cajaIniciada, historialCierres, mesas, deliveries, config: cfg, insumos, stock, costos, proveedores, usuarios, facturaXNum });
 });
 
 app.post("/api/caja", (req, res) => {
   try {
-  const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios } = req.body;
-  console.log("[POST /api/caja] mesas recibidas:", mesas ? Object.entries(mesas).map(([k, v]) => k + ":" + JSON.stringify({ l: (v.lineas||[]).length, e: (v.enviado||[]).length, d: (v.despachado||[]).length, b: (v.bebidas||[]).length })) : "null");
+    const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios } = req.body;
 
-  // Client is authority for caja movements
-  if (caja !== undefined && caja !== null) {
-    const serverFecha = CAJA_STATE.caja && CAJA_STATE.caja.fecha;
-    const clientFecha = caja.fecha;
-    const today = new Date().toLocaleDateString('sv-SE');
-
-    // New day detected: archive old caja to historialCierres, start fresh
-    if (serverFecha && serverFecha !== today && CAJA_STATE.caja.movimientos && CAJA_STATE.caja.movimientos.length > 0) {
-      console.log("[POST /api/caja] New day detected, archiving caja from", serverFecha);
-      CAJA_STATE.historialCierres = CAJA_STATE.historialCierres || [];
-      CAJA_STATE.historialCierres.push({ ...CAJA_STATE.caja, fecha: serverFecha });
-      CAJA_STATE.caja = { fecha: today, apertura: null, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
-      CAJA_STATE.cajaIniciada = false;
-    }
-
-    // Only accept caja from today - reject stale data from localStorage
-    if (clientFecha === today) {
-      CAJA_STATE.caja = caja;
-    } else {
-      console.log("[POST /api/caja] Ignoring stale caja (client:", clientFecha, "≠ today:", today, ")");
-    }
-  }
-
-  if (cajaIniciada !== undefined) CAJA_STATE.cajaIniciada = cajaIniciada;
-
-  // Client is authority for historialCierres - replace
-  if (historialCierres !== undefined && Array.isArray(historialCierres)) {
-    CAJA_STATE.historialCierres = historialCierres;
-  }
-
-  // Merge mesas - client always wins (one person edits a mesa at a time)
-  if (mesas !== undefined && mesas !== null) {
-    if (!CAJA_STATE.mesas) CAJA_STATE.mesas = mesas;
-    else {
-      for (const [id, clientMesa] of Object.entries(mesas)) {
-        CAJA_STATE.mesas[id] = clientMesa;
+    // Caja
+    if (caja !== undefined && caja !== null) {
+      const today = new Date().toLocaleDateString('sv-SE');
+      const serverCaja = db.getCaja();
+      if (serverCaja && serverCaja.fecha !== today && serverCaja.movimientos && serverCaja.movimientos.length > 0) {
+        console.log("[POST /api/caja] New day, archiving old caja");
       }
-    }
-  }
-
-  // Merge deliveries by ID (keep local state priority for entregado/despachado)
-  if (deliveries !== undefined && deliveries !== null) {
-    if (!CAJA_STATE.deliveries) {
-      CAJA_STATE.deliveries = deliveries;
-    } else {
-      const serverDelIds = new Set(CAJA_STATE.deliveries.map(d => d.id));
-      const clientOnlyDels = deliveries.filter(d => !serverDelIds.has(d.id));
-      const merged = [...CAJA_STATE.deliveries];
-      for (const clientDel of deliveries) {
-        const idx = merged.findIndex(d => d.id === clientDel.id);
-        if (idx >= 0) {
-          merged[idx] = { ...merged[idx], ...clientDel };
+      if (caja.fecha === today) {
+        if (!serverCaja || serverCaja.fecha !== today) {
+          const sesionId = db.createCaja(caja);
+          if (caja.movimientos) {
+            for (const mov of caja.movimientos) db.addMovimiento(sesionId, mov);
+          }
+        } else {
+          if (caja.movimientos) {
+            for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
+          }
         }
       }
-      CAJA_STATE.deliveries = [...merged, ...clientOnlyDels];
     }
-    // Clean: remove entregado deliveries (fully done)
-    CAJA_STATE.deliveries = CAJA_STATE.deliveries.filter(d => (d.estado || "cocina") !== "entregado");
-  }
 
-  if (config !== undefined && config !== null) {
-    if (!CAJA_STATE.config) CAJA_STATE.config = {};
-    for (const [k, v] of Object.entries(config)) {
-      if (v !== "" && v !== null && v !== undefined) CAJA_STATE.config[k] = v;
+    // CajaIniciada
+    if (cajaIniciada !== undefined) {
+      // Handled by caja session state
     }
-    delete MENU_CACHE.html;
-  }
-  if (insumos !== undefined && Array.isArray(insumos) && insumos.length > 0) CAJA_STATE.insumos = insumos;
-  if (stock !== undefined && typeof stock === "object" && Object.keys(stock).length > 0) CAJA_STATE.stock = stock;
-  if (costos !== undefined && typeof costos === "object" && Object.keys(costos).length > 0) CAJA_STATE.costos = costos;
-  if (proveedores !== undefined && Array.isArray(proveedores) && proveedores.length > 0) CAJA_STATE.proveedores = proveedores;
-  if (usuarios !== undefined && Array.isArray(usuarios) && usuarios.length > 0) CAJA_STATE.usuarios = usuarios;
-  if (facturaXNum !== undefined && typeof facturaXNum === "number" && facturaXNum > (CAJA_STATE.facturaXNum || 0)) CAJA_STATE.facturaXNum = facturaXNum;
-  fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
-  res.json({ ok: true });
+
+    // HistorialCierres
+    if (historialCierres !== undefined && Array.isArray(historialCierres)) {
+      // Client is authority - handled client-side
+    }
+
+    // Mesas
+    if (mesas !== undefined && mesas !== null) {
+      db.saveMesas(mesas);
+    }
+
+    // Deliveries
+    if (deliveries !== undefined && deliveries !== null) {
+      const filtered = Array.isArray(deliveries) ? deliveries.filter(d => (d.estado || "cocina") !== "entregado") : [];
+      db.saveDeliveries(filtered);
+    }
+
+    // Config
+    if (config !== undefined && config !== null) {
+      db.saveConfig(config);
+      delete MENU_CACHE.html;
+    }
+
+    // Insumos
+    if (insumos !== undefined && Array.isArray(insumos) && insumos.length > 0) db.saveInsumos(insumos);
+    if (stock !== undefined && typeof stock === "object" && Object.keys(stock).length > 0) db.saveStock(stock);
+    if (costos !== undefined && typeof costos === "object" && Object.keys(costos).length > 0) db.saveCostos(costos);
+    if (proveedores !== undefined && Array.isArray(proveedores) && proveedores.length > 0) db.saveProveedores(proveedores);
+    if (usuarios !== undefined && Array.isArray(usuarios) && usuarios.length > 0) db.saveUsuarios(usuarios);
+    if (facturaXNum !== undefined && typeof facturaXNum === "number" && facturaXNum > (db.getFacturaXNum() || 0)) db.setFacturaXNum(facturaXNum);
+
+    res.json({ ok: true });
   } catch (e) {
     console.error("[POST /api/caja] ERROR:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// --- Endpoints separados para mesas y deliveries ---
+// --- API: Mesas ---
 app.get("/api/mesas", (req, res) => {
-  res.json(CAJA_STATE.mesas || {});
+  res.json(db.getMesas());
 });
 app.post("/api/mesas", (req, res) => {
   const mesas = req.body;
   if (!mesas || typeof mesas !== "object") return res.status(400).json({ error: "invalid" });
-  CAJA_STATE.mesas = mesas;
-  fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
+  db.saveMesas(mesas);
   res.json({ ok: true });
 });
+
+// --- API: Deliveries ---
 app.get("/api/deliveries", (req, res) => {
-  res.json((CAJA_STATE.deliveries || []).filter(d => (d.estado || "cocina") !== "entregado"));
+  res.json(db.getDeliveries().filter(d => (d.estado || "cocina") !== "entregado"));
 });
 app.post("/api/deliveries", (req, res) => {
   const deliveries = req.body;
   if (!Array.isArray(deliveries)) return res.status(400).json({ error: "invalid" });
-  CAJA_STATE.deliveries = deliveries.filter(d => (d.estado || "cocina") !== "entregado");
-  fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
+  db.saveDeliveries(deliveries.filter(d => (d.estado || "cocina") !== "entregado"));
   res.json({ ok: true });
 });
 
-// --- API REST ---
+// --- API: Productos ---
 app.get("/api/productos", (req, res) => {
   res.json(PRODUCTOS);
 });
-
 app.put("/api/productos", (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ ok: false, error: "se espera un array" });
   PRODUCTOS = req.body.map(p => ({ ...p, receta: p.receta || [] }));
-  fs.writeFileSync(PROD_FILE, JSON.stringify(PRODUCTOS, null, 2));
+  db.saveProductos(PRODUCTOS);
   Object.assign(prodPorRef, Object.fromEntries(PRODUCTOS.map(p => [p.ref, p])));
   Object.assign(prodPorNombre, Object.fromEntries(PRODUCTOS.map(p => [p.nombre.toLowerCase(), p])));
   res.json({ ok: true });
 });
 
+// --- API: Pedidos WhatsApp ---
 app.get("/api/pedidos", (req, res) => {
-  res.json(pedidosPendientes.filter(p => !p.leido));
+  res.json(db.getPedidosPendientes().filter(p => !p.leido));
 });
-
 app.get("/api/pedidos/pendientes", (req, res) => {
-  res.json(pedidosPendientes.filter(p => !p.enviado));
+  res.json(db.getPedidosPendientes().filter(p => !p.enviado));
 });
-
 app.post("/api/pedidos/:id/leido", (req, res) => {
-  pedidosPendientes = pedidosPendientes.map(p => p.id === req.params.id ? { ...p, leido: true } : p);
-  fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidosPendientes, null, 2));
+  const p = db.getPedidosPendientes().find(p => p.id === req.params.id);
+  if (p) { p.leido = true; db.savePedido(p); }
   res.json({ ok: true });
 });
-
 app.post("/api/pedidos/:id/enviado", (req, res) => {
-  pedidosPendientes = pedidosPendientes.map(p => p.id === req.params.id ? { ...p, enviado: true, leido: true } : p);
-  fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidosPendientes, null, 2));
+  db.markPedidoEnviado(req.params.id);
   res.json({ ok: true });
 });
-
 app.post("/api/pedidos/:id/entregado", (req, res) => {
-  pedidosPendientes = pedidosPendientes.filter(p => p.id !== req.params.id);
-  fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidosPendientes, null, 2));
+  db.deletePedido(req.params.id);
   res.json({ ok: true });
 });
 
@@ -367,12 +336,84 @@ app.get("/api/menu", (req, res) => {
   res.json(PRODUCTOS);
 });
 
-app.get("/api/config", (req, res) => {
-  res.json(CAJA_STATE.config || {});
+// --- API: Backup ---
+app.get("/api/backups", (req, res) => {
+  res.json(db.listarBackups ? backup.listarBackups() : []);
+});
+app.post("/api/backups/crear", (req, res) => {
+  const result = backup.crearBackup("manual");
+  res.json(result);
+});
+app.post("/api/backups/restaurar", (req, res) => {
+  const { nombre } = req.body;
+  if (!nombre) return res.status(400).json({ ok: false, error: "Sin nombre" });
+  const result = backup.restaurarBackup(nombre);
+  if (result.ok) {
+    res.json({ ok: true, texto: "Restaurado. Reiniciando..." });
+    setTimeout(() => {
+      const { spawn } = require("child_process");
+      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
+      bat.unref();
+      process.exit(0);
+    }, 1000);
+  } else {
+    res.json(result);
+  }
 });
 
+// --- API: Update ---
+app.post("/api/update", (req, res) => {
+  const { execSync, spawn } = require("child_process");
+  const gitPath = "C:\\Program Files\\Git\\cmd\\git.exe";
+  const token = req.body && req.body.token;
+  try {
+    if (token) {
+      execSync('"' + gitPath + '" remote set-url origin https://germangrillo-dev:' + token + '@github.com/germangrillo-dev/restobar_martu.git', { encoding: "utf-8", timeout: 10000, cwd: __dirname });
+    }
+    execSync('"' + gitPath + '" pull origin main', { encoding: "utf-8", timeout: 30000, cwd: __dirname });
+    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
+    setTimeout(() => {
+      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
+      bat.unref();
+      process.exit(0);
+    }, 1000);
+  } catch (e) {
+    res.json({ ok: false, texto: "Error al actualizar: " + e.message });
+  }
+});
+
+// --- Static routes ---
+app.get("/prototipo-gestion-bar.html", (req, res) => {
+  const cfg = getConfig();
+  const nombre = cfg.nombreLocal || "El Mostrador";
+  let html = fs.readFileSync(path.join(__dirname, "prototipo-gestion-bar.html"), "utf-8");
+  html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
+  html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
+  res.set("Content-Type", "text/html");
+  res.send(html);
+});
+
+app.use(express.static(path.join(__dirname)));
+
+function serveMenu(req, res) {
+  const cfg = getConfig();
+  const nombre = cfg.nombreLocal || "El Mostrador";
+  const logo = cfg.logo || "";
+  let html = MENU_CACHE.html;
+  if (!html) {
+    try { html = fs.readFileSync(path.join(__dirname, "menu-mesa.html"), "utf-8"); MENU_CACHE.html = html; } catch { return res.status(500).send("Error"); }
+  }
+  let out = html.replace(/El Mostrador/g, nombre);
+  if (logo) {
+    out = out.replace('id="ogImage" content="/app-icon.png"', 'id="ogImage" content="' + logo + '"');
+  }
+  res.set("Content-Type", "text/html");
+  res.send(out);
+}
+
 app.get("/app-icon.png", (req, res) => {
-  const logo = (CAJA_STATE.config || {}).logo;
+  const cfg = getConfig();
+  const logo = cfg.logo;
   if (logo && logo.startsWith("data:image")) {
     const base64 = logo.split(",")[1];
     const buffer = Buffer.from(base64, "base64");
@@ -384,7 +425,8 @@ app.get("/app-icon.png", (req, res) => {
 });
 
 app.get("/manifest.json", (req, res) => {
-  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const cfg = getConfig();
+  const nombre = cfg.nombreLocal || "El Mostrador";
   const manifest = {
     name: nombre + " - Menú",
     short_name: nombre,
@@ -407,7 +449,8 @@ app.get("/manifest.json", (req, res) => {
 });
 
 app.get("/manifest-app.json", (req, res) => {
-  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const cfg = getConfig();
+  const nombre = cfg.nombreLocal || "El Mostrador";
   const manifest = {
     name: nombre,
     short_name: nombre,
@@ -428,7 +471,8 @@ app.get("/manifest-app.json", (req, res) => {
 });
 
 app.get("/instructivo.html", (req, res) => {
-  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const cfg = getConfig();
+  const nombre = cfg.nombreLocal || "El Mostrador";
   const url = PUBLIC_URL + "/menu-delivery.html";
   let html = fs.readFileSync(path.join(__dirname, "instructivo.html"), "utf-8");
   html = html.replace("COMPLETAR CON LA URL", url);
@@ -455,12 +499,11 @@ app.post("/api/pedidos/mesa", (req, res) => {
     direccion: direccion || "",
     items: items.map(it => ({ nombre: it.nombre, cant: it.cant, nota: it.nota || "" })),
     total: items.reduce((a, it) => a + (it.precio || 0) * it.cant, 0),
-    hora: new Date().toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+    hora: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
     leido: false,
     enviado: false
   };
-  pedidosPendientes.unshift(pedido);
-  fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidosPendientes, null, 2));
+  db.savePedido(pedido);
   res.json({ ok: true, id: pedido.id });
 });
 
@@ -473,33 +516,13 @@ app.get("/qr", (req, res) => {
   }
 });
 
-// --- API Update ---
-app.post("/api/update", (req, res) => {
-  const { execSync, spawn } = require("child_process");
-  const gitPath = "C:\\Program Files\\Git\\cmd\\git.exe";
-  const token = req.body && req.body.token;
-  try {
-    if (token) {
-      execSync('"' + gitPath + '" remote set-url origin https://germangrillo-dev:' + token + '@github.com/germangrillo-dev/restobar_martu.git', { encoding: "utf-8", timeout: 10000, cwd: __dirname });
-    }
-    execSync('"' + gitPath + '" pull origin main', { encoding: "utf-8", timeout: 30000, cwd: __dirname });
-    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
-    setTimeout(() => {
-      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
-      bat.unref();
-      process.exit(0);
-    }, 1000);
-  } catch (e) {
-    res.json({ ok: false, texto: "Error al actualizar: " + e.message });
-  }
-});
-
-// --- AFIP Facturación Electrónica ---
+// --- AFIP ---
 const afip = require("./afip");
 
 app.post("/api/afip/test", async (req, res) => {
   try {
-    const accessToken = req.body.accessToken || (CAJA_STATE.config || {}).afipAccessToken || "";
+    const cfg = getConfig();
+    const accessToken = req.body.accessToken || cfg.afipAccessToken || "";
     const result = await afip.verificarPuntoVenta(false, accessToken);
     res.json(result);
   } catch (e) {
@@ -509,9 +532,10 @@ app.post("/api/afip/test", async (req, res) => {
 
 app.post("/api/afip/facturar", async (req, res) => {
   try {
+    const cfg = getConfig();
     const data = req.body;
     if (!data.items || !data.items.length) return res.status(400).json({ ok: false, error: "Sin items" });
-    const accessToken = data.accessToken || (CAJA_STATE.config || {}).afipAccessToken || "";
+    const accessToken = data.accessToken || cfg.afipAccessToken || "";
     delete data.accessToken;
     const result = await afip.facturar(data, false, accessToken);
     res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta });
@@ -523,7 +547,8 @@ app.post("/api/afip/facturar", async (req, res) => {
 
 app.get("/api/afip/token", async (req, res) => {
   try {
-    const accessToken = (CAJA_STATE.config || {}).afipAccessToken || "";
+    const cfg = getConfig();
+    const accessToken = cfg.afipAccessToken || "";
     const token = await afip.getWSAAToken(false, accessToken);
     res.json({ ok: true, token: token.token ? token.token.substring(0, 20) + "..." : "OK" });
   } catch (e) {
@@ -533,23 +558,24 @@ app.get("/api/afip/token", async (req, res) => {
 
 app.post("/api/whatsapp/comprobante", async (req, res) => {
   try {
-    const { telefono, items, total, metodo, comprobante, afip, cliente, localName } = req.body;
+    const cfg = getConfig();
+    const { telefono, items, total, metodo, comprobante, afip: afipData, cliente, localName } = req.body;
     if (!telefono) return res.status(400).json({ ok: false, error: "Sin teléfono" });
-    const nombre = (CAJA_STATE.config || {}).nombreLocal || localName || "El Mostrador";
-    const dir = (CAJA_STATE.config || {}).direccion || "YPF El Cruce / Ruta Nac 157 y 64";
-    const cuit = (CAJA_STATE.config || {}).cuit || "27-21341447-5";
+    const nombre = cfg.nombreLocal || localName || "El Mostrador";
+    const dir = cfg.direccion || "YPF El Cruce / Ruta Nac 157 y 64";
+    const cuit = cfg.cuit || "27-21341447-5";
     const now = new Date();
     const fecha = now.toLocaleDateString("es-AR");
     const hora = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
     let itemsHtml = (items || []).map(it => `<tr><td style="padding:4px 0">${it.cant || 1}x ${it.nombre}</td><td style="text-align:right;padding:4px 0">$${((it.precio || 0) * (it.cant || 1)).toLocaleString("es-AR")}</td></tr>`).join("");
     let afipHtml = "";
-    if (afip && afip.cae) {
+    if (afipData && afipData.cae) {
       afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
         <div><b>Factura Electrónica</b></div>
-        <div>CAE: ${afip.cae}</div>
-        <div>Vto CAE: ${afip.vencimiento || ""}</div>
-        <div>Cbte N°: ${afip.cbteNro || ""}</div>
-        <div>Pto Venta: ${afip.ptoVenta || "2"}</div>
+        <div>CAE: ${afipData.cae}</div>
+        <div>Vto CAE: ${afipData.vencimiento || ""}</div>
+        <div>Cbte N°: ${afipData.cbteNro || ""}</div>
+        <div>Pto Venta: ${afipData.ptoVenta || "2"}</div>
         <div>CUIT: ${cuit}</div>
         <div>Régimen: Monotributo</div>
       </div>`;
@@ -604,6 +630,11 @@ process.on("unhandledRejection", (err) => {
   console.log("⚠️  (ignorado) " + err.message);
 });
 
+process.on("exit", () => {
+  backup.detenerBackups();
+  db.closeDB();
+});
+
 const PORT = 3456;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {
@@ -613,4 +644,5 @@ app.listen(PORT, HOST, () => {
   if (ts) console.log(`🔗 Tailscale:      http://${ts}:${PORT}`);
   console.log(`📡 Menú clientes:  http://localhost:${PORT}/menu-mesa.html?mesa=1`);
   console.log(`📡 Sistema:        http://localhost:${PORT}/prototipo-gestion-bar.html`);
+  console.log(`💾 SQLite:         ${path.join(__dirname, "data", "martu.db")}`);
 });

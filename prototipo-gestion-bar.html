@@ -1203,6 +1203,17 @@ function App() {
               <button onClick={async () => { if (!window.confirm("¿Restaurar datos desde el servidor? Se sobreescribirán los datos locales.")) return; try { const r = await fetch(serverUrl + "/api/caja"); const data = await r.json(); if (data.caja) setCaja(data.caja); if (data.cajaIniciada !== undefined) setCajaIniciada(data.cajaIniciada); if (data.historialCierres) setHistorialCierres(data.historialCierres); if (data.config) setConfig((c) => ({ ...c, ...data.config })); if (data.deliveries) setDeliveries(data.deliveries); if (data.mesas) setMesas(data.mesas); setToast({ tipo: "ok", texto: "Datos restaurados desde el servidor." }); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm mt-3" style={{ background: C.base, border: "1px solid " + C.border, color: C.amber }}><RotateCcw size={15} /> Restaurar desde servidor</button>
               <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Si los datos locales están desincronizados, cargá todo desde el servidor.</div>
             </div>
+
+            {/* Backup SQLite */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Backup SQLite</h3>
+              <p style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Backups automáticos cada 4 horas (últimos 30 guardados).</p>
+              <div className="flex gap-3">
+                <button onClick={async () => { try { const r = await fetch(serverUrl + "/api/backups/crear", { method: "POST" }); const d = await r.json(); setToast({ tipo: d.ok ? "ok" : "error", texto: d.ok ? "Backup creado: " + d.archivo : "Error: " + d.error }); } catch { setToast({ tipo: "error", texto: "Error al crear backup." }); } }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Backup manual</button>
+                <button onClick={async () => { try { const r = await fetch(serverUrl + "/api/backups"); const lista = await r.json(); if (!lista.length) { setToast({ tipo: "error", texto: "No hay backups." }); return; } const nombre = prompt("Últimos backups:\n" + lista.slice(0, 5).map(b => b.nombre).join("\n") + "\n\nEscribí el nombre del backup a restaurar:"); if (!nombre) return; const res = await fetch(serverUrl + "/api/backups/restaurar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre }) }); const d = await res.json(); setToast({ tipo: d.ok ? "ok" : "error", texto: d.ok ? "Restaurado. Recargando..." : "Error: " + d.error }); if (d.ok) setTimeout(() => window.location.reload(), 2000); } catch { setToast({ tipo: "error", texto: "Error al restaurar." }); } }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><RotateCcw size={15} /> Restaurar</button>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Los backups se guardan en data/backups/</div>
+            </div>
           </div>
         )}
 
