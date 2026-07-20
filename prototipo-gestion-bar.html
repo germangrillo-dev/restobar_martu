@@ -242,7 +242,7 @@ function App() {
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
-    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas } : undefined;
+    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken } : undefined;
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: cajaVal, historialCierres, mesas: mesasVal, deliveries: deliveriesVal || [], orden, config: configLiviano, insumos, stock, costos, proveedores, facturaXNum, usuarios }) }).catch(() => console.warn("sync: fallo post caja"));
   };
   const guardar = (opts) => {
@@ -307,7 +307,7 @@ function App() {
   const [showComprobanteModal, setShowComprobanteModal] = useState(null);
   const [facturaXNum, setFacturaXNum] = useState(() => cargar("facturaXNum", 1));
   const [showConfig, setShowConfig] = useState(false);
-  const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false }));
+  const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false, githubToken: "" }));
   const [cajaIniciadaRef, setCajaIniciadaRef] = useState(cajaIniciada);
 
   const insumoById = useMemo(() => Object.fromEntries(insumos.map((i) => [i.id, i])), [insumos]);
@@ -1152,7 +1152,11 @@ function App() {
             {/* Actualizar sistema */}
             <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
               <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Sistema</h3>
-              <button onClick={async () => { if (!window.confirm("¿Actualizar sistema? Se reiniciará el servidor.")) return; try { const r = await fetch(serverUrl + "/api/update", { method: "POST" }); const d = await r.json(); setToast({ tipo: d.ok ? "ok" : "error", texto: d.texto }); if (d.ok) setTimeout(() => window.location.reload(), 2000); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Actualizar sistema</button>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 4 }}>Token GitHub (acceso al repo privado)</label>
+                <input type="password" placeholder="ghp_..." value={config.githubToken || ""} onChange={(e) => setConfig((c) => ({ ...c, githubToken: e.target.value }))} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + C.border, background: C.base, color: C.text, fontSize: 13 }} />
+              </div>
+              <button onClick={async () => { if (!window.confirm("¿Actualizar sistema? Se reiniciará el servidor.")) return; try { const r = await fetch(serverUrl + "/api/update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: config.githubToken }) }); const d = await r.json(); setToast({ tipo: d.ok ? "ok" : "error", texto: d.texto }); if (d.ok) setTimeout(() => window.location.reload(), 2000); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Actualizar sistema</button>
               <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Descarga la última versión desde GitHub y reinicia el servidor</div>
             </div>
 

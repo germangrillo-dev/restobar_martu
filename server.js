@@ -477,7 +477,11 @@ app.get("/qr", (req, res) => {
 app.post("/api/update", (req, res) => {
   const { execSync, spawn } = require("child_process");
   const gitPath = "C:\\Program Files\\Git\\cmd\\git.exe";
+  const token = req.body && req.body.token;
   try {
+    if (token) {
+      execSync('"' + gitPath + '" remote set-url origin https://germangrillo-dev:' + token + '@github.com/germangrillo-dev/restobar_martu.git', { encoding: "utf-8", timeout: 10000, cwd: __dirname });
+    }
     execSync('"' + gitPath + '" pull origin main', { encoding: "utf-8", timeout: 30000, cwd: __dirname });
     res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
     setTimeout(() => {
