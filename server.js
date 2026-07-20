@@ -475,11 +475,16 @@ app.get("/qr", (req, res) => {
 
 // --- API Update ---
 app.post("/api/update", (req, res) => {
-  const { execSync } = require("child_process");
+  const { execSync, spawn } = require("child_process");
+  const gitPath = "C:\\Program Files\\Git\\cmd\\git.exe";
   try {
-    execSync("git pull origin main", { encoding: "utf-8", timeout: 30000 });
+    execSync('"' + gitPath + '" pull origin main', { encoding: "utf-8", timeout: 30000, cwd: __dirname });
     res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
-    setTimeout(() => { process.exit(0); }, 1000);
+    setTimeout(() => {
+      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
+      bat.unref();
+      process.exit(0);
+    }, 1000);
   } catch (e) {
     res.json({ ok: false, texto: "Error al actualizar: " + e.message });
   }

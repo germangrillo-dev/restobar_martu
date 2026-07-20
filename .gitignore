@@ -18,3 +18,12 @@ start_tunnel_and_save_url.ps1
 tunnel.bat
 server.err
 brace-check.ps1
+*.crt
+*.key
+*.csr
+tra.tmp
+pedidos-whatsapp.json
+productos.json
+Comprobante.pdf
+*.jpg
+*.jpeg
