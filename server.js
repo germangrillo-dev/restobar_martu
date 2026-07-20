@@ -7,8 +7,35 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+
+app.get("/prototipo-gestion-bar.html", (req, res) => {
+  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  let html = fs.readFileSync(path.join(__dirname, "prototipo-gestion-bar.html"), "utf-8");
+  html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
+  html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
+  res.set("Content-Type", "text/html");
+  res.send(html);
+});
+
 app.use(express.static(path.join(__dirname)));
+
+const MENU_CACHE = {};
+
+function serveMenu(req, res) {
+  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const logo = (CAJA_STATE.config || {}).logo || "";
+  let html = MENU_CACHE.html;
+  if (!html) {
+    try { html = fs.readFileSync(path.join(__dirname, "menu-mesa.html"), "utf-8"); MENU_CACHE.html = html; } catch { return res.status(500).send("Error"); }
+  }
+  let out = html.replace(/El Mostrador/g, nombre);
+  if (logo) {
+    out = out.replace('id="ogImage" content="/app-icon.png"', 'id="ogImage" content="' + logo + '"');
+  }
+  res.set("Content-Type", "text/html");
+  res.send(out);
+}
 
 const PEDIDOS_FILE = path.join(__dirname, "pedidos-whatsapp.json");
 const PROD_FILE = path.join(__dirname, "productos.json");
@@ -169,16 +196,17 @@ function iniciarWhatsApp() {
   });
 
   client.initialize().catch(err => {
-    console.log(`⚠️  ${err.message || "Auth timeout"}. Reintentando en 15 seg...`);
+    console.log(`⚠️  WhatsApp: ${err.message || "Error"}. Reintentando en 60 seg...`);
     try { fs.unlinkSync("qr.txt"); } catch {}
-    try { fs.rmSync(".wwebjs_auth", { recursive: true, force: true }); } catch {}
-    setTimeout(iniciarWhatsApp, 15000);
+    if (!err.message.includes("already running")) {
+      try { fs.rmSync(".wwebjs_auth", { recursive: true, force: true }); } catch {}
+    }
+    setTimeout(iniciarWhatsApp, 60000);
   });
 }
-iniciarWhatsApp();
 
 const CAJA_FILE = path.join(__dirname, "caja-state.json");
-let CAJA_STATE = { caja: null, cajaIniciada: false, historialCierres: [], mesas: null, deliveries: null };
+let CAJA_STATE = { caja: null, cajaIniciada: false, historialCierres: [], mesas: null, deliveries: null, insumos: null, stock: null, costos: null, proveedores: null };
 try { CAJA_STATE = JSON.parse(fs.readFileSync(CAJA_FILE, "utf-8")); } catch {}
 if (typeof CAJA_STATE.cajaIniciada !== "boolean") CAJA_STATE.cajaIniciada = false;
 if (!Array.isArray(CAJA_STATE.historialCierres)) CAJA_STATE.historialCierres = [];
@@ -188,12 +216,109 @@ app.get("/api/caja", (req, res) => {
 });
 
 app.post("/api/caja", (req, res) => {
-  const { caja, cajaIniciada, historialCierres, mesas, deliveries } = req.body;
-  if (caja !== undefined) CAJA_STATE.caja = caja;
+  try {
+  const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios } = req.body;
+  console.log("[POST /api/caja] mesas recibidas:", mesas ? Object.entries(mesas).map(([k, v]) => k + ":" + JSON.stringify({ l: (v.lineas||[]).length, e: (v.enviado||[]).length, d: (v.despachado||[]).length, b: (v.bebidas||[]).length })) : "null");
+
+  // Client is authority for caja movements
+  if (caja !== undefined && caja !== null) {
+    const serverFecha = CAJA_STATE.caja && CAJA_STATE.caja.fecha;
+    const clientFecha = caja.fecha;
+    const today = new Date().toLocaleDateString('sv-SE');
+
+    // New day detected: archive old caja to historialCierres, start fresh
+    if (serverFecha && serverFecha !== today && CAJA_STATE.caja.movimientos && CAJA_STATE.caja.movimientos.length > 0) {
+      console.log("[POST /api/caja] New day detected, archiving caja from", serverFecha);
+      CAJA_STATE.historialCierres = CAJA_STATE.historialCierres || [];
+      CAJA_STATE.historialCierres.push({ ...CAJA_STATE.caja, fecha: serverFecha });
+      CAJA_STATE.caja = { fecha: today, apertura: null, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
+      CAJA_STATE.cajaIniciada = false;
+    }
+
+    // Only accept caja from today - reject stale data from localStorage
+    if (clientFecha === today) {
+      CAJA_STATE.caja = caja;
+    } else {
+      console.log("[POST /api/caja] Ignoring stale caja (client:", clientFecha, "≠ today:", today, ")");
+    }
+  }
+
   if (cajaIniciada !== undefined) CAJA_STATE.cajaIniciada = cajaIniciada;
-  if (historialCierres !== undefined) CAJA_STATE.historialCierres = historialCierres;
-  if (mesas !== undefined) CAJA_STATE.mesas = mesas;
-  if (deliveries !== undefined) CAJA_STATE.deliveries = deliveries;
+
+  // Client is authority for historialCierres - replace
+  if (historialCierres !== undefined && Array.isArray(historialCierres)) {
+    CAJA_STATE.historialCierres = historialCierres;
+  }
+
+  // Merge mesas - client always wins (one person edits a mesa at a time)
+  if (mesas !== undefined && mesas !== null) {
+    if (!CAJA_STATE.mesas) CAJA_STATE.mesas = mesas;
+    else {
+      for (const [id, clientMesa] of Object.entries(mesas)) {
+        CAJA_STATE.mesas[id] = clientMesa;
+      }
+    }
+  }
+
+  // Merge deliveries by ID (keep local state priority for entregado/despachado)
+  if (deliveries !== undefined && deliveries !== null) {
+    if (!CAJA_STATE.deliveries) {
+      CAJA_STATE.deliveries = deliveries;
+    } else {
+      const serverDelIds = new Set(CAJA_STATE.deliveries.map(d => d.id));
+      const clientOnlyDels = deliveries.filter(d => !serverDelIds.has(d.id));
+      const merged = [...CAJA_STATE.deliveries];
+      for (const clientDel of deliveries) {
+        const idx = merged.findIndex(d => d.id === clientDel.id);
+        if (idx >= 0) {
+          merged[idx] = { ...merged[idx], ...clientDel };
+        }
+      }
+      CAJA_STATE.deliveries = [...merged, ...clientOnlyDels];
+    }
+    // Clean: remove entregado deliveries (fully done)
+    CAJA_STATE.deliveries = CAJA_STATE.deliveries.filter(d => (d.estado || "cocina") !== "entregado");
+  }
+
+  if (config !== undefined && config !== null) {
+    if (!CAJA_STATE.config) CAJA_STATE.config = {};
+    for (const [k, v] of Object.entries(config)) {
+      if (v !== "" && v !== null && v !== undefined) CAJA_STATE.config[k] = v;
+    }
+    delete MENU_CACHE.html;
+  }
+  if (insumos !== undefined && Array.isArray(insumos) && insumos.length > 0) CAJA_STATE.insumos = insumos;
+  if (stock !== undefined && typeof stock === "object" && Object.keys(stock).length > 0) CAJA_STATE.stock = stock;
+  if (costos !== undefined && typeof costos === "object" && Object.keys(costos).length > 0) CAJA_STATE.costos = costos;
+  if (proveedores !== undefined && Array.isArray(proveedores) && proveedores.length > 0) CAJA_STATE.proveedores = proveedores;
+  if (usuarios !== undefined && Array.isArray(usuarios) && usuarios.length > 0) CAJA_STATE.usuarios = usuarios;
+  if (facturaXNum !== undefined && typeof facturaXNum === "number" && facturaXNum > (CAJA_STATE.facturaXNum || 0)) CAJA_STATE.facturaXNum = facturaXNum;
+  fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
+  res.json({ ok: true });
+  } catch (e) {
+    console.error("[POST /api/caja] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// --- Endpoints separados para mesas y deliveries ---
+app.get("/api/mesas", (req, res) => {
+  res.json(CAJA_STATE.mesas || {});
+});
+app.post("/api/mesas", (req, res) => {
+  const mesas = req.body;
+  if (!mesas || typeof mesas !== "object") return res.status(400).json({ error: "invalid" });
+  CAJA_STATE.mesas = mesas;
+  fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
+  res.json({ ok: true });
+});
+app.get("/api/deliveries", (req, res) => {
+  res.json((CAJA_STATE.deliveries || []).filter(d => (d.estado || "cocina") !== "entregado"));
+});
+app.post("/api/deliveries", (req, res) => {
+  const deliveries = req.body;
+  if (!Array.isArray(deliveries)) return res.status(400).json({ error: "invalid" });
+  CAJA_STATE.deliveries = deliveries.filter(d => (d.estado || "cocina") !== "entregado");
   fs.writeFileSync(CAJA_FILE, JSON.stringify(CAJA_STATE, null, 2));
   res.json({ ok: true });
 });
@@ -242,9 +367,81 @@ app.get("/api/menu", (req, res) => {
   res.json(PRODUCTOS);
 });
 
-app.get("/menu-delivery.html", (req, res) => { res.sendFile(path.join(__dirname, "menu-mesa.html")); });
+app.get("/api/config", (req, res) => {
+  res.json(CAJA_STATE.config || {});
+});
+
+app.get("/app-icon.png", (req, res) => {
+  const logo = (CAJA_STATE.config || {}).logo;
+  if (logo && logo.startsWith("data:image")) {
+    const base64 = logo.split(",")[1];
+    const buffer = Buffer.from(base64, "base64");
+    res.set("Content-Type", "image/png");
+    res.set("Cache-Control", "no-cache");
+    return res.send(buffer);
+  }
+  res.sendFile(path.join(__dirname, "icon-192.png"));
+});
+
+app.get("/manifest.json", (req, res) => {
+  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const manifest = {
+    name: nombre + " - Menú",
+    short_name: nombre,
+    description: "Menú de " + nombre + " - Hacé tu pedido",
+    start_url: "/menu-delivery.html",
+    display: "standalone",
+    background_color: "#f5f0eb",
+    theme_color: "#241a0c",
+    orientation: "portrait",
+    icons: [
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+      { src: "/icon-192.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any" },
+      { src: "/icon-512.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any" }
+    ]
+  };
+  res.set("Content-Type", "application/json");
+  res.set("Cache-Control", "no-cache");
+  res.json(manifest);
+});
+
+app.get("/manifest-app.json", (req, res) => {
+  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const manifest = {
+    name: nombre,
+    short_name: nombre,
+    description: "Sistema de gestión " + nombre,
+    start_url: "/",
+    display: "standalone",
+    background_color: "#1a1715",
+    theme_color: "#1a1715",
+    orientation: "any",
+    icons: [
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
+  };
+  res.set("Content-Type", "application/json");
+  res.set("Cache-Control", "no-cache");
+  res.json(manifest);
+});
+
+app.get("/instructivo.html", (req, res) => {
+  const nombre = (CAJA_STATE.config || {}).nombreLocal || "El Mostrador";
+  const url = PUBLIC_URL + "/menu-delivery.html";
+  let html = fs.readFileSync(path.join(__dirname, "instructivo.html"), "utf-8");
+  html = html.replace("COMPLETAR CON LA URL", url);
+  html = html.replace("Menú Digital", nombre);
+  html = html.replace("id=\"footerName\">Menú Digital", "id=\"footerName\">" + nombre);
+  res.set("Content-Type", "text/html");
+  res.send(html);
+});
+
+app.get("/menu-delivery.html", (req, res) => { serveMenu(req, res); });
+app.get("/admin", (req, res) => { res.redirect("/prototipo-gestion-bar.html?mode=admin"); });
 app.get("/", (req, res) => { res.redirect("/prototipo-gestion-bar.html"); });
-app.get("/menu-mesa.html", (req, res) => { res.sendFile(path.join(__dirname, "menu-mesa.html")); });
+app.get("/menu-mesa.html", (req, res) => { serveMenu(req, res); });
 
 app.post("/api/pedidos/mesa", (req, res) => {
   const { mesa, telefono, items, nombrePedido, direccion } = req.body;
@@ -276,6 +473,124 @@ app.get("/qr", (req, res) => {
   }
 });
 
+// --- API Update ---
+app.post("/api/update", (req, res) => {
+  const { execSync } = require("child_process");
+  try {
+    execSync("git pull origin main", { encoding: "utf-8", timeout: 30000 });
+    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
+    setTimeout(() => { process.exit(0); }, 1000);
+  } catch (e) {
+    res.json({ ok: false, texto: "Error al actualizar: " + e.message });
+  }
+});
+
+// --- AFIP Facturación Electrónica ---
+const afip = require("./afip");
+
+app.post("/api/afip/test", async (req, res) => {
+  try {
+    const accessToken = req.body.accessToken || (CAJA_STATE.config || {}).afipAccessToken || "";
+    const result = await afip.verificarPuntoVenta(false, accessToken);
+    res.json(result);
+  } catch (e) {
+    res.json({ ok: false, mensaje: e.message });
+  }
+});
+
+app.post("/api/afip/facturar", async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.items || !data.items.length) return res.status(400).json({ ok: false, error: "Sin items" });
+    const accessToken = data.accessToken || (CAJA_STATE.config || {}).afipAccessToken || "";
+    delete data.accessToken;
+    const result = await afip.facturar(data, false, accessToken);
+    res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta });
+  } catch (e) {
+    console.error("[AFIP] Error facturando:", e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/api/afip/token", async (req, res) => {
+  try {
+    const accessToken = (CAJA_STATE.config || {}).afipAccessToken || "";
+    const token = await afip.getWSAAToken(false, accessToken);
+    res.json({ ok: true, token: token.token ? token.token.substring(0, 20) + "..." : "OK" });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/api/whatsapp/comprobante", async (req, res) => {
+  try {
+    const { telefono, items, total, metodo, comprobante, afip, cliente, localName } = req.body;
+    if (!telefono) return res.status(400).json({ ok: false, error: "Sin teléfono" });
+    const nombre = (CAJA_STATE.config || {}).nombreLocal || localName || "El Mostrador";
+    const dir = (CAJA_STATE.config || {}).direccion || "YPF El Cruce / Ruta Nac 157 y 64";
+    const cuit = (CAJA_STATE.config || {}).cuit || "27-21341447-5";
+    const now = new Date();
+    const fecha = now.toLocaleDateString("es-AR");
+    const hora = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    let itemsHtml = (items || []).map(it => `<tr><td style="padding:4px 0">${it.cant || 1}x ${it.nombre}</td><td style="text-align:right;padding:4px 0">$${((it.precio || 0) * (it.cant || 1)).toLocaleString("es-AR")}</td></tr>`).join("");
+    let afipHtml = "";
+    if (afip && afip.cae) {
+      afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
+        <div><b>Factura Electrónica</b></div>
+        <div>CAE: ${afip.cae}</div>
+        <div>Vto CAE: ${afip.vencimiento || ""}</div>
+        <div>Cbte N°: ${afip.cbteNro || ""}</div>
+        <div>Pto Venta: ${afip.ptoVenta || "2"}</div>
+        <div>CUIT: ${cuit}</div>
+        <div>Régimen: Monotributo</div>
+      </div>`;
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Courier New',monospace;width:300px;padding:16px;background:#fff;color:#000;font-size:13px}
+      .center{text-align:center}
+      .bold{font-weight:700}
+      .small{font-size:11px;color:#555}
+      table{width:100%;border-collapse:collapse}
+    </style></head><body>
+      <div class="center bold" style="font-size:16px;margin-bottom:4px">${nombre}</div>
+      ${dir ? '<div class="center small">' + dir + '</div>' : ''}
+      <div class="center small">CUIT: ${cuit}</div>
+      <div class="center small" style="margin-bottom:8px">${fecha} ${hora}</div>
+      <div style="border-top:1px dashed #000;margin:8px 0"></div>
+      <table>${itemsHtml}</table>
+      <div style="border-top:1px dashed #000;margin:8px 0"></div>
+      <table><tr><td class="bold">TOTAL</td><td style="text-align:right;font-weight:700;font-size:15px">$${(total || 0).toLocaleString("es-AR")}</td></tr></table>
+      <div class="center small" style="margin-top:4px">Pago: ${metodo || "Efectivo"}</div>
+      <div class="center small">${comprobante || ""}</div>
+      ${afipHtml}
+      <div class="center small" style="margin-top:12px;border-top:1px dashed #ccc;padding-top:8px">¡Gracias por su compra!</div>
+    </body></html>`;
+    const browser = await require("puppeteer").launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" } });
+    await browser.close();
+    const pdfPath = path.join(__dirname, "tmp_comprobante.pdf");
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    let num = telefono.replace(/[^0-9]/g, "");
+    if (!num.startsWith("54")) num = "549" + num;
+    const chatId = num + "@c.us";
+    const clientWpp = client;
+    if (clientWpp && clientWpp.info && clientWpp.info.wid) {
+      await clientWpp.sendMessage(chatId, { caption: `Comprobante ${nombre} — ${comprobante || ""}`, filename: "comprobante.pdf", mimetype: "application/pdf", document: fs.readFileSync(pdfPath) });
+      try { fs.unlinkSync(pdfPath); } catch {}
+      res.json({ ok: true });
+    } else {
+      try { fs.unlinkSync(pdfPath); } catch {}
+      res.json({ ok: false, error: "WhatsApp no conectado" });
+    }
+  } catch (e) {
+    console.error("[WA comprobante]", e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 process.on("unhandledRejection", (err) => {
   console.log("⚠️  (ignorado) " + err.message);
 });
@@ -287,7 +602,6 @@ app.listen(PORT, HOST, () => {
   try { ts = require("child_process").execSync("tailscale ip -4", { encoding: "utf-8", timeout: 3000 }).trim(); } catch {}
   console.log(`\n🌐 Servidor web: http://localhost:${PORT}`);
   if (ts) console.log(`🔗 Tailscale:      http://${ts}:${PORT}`);
-  console.log(`📡 QR WhatsApp:    http://localhost:${PORT}/qr`);
   console.log(`📡 Menú clientes:  http://localhost:${PORT}/menu-mesa.html?mesa=1`);
   console.log(`📡 Sistema:        http://localhost:${PORT}/prototipo-gestion-bar.html`);
 });

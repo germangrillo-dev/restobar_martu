@@ -3,7 +3,35 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>El Mostrador — Prototipo</title>
+<title>El Mostrador</title>
+<link rel="manifest" href="/manifest-app.json" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<meta name="theme-color" content="#1a1715" />
+<script>
+(function(){
+  try{
+    var x=new XMLHttpRequest();
+    x.open('GET','/api/caja',false);
+    x.send();
+    if(x.status===200){
+      var d=JSON.parse(x.responseText);
+      if(d&&d.config&&d.config.nombreLocal){
+        var raw=localStorage.getItem('elmo_config');
+        var cfg=raw?JSON.parse(raw):{};
+        if(!cfg.nombreLocal||cfg.nombreLocal==='')cfg.nombreLocal=d.config.nombreLocal;
+        if((!cfg.logo||cfg.logo==='')&&d.config.logo)cfg.logo=d.config.logo;
+        localStorage.setItem('elmo_config',JSON.stringify(cfg));
+        document.title=d.config.nombreLocal;
+        var ma=document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if(ma)ma.content=d.config.nombreLocal;
+      }
+      if(typeof d.cajaIniciada==='boolean'){
+        localStorage.setItem('elmo_cajaIniciada',JSON.stringify(d.cajaIniciada));
+      }
+    }
+  }catch(e){}
+})();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -40,12 +68,16 @@ const Truck = (p) => <Ic {...p} paths={["M1 3h15v13H1z", "M16 8h4l3 3v5h-7z", "M
 const Pencil = (p) => <Ic {...p} paths={["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"]} />;
 const Book = (p) => <Ic {...p} paths={["M4 19.5A2.5 2.5 0 0 1 6.5 17H20", "M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"]} />;
 const Smartphone = (p) => <Ic {...p} paths={["M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M10 17h4"]} />;
+const Zap = (p) => <Ic {...p} paths={["M13 2L3 14h9l-1 8 10-12h-9l1-8z"]} />;
 const QrCode = (p) => <Ic {...p} paths={["M3 3h8v8H3z", "M13 3h8v8h-8z", "M3 13h8v8H3z", "M13 17h2", "M17 13h2", "M13 13h2v2h-2z", "M19 19h2v2h-2z"]} />;
 const Settings = (p) => <Ic {...p} paths={["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"]} />;
 const LayoutGrid = (p) => <Ic {...p} paths={["M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z"]} />;
 const Flame = (p) => <Ic {...p} paths={["M12 2c-4 4-6 8-6 12a6 6 0 0 0 12 0c0-4-2-8-6-12z", "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M10 18c-2 1.5-2 3.5 0 5"]} />;
+const RefreshCw = (p) => <Ic {...p} paths={["M23 4v6h-6", "M1 20v-6h6", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10", "M20.49 15a9 9 0 0 1-14.85 3.36L1 14"]} />;
 const DollarSign = (p) => <Ic {...p} paths={["M12 3v18", "M17 7.5C17 5.57 14.76 4 12 4c-2.76 0-5 1.57-5 3.5S9.24 11 12 11s5 1.57 5 3.5S14.76 18 12 18s-5-1.57-5-3.5"]} />;
 const Globe = (p) => <Ic {...p} paths={["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M2 12h20", "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"]} />;
+const Download = (p) => <Ic {...p} paths={["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"]} />;
+const Upload = (p) => <Ic {...p} paths={["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]} />;
 
 const C = { base: "#1a1715", raised: "#262120", raised2: "#2f2926", border: "#3a322e", text: "#f5efe6", muted: "#a89a8c", amber: "#e8a23d", green: "#6fa84a", red: "#d9543f", blue: "#5b8fd6" };
 const UNIDADES = ["g", "kg", "ml", "L", "u"];
@@ -116,7 +148,7 @@ const dinero = (n) => "$" + (n || 0).toLocaleString("es-AR", { minimumFractionDi
 const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 const hoy = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 9);
-const USUARIOS = [{ nombre: "Sofía (dueña)", rol: "admin", clave: "1234" }, { nombre: "Caja 1", rol: "cajero", clave: "1234" }, { nombre: "Visor Remoto", rol: "visor", clave: "1234" }];
+const USUARIOS_DEFAULT = [{ nombre: "Sofía (dueña)", rol: "admin", clave: "1234" }, { nombre: "Caja 1", rol: "cajero", clave: "1234" }, { nombre: "Visor Remoto", rol: "visor", clave: "1234" }];
 const lineaVacia = () => ({ lid: uid(), codigo: "", cantidad: "", unitario: "", descuento: "", internos: "" });
 const provVacio = () => ({ nombre: "", cuit: "", condicion: CONDICIONES[0], rubro: "", direccion: "", localidad: "", telefono: "", email: "" });
 let WA_NUMERO = (() => { try { return localStorage.getItem("elmo_wa_numero") || "5491155551234"; } catch { return "5491155551234"; } })();
@@ -201,11 +233,22 @@ const parsearPedidoWhatsApp = (texto, prods) => {
 
 function App() {
   const cargar = (key, def) => { try { const v = localStorage.getItem("elmo_" + key); return v ? JSON.parse(v) : def; } catch { return def; } };
+  const mesasRef = React.useRef({}); const deliveriesRef = React.useRef([]);
+  const cajaDirtyUntilRef = React.useRef(0);
+  const initialSyncDoneRef = React.useRef(false);
+  const configRef = React.useRef(null);
+  const postMesas = (m) => { fetch(serverUrl + "/api/mesas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) }).catch(() => console.warn("sync: fallo post mesas")); };
+  const postDeliveries = (d) => { fetch(serverUrl + "/api/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) }).catch(() => console.warn("sync: fallo post deliveries")); };
+  const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
+    if (!initialSyncDoneRef.current) return;
+    const cfg = configRef.current || config;
+    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas } : undefined;
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: cajaVal, historialCierres, mesas: mesasVal, deliveries: deliveriesVal || [], orden, config: configLiviano, insumos, stock, costos, proveedores, facturaXNum, usuarios }) }).catch(() => console.warn("sync: fallo post caja"));
+  };
   const guardar = (opts) => {
-    const datos = { insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config };
+    const datos = { insumos, stock, costos, productos, proveedores, facturas, mesas: mesasRef.current, deliveries: deliveriesRef.current, caja: cajaRef.current, historialCierres, cajaIniciada, orden, config, facturaXNum, usuarios };
     for (const [k, v] of Object.entries(datos)) { try { localStorage.setItem("elmo_" + k, JSON.stringify(v)); } catch {} }
-    if (opts?.skipServer) return;
-    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja, cajaIniciada, historialCierres, mesas, deliveries, orden }) }).catch(() => { console.warn("sync: fallo al guardar en servidor"); try { setToast({ tipo: "error", texto: "Error al sincronizar con el servidor. Los cambios se guardan localmente." }); } catch {} });
+    postAlServer(cajaRef.current, mesasRef.current, deliveriesRef.current);
   };
   const [usuario, setUsuario] = useState(() => cargar("usuario", null));
   const [tab, setTab] = useState("pedido");
@@ -213,13 +256,18 @@ function App() {
   const [stock, setStock] = useState(() => cargar("stock", Object.fromEntries(INSUMOS_INI.map((i) => [i.id, i.inicial]))));
   const [costos, setCostos] = useState(() => cargar("costos", { ...COSTOS_INI }));
   const [productos, setProductos] = useState(() => { const local = cargar("productos", null); if (local && local.length) { return local.map((p, i) => p.ref ? p : { ...p, ref: (i + 1) }); } return PRODUCTOS_INI; });
-  const [categorias, setCategorias] = useState(() => cargar("categorias", CATEGORIAS_DEF));
+  const [categorias, setCategorias] = useState(() => {
+    const saved = cargar("categorias", CATEGORIAS_DEF);
+    const prods = cargar("productos", []);
+    const prodCats = [...new Set(prods.map(p => p.cat).filter(Boolean))];
+    const merged = [...new Set([...saved, ...prodCats])];
+    return merged;
+  });
   const [proveedores, setProveedores] = useState(() => cargar("proveedores", PROVEEDORES_INI));
   const [facturas, setFacturas] = useState(() => cargar("facturas", []));
   const [fac, setFac] = useState({ provId: "", tipo: TIPOS_FAC[0], numero: "", fecha: hoy(), items: [lineaVacia()] });
   const [mesas, setMesas] = useState(() => { const d = cargar("mesas", {}); const def = { lineas: [], enviado: [], despachado: [], bebidas: [] }; return Object.fromEntries(MESAS.map((m) => [m.id, { ...def, ...(d[m.id] || {}) }])); });
   const [deliveries, setDeliveries] = useState(() => cargar("deliveries", []));
-  const deliveriesRef = React.useRef(deliveries); deliveriesRef.current = deliveries;
   const [vista, setVista] = useState("mapa");
   const [salonVista, setSalonVista] = useState("salon");
   const [orden, setOrden] = useState(() => cargar("orden", null));
@@ -247,13 +295,19 @@ function App() {
   const [caja, setCaja] = useState(() => cargar("caja", { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "" }));
   const [cajaIniciada, setCajaIniciada] = useState(() => cargar("cajaIniciada", false));
   const [historialCierres, setHistorialCierres] = useState(() => cargar("historialCierres", []));
+  const [usuarios, setUsuarios] = useState(() => cargar("usuarios", USUARIOS_DEFAULT));
+  const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", clave: "", rol: "cajero" });
   const [showHistorial, setShowHistorial] = useState(false);
   const [showCierreModal, setShowCierreModal] = useState(false);
   const [showCobroModal, setShowCobroModal] = useState(false);
+
   const [cobroMetodo, setCobroMetodo] = useState(null);
   const [cobroPago, setCobroPago] = useState("");
+  const [cobroRef, setCobroRef] = useState("");
+  const [showComprobanteModal, setShowComprobanteModal] = useState(null);
+  const [facturaXNum, setFacturaXNum] = useState(() => cargar("facturaXNum", 1));
   const [showConfig, setShowConfig] = useState(false);
-  const [config, setConfig] = useState(() => cargar("config", { destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false }));
+  const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false }));
   const [cajaIniciadaRef, setCajaIniciadaRef] = useState(cajaIniciada);
 
   const insumoById = useMemo(() => Object.fromEntries(insumos.map((i) => [i.id, i])), [insumos]);
@@ -263,7 +317,7 @@ function App() {
   const waLink = (tel, msg) => { let n = (tel || "").replace(/[^0-9]/g, ""); if (!n.startsWith("54")) n = "549" + n; return "whatsapp://send?phone=" + n + "&text=" + encodeURIComponent(msg); };
   const abrirWA = (tel, msg) => { window.location.href = waLink(tel, msg); };
   const mesaTotal = (id) => sumLin(mesas[id].enviado) + sumLin(mesas[id].lineas) + sumLin(mesas[id].despachado || []) + sumLin(mesas[id].bebidas || []);
-  const mesaEstado = (id) => mesas[id].despachado && mesas[id].despachado.length ? "despachado" : (mesas[id].enviado.length ? "cocina" : (mesas[id].lineas.length ? "abierta" : "libre"));
+  const mesaEstado = (id) => mesas[id].enviado.length ? "cocina" : (mesas[id].despachado && mesas[id].despachado.length ? "despachado" : (mesas[id].lineas.length || (mesas[id].bebidas && mesas[id].bebidas.length) ? "abierta" : "libre"));
   const costoReceta = (rec) => rec.reduce((a, [iid, c]) => a + (costos[iid] || 0) * c, 0);
   const unidadDe = (iid) => insumoById[iid] ? insumoById[iid].unidad : "";
   const nombreIns = (iid) => insumoById[iid] ? insumoById[iid].nombre : "(borrado)";
@@ -279,13 +333,16 @@ function App() {
   const volver = () => { if (orden && orden.tipo === "mesa") setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: orden.lineas } })); setOrden(null); setVista("mapa"); };
   const add = (pid) => {
     if (orden.tipo === "mesa" && prodById[pid]?.cat === "Bebidas") {
+      markMesaDirty(orden.mesaId);
       setMesas((ms) => {
         const bev = ms[orden.mesaId].bebidas || [];
         const i = bev.findIndex((l) => l.pid === pid && !l.nota);
         let nb;
         if (i >= 0) { nb = [...bev]; nb[i] = { ...nb[i], cant: nb[i].cant + 1 }; }
         else nb = [...bev, { lid: uid(), pid, cant: 1, nota: "" }];
-        return { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: nb } };
+        const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: nb } };
+        postMesas(nm);
+        return nm;
       });
       return;
     }
@@ -304,39 +361,97 @@ function App() {
     let descuentaStock = true;
     if (faltan.length) {
       const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ");
-      if (!window.confirm("Stock insuficiente:\n\n" + txt + "\n\n¿Enviar igual a cocina? (no se descuenta stock)")) return;
+      setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." });
       descuentaStock = false;
     }
     if (descuentaStock) setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
     const itemsTicket = orden.lineas.map((l) => ({ nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
     const total = sumLin(orden.lineas);
     setTicket({ tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket });
-    if (orden.tipo === "mesa") { setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas] } })); setOrden((o) => ({ ...o, lineas: [] })); }
-    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); setDeliveries((d) => [{ id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, hora: hora(), total, items: delItems, estado: "cocina" }, ...d]); setOrden((o) => ({ ...o, lineas: [] })); }
+    if (orden.tipo === "mesa") { setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], despachado: [] } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
+    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, hora: hora(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); }
   };
   const cerrarTicket = () => { const eraDelivery = ticket && ticket.tipo === "delivery"; setTicket(null); setToast({ tipo: "ok", texto: "Comanda enviada a cocina y stock actualizado." }); if (eraDelivery) { setOrden(null); setSalonVista("delivery"); setVista("mapa"); } };
-  const cerrarMesa = (id) => { setShowCobroModal({ id, total: mesaTotal(id) }); setCobroMetodo(null); setCobroPago(""); };
-  const limpiarMesa = (id) => { if (!window.confirm("¿Limpiar mesa " + id + "? Se borran todos los items.")) return; setMesas((ms) => ({ ...ms, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } })); setToast({ tipo: "ok", texto: "Mesa " + id + " limpiada." }); if (orden && orden.mesaId === id) setOrden((o) => ({ ...o, lineas: [] })); };
-  const confirmarCobro = (id, metodo) => {
-    const total = mesaTotal(id);
-    setCaja((c) => ({ ...c, movimientos: [...c.movimientos, { id: uid(), tipo: "venta", concepto: "Mesa " + id, monto: total, metodo, hora: hora(), usuario: usuario.nombre }] }));
-    setMesas((ms) => ({ ...ms, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } })); setOrden(null); setVista("mapa"); setShowCobroModal(null);
-    setToast({ tipo: "ok", texto: "Mesa " + id + " cobrada ($" + total.toLocaleString("es-AR") + " " + metodo + ")." });
+  const cerrarMesa = (id) => { markMesaDirty(id); postMesas(mesas); setShowCobroModal({ id, total: mesaTotal(id), itemsCapturados: [...(mesas[id]?.enviado || []), ...(mesas[id]?.lineas || []), ...(mesas[id]?.despachado || []), ...(mesas[id]?.bebidas || [])] }); setCobroMetodo(null); setCobroPago(""); setCobroRef(""); };
+  const limpiarMesa = (id) => { if (!window.confirm("¿Limpiar mesa " + id + "? Se borran todos los items.")) return; markMesaDirty(id); const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } }; setMesas(nuevasMesas); setToast({ tipo: "ok", texto: "Mesa " + id + " limpiada." }); if (orden && orden.mesaId === id) setOrden((o) => ({ ...o, lineas: [] })); try { localStorage.setItem("elmo_mesas", JSON.stringify(nuevasMesas)); } catch {} postMesas(nuevasMesas); };
+  const enviarComprobanteWA = async () => {
+    const tel = (showComprobanteModal.telefono || showComprobanteModal._telInput || "").replace(/[^0-9]/g, "");
+    if (!tel) { setToast({ tipo: "error", texto: "Ingresá un teléfono" }); return; }
+    setToast({ tipo: "ok", texto: "Generando comprobante y enviando por WhatsApp..." });
+    const fallback = function() {
+      var tipo = showComprobanteModal.afip ? ("Factura B CAE: " + showComprobanteModal.afip.cae) : "Factura X";
+      var tot = pesos(showComprobanteModal.total);
+      var met = showComprobanteModal.metodo;
+      var msg = encodeURIComponent("Comprobante " + tipo + "\nTotal: " + tot + "\nMetodo: " + met + "\nGracias por su compra");
+      window.open("https://wa.me/" + tel + "?text=" + msg, "_blank");
+    };
+    try {
+      var body = JSON.stringify({
+        telefono: tel,
+        items: showComprobanteModal.items || [],
+        total: showComprobanteModal.total,
+        metodo: showComprobanteModal.metodo,
+        comprobante: showComprobanteModal.afip ? ("CAE " + showComprobanteModal.afip.cae) : "FAX",
+        afip: showComprobanteModal.afip || null,
+        cliente: showComprobanteModal.cliente || ""
+      });
+      var r = await fetch(serverUrl + "/api/whatsapp/comprobante", { method: "POST", headers: { "Content-Type": "application/json" }, body: body });
+      var d = await r.json();
+      if (d.ok) {
+        setToast({ tipo: "ok", texto: "Comprobante enviado por WhatsApp" });
+      } else {
+        var errMsg = d.error || "No se pudo enviar";
+        setToast({ tipo: "error", texto: "Error: " + errMsg });
+        fallback();
+      }
+    } catch(e) {
+      setToast({ tipo: "error", texto: "Error de conexion" });
+      fallback();
+    }
   };
-  const entregarDelivery = (id, metodoPago) => {
+
+  const confirmarCobro = (id, metodo, afipResult) => {
+    const total = mesaTotal(id);
+    const ref = (metodo !== "Efectivo") ? cobroRef : "";
+    markMesaDirty(id);
+    const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
+    setFacturaXNum((n) => n + 1);
+    const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id, monto: total, metodo, ref, hora: hora(), comprobante: numComp };
+    if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
+    const nuevaCaja = { ...caja, movimientos: [...caja.movimientos, mov] };
+    const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [] } };
+    setCaja(nuevaCaja);
+    setMesas(nuevasMesas);
+    setOrden(null); setVista("mapa"); setShowCobroModal(null);
+    setToast({ tipo: "ok", texto: "Mesa " + id + " cobrada ($" + total.toLocaleString("es-AR") + " " + metodo + ")" + (afipResult ? " · CAE: " + afipResult.cae : "") + "." });
+    try { localStorage.setItem("elmo_mesas", JSON.stringify(nuevasMesas)); localStorage.setItem("elmo_caja", JSON.stringify(nuevaCaja)); } catch {}
+    postMesas(nuevasMesas);
+    postAlServer(nuevaCaja, nuevasMesas, null);
+  };
+  const entregarDelivery = (id, metodoPago, ref, afipResult) => {
     const found = deliveriesRef.current.find(x => x.id === id);
     if (!found || found.estado === "entregado") return;
     const nuevoEstado = found.estado === "despachado" ? "entregado" : "despachado";
-    setDeliveries((ds) => ds.map((x) => x.id !== id ? x : { ...x, estado: nuevoEstado }));
+    const updated = { ...found, estado: nuevoEstado };
+    const nds = deliveriesRef.current.map((x) => x.id !== id ? x : updated);
+    setDeliveries(nds);
+    postDeliveries(nds);
     if (found.estado === "despachado") {
-      setCaja((c) => ({ ...c, movimientos: [...c.movimientos, { id: uid(), tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", hora: hora(), usuario: usuario.nombre }] }));
-      setToast({ tipo: "ok", texto: "Pedido marcado como entregado." });
+      const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
+      setFacturaXNum((n) => n + 1);
+      const mov = { id: uid(), tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp };
+      if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
+      const nuevaCaja = { ...caja, movimientos: [...caja.movimientos, mov] };
+      setCaja(nuevaCaja);
+      setToast({ tipo: "ok", texto: "Pedido entregado." + (afipResult ? " CAE: " + afipResult.cae : "") });
+      try { localStorage.setItem("elmo_caja", JSON.stringify(nuevaCaja)); } catch {}
+      postAlServer(nuevaCaja, null, null);
     } else {
       setToast({ tipo: "ok", texto: "Pedido despachado." });
     }
   };
   const [showPagoDelivery, setShowPagoDelivery] = useState(null);
-  const despacharMesa = (id) => { setMesas((ms) => ({ ...ms, [id]: { ...ms[id], despachado: [...(ms[id].despachado || []), ...ms[id].enviado], enviado: [] } })); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); };
+  const despacharMesa = (id) => { markMesaDirty(id); const nuevasMesas = { ...mesas, [id]: { ...mesas[id], despachado: [...(mesas[id].despachado || []), ...mesas[id].enviado], enviado: [] } }; setMesas(nuevasMesas); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); try { localStorage.setItem("elmo_mesas", JSON.stringify(nuevasMesas)); } catch {} postMesas(nuevasMesas); };
 
   // ABM Insumos
   const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "", factorCompra: "" });
@@ -416,8 +531,10 @@ function App() {
   };
   const logout = () => { setUsuario(null); localStorage.removeItem("elmo_usuario"); setOrden(null); setVista("mapa"); };
   React.useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3800); return () => clearTimeout(t); }, [toast]);
+  React.useEffect(() => { fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (typeof data.cajaIniciada === "boolean") setCajaIniciada(data.cajaIniciada); if (data.config) setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); }).catch(() => {}); }, []);
   React.useEffect(() => { guardar({ skipServer: true }); }, []);
-  React.useEffect(() => { const t = setTimeout(() => guardar(), 1000); return () => clearTimeout(t); }, [insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config]);
+  React.useEffect(() => { configRef.current = config; }, [config]);
+  React.useEffect(() => { const t = setTimeout(() => guardar(), 1000); return () => clearTimeout(t); }, [insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config, facturaXNum, usuarios]);
   React.useEffect(() => { if (!cajaAbierta && tab !== "caja") setTab("caja"); }, [cajaAbierta]);
   // Sincronizar productos desde el servidor (precios, nombres, etc.) cada 10s
   const prodRef = React.useRef(productos);
@@ -431,6 +548,11 @@ function App() {
         const localOnly = prev.filter(lp => !prods.find(sp => sp.id === lp.id));
         return [...merged, ...localOnly];
       });
+      setCategorias(prev => {
+        const prodCats = [...new Set(prods.map(p => p.cat).filter(Boolean))];
+        const newCats = prodCats.filter(c => !prev.includes(c));
+        return newCats.length > 0 ? [...prev, ...newCats] : prev;
+      });
     }).catch(() => { console.warn("sync productos: no se pudo leer del servidor"); });
     fn();
     const t = setInterval(fn, 10000);
@@ -440,7 +562,85 @@ function App() {
   // Sync from server on login + periodic (safe: no overwrite of pending local changes)
   const cajaRef = React.useRef(caja);
   cajaRef.current = caja;
-  React.useEffect(() => { if (!usuario) return; fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (data.caja) { setCaja(data.caja); setCajaIniciada(data.cajaIniciada); if (data.historialCierres) setHistorialCierres(data.historialCierres); if (data.deliveries) { setDeliveries((prev) => { const prevIds = new Set(prev.map(d => d.id)); const newDels = data.deliveries.filter(d => !prevIds.has(d.id)); return newDels.length > 0 ? [...prev, ...newDels] : prev; }); } } }).catch(() => console.warn("sync: no se pudo leer del servidor")); const t = setInterval(() => { fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (!data.caja) return; if (data.historialCierres) setHistorialCierres(data.historialCierres); const localMovs = (cajaRef.current?.movimientos || []).length; const serverMovs = (data.caja?.movimientos || []).length; if (serverMovs > localMovs) { const localIds = new Set((cajaRef.current?.movimientos || []).map(m => m.id)); const serverOnly = (data.caja.movimientos || []).filter(m => !localIds.has(m.id)); if (serverOnly.length > 0) setCaja((c) => ({ ...c, movimientos: [...c.movimientos, ...serverOnly] })); } }).catch(() => {}); }, 5000); return () => clearInterval(t); }, [usuario]);
+  mesasRef.current = mesas;
+  deliveriesRef.current = deliveries;
+  const dirtyMesasRef = React.useRef(new Set());
+  const markMesaDirty = (id) => { const sid = String(id); dirtyMesasRef.current.add(sid); setTimeout(() => dirtyMesasRef.current.delete(sid), 10000); };
+  const syncRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!usuario) return;
+    const syncFromServer = () => {
+      // Caja + config + stock from main endpoint
+      fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => {
+        initialSyncDoneRef.current = true;
+        if (!data.caja) return;
+        if (Date.now() < cajaDirtyUntilRef.current) return;
+        if (cajaIniciada && data.caja.fecha === caja.fecha) {
+          setCajaIniciada(data.cajaIniciada);
+          return;
+        }
+        // Different date from server = replace entirely (clean start)
+        if (data.caja.fecha !== caja.fecha) {
+          setCaja(data.caja);
+          if (data.cajaIniciada !== undefined) setCajaIniciada(data.cajaIniciada);
+        } else {
+          setCaja((prev) => {
+            const localIds = new Set((prev?.movimientos || []).map(m => m.id));
+            const serverOnly = (data.caja.movimientos || []).filter(m => !localIds.has(m.id));
+            if (serverOnly.length === 0) return prev;
+            return { ...prev, movimientos: [...(prev?.movimientos || []), ...serverOnly] };
+          });
+          setCajaIniciada(data.cajaIniciada);
+        }
+        if (data.historialCierres) {
+          setHistorialCierres((prev) => {
+            const prevKeys = new Set(prev.map(h => h.fechaCierre || h.fecha));
+            const serverOnly = data.historialCierres.filter(h => !prevKeys.has(h.fechaCierre || h.fecha));
+            return serverOnly.length > 0 ? [...prev, ...serverOnly] : prev;
+          });
+        }
+        if (data.config) setConfig((c) => {
+          const merged = { ...c };
+          for (const [k, v] of Object.entries(data.config)) {
+            if (v !== "" && v !== null && v !== undefined) merged[k] = v;
+          }
+          return merged;
+        });
+        if (typeof data.facturaXNum === "number") setFacturaXNum((prev) => Math.max(prev || 1, data.facturaXNum));
+        if (data.insumos && Array.isArray(data.insumos) && data.insumos.length > 0) setInsumos(data.insumos);
+        if (data.stock && typeof data.stock === "object") setStock(data.stock);
+        if (data.costos && typeof data.costos === "object") setCostos(data.costos);
+        if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios);
+        if (data.proveedores && Array.isArray(data.proveedores) && data.proveedores.length > 0) setProveedores(data.proveedores);
+      }).catch(() => {});
+      // Mesas from own endpoint - never overwrite local mesa with items with empty server mesa
+      fetch(serverUrl + "/api/mesas").then(r => r.json()).then(serverMesas => {
+        if (!serverMesas || typeof serverMesas !== "object") return;
+        setMesas((prev) => {
+          const m = { ...prev };
+          for (const [id, sm] of Object.entries(serverMesas)) {
+            if (dirtyMesasRef.current.has(id)) continue;
+            const local = m[id];
+            const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0);
+            const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0);
+            if (localHasItems && !serverHasItems) continue;
+            m[id] = sm;
+          }
+          return m;
+        });
+      }).catch(() => {});
+      // Deliveries from own endpoint - server is source of truth
+      fetch(serverUrl + "/api/deliveries").then(r => r.json()).then(serverDels => {
+        if (!Array.isArray(serverDels)) return;
+        setDeliveries(serverDels);
+      }).catch(() => {});
+    };
+    syncFromServer();
+    syncRef.current = syncFromServer;
+    const t = setInterval(syncFromServer, 5000);
+    return () => clearInterval(t);
+  }, [usuario]);
+  React.useEffect(() => { document.title = (config.nombreLocal || "El Mostrador") + " — " + (tab === "pedido" ? "Pedido" : tab === "caja" ? "Caja" : tab === "carta" ? "Carta" : tab === "delivery" ? "Delivery" : tab === "compras" ? "Compras" : tab === "insumos" ? "Insumos" : tab === "config" ? "Config" : "Sistema"); }, [config.nombreLocal, tab]);
   React.useEffect(() => { const t = setInterval(() => { fetch(serverUrl + "/api/pedidos/pendientes").then(r => r.json()).then(d => setWaPedidos(d)).catch(() => {}); }, 4000); return () => clearInterval(t); }, []);
   const importarWAPedido = (wp, items) => {
     setWaPedidos((ps) => ps.filter(p => p.id !== wp.id));
@@ -449,8 +649,8 @@ function App() {
       const req = {};
       for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
       const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
-      if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "No alcanza el stock: " + txt }); return; }
-      setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+      if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
+      setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
       setMesas((ms) => ({ ...ms, [wp.mesa]: { ...ms[wp.mesa], enviado: [...ms[wp.mesa].enviado, ...items] } }));
       const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
       const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
@@ -464,11 +664,12 @@ function App() {
         const req = {};
         for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
         const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
-        if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "No alcanza el stock: " + txt }); return; }
-        setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+        if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
+        setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
         const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota }));
         const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
-        setDeliveries((d) => [{ id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems, estado: "cocina" }, ...d]);
+        const newDel = { id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems, estado: "cocina" };
+        setDeliveries((d) => { const nds = [newDel, ...d]; postDeliveries(nds); return nds; });
         setTicket({ tipo: "delivery", mesaId: null, cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems });
         setSalonVista("delivery"); setVista("mapa"); setTab("pedido");
         setToast({ tipo: "ok", texto: "Pedido de " + nombre + " enviado a cocina." });
@@ -484,11 +685,13 @@ function App() {
   const miniInput = { ...inputStyle, padding: "6px 8px", fontSize: 13 };
   const lbl = { color: C.muted, fontSize: 11, marginBottom: 3, display: "block" };
 
+  const esModoAdmin = window.location.search.includes("mode=admin");
+
   if (!usuario) {
     return (
       <div style={{ background: C.base, color: C.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
         <div className="w-full max-w-sm px-6">
-          <div className="text-center mb-7"><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>El Mostrador</h1></div>
+          <div className="text-center mb-7">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", margin: "0 auto 12px", display: "block", border: "2px solid " + C.border }} />}<div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{config.nombreLocal || "El Mostrador"}</h1></div>
           {loginUsuario ? (
             <div>
               <p style={{ color: C.muted, fontSize: 14, marginBottom: 12 }}>Ingresá la contraseña para <strong>{loginUsuario.nombre}</strong></p>
@@ -501,8 +704,8 @@ function App() {
             </div>
           ) : (
             <div>
-              <p style={{ color: C.muted, fontSize: 14, marginTop: 4, marginBottom: 12 }}>Elegí con qué usuario entrás</p>
-              <div className="flex flex-col gap-3">{USUARIOS.map((u) => (<button key={u.nombre} onClick={() => login(u)} className="flex items-center gap-3 p-4 rounded-xl text-left" style={{ background: C.raised, border: "1px solid " + C.border }}><div style={{ background: C.raised2, borderRadius: 99, padding: 10, color: C.amber }}>{u.rol === "admin" ? <User size={20} /> : u.rol === "visor" ? <ClipboardList size={20} /> : <Lock size={20} />}</div><div><div style={{ fontWeight: 700 }}>{u.nombre}</div><div style={{ color: C.muted, fontSize: 13 }}>{u.rol === "admin" ? "Acceso total" : u.rol === "visor" ? "Solo lectura + precios" : "Solo ventas"}</div></div></button>))}</div>
+              <p style={{ color: C.muted, fontSize: 14, marginTop: 4, marginBottom: 12 }}>{esModoAdmin ? "Panel de gestión" : "Elegí con qué usuario entrás"}</p>
+              <div className="flex flex-col gap-3">{usuarios.filter((u) => esModoAdmin ? u.rol === "visor" : true).map((u) => (<button key={u.nombre} onClick={() => login(u)} className="flex items-center gap-3 p-4 rounded-xl text-left" style={{ background: C.raised, border: "1px solid " + C.border }}><div style={{ background: C.raised2, borderRadius: 99, padding: 10, color: C.amber }}>{u.rol === "admin" ? <User size={20} /> : <Lock size={20} />}</div><div><div style={{ fontWeight: 700 }}>{u.nombre}</div><div style={{ color: C.muted, fontSize: 13 }}>{u.rol === "admin" ? "Acceso total" : u.rol === "visor" ? "Solo lectura + precios" : "Solo ventas"}</div></div></button>))}</div>
                   </div>
                 )}
         </div>
@@ -512,7 +715,8 @@ function App() {
 
   const esAdmin = usuario.rol === "admin";
   const esVisor = usuario.rol === "visor";
-  const puedeCarta = esAdmin || esVisor;
+  const esGerente = usuario.rol === "gerente";
+  const puedeCarta = esAdmin || esVisor || esGerente;
   const tabsAll = [
     { id: "pedido", label: "Vender", icon: ClipboardList, admin: false },
     { id: "estado", label: "Estado", icon: LayoutGrid, admin: false },
@@ -521,8 +725,10 @@ function App() {
     { id: "proveedores", label: "Proveedores", icon: Truck, admin: true },
     { id: "insumos", label: "Insumos", icon: Package, admin: true },
     { id: "carta", label: "Carta", icon: Book, admin: true },
+    { id: "config", label: "Config", icon: Settings, admin: true },
   ];
   const tabs = tabsAll.filter((t) => {
+    if (esGerente) return ["caja", "carta", "compras", "proveedores", "insumos"].includes(t.id);
     if (!cajaAbierta) return false;
     if (t.admin && !esAdmin && !(esVisor && t.id === "carta")) return false;
     return true;
@@ -534,8 +740,17 @@ function App() {
     <div style={{ background: C.base, color: C.text, minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-5xl mx-auto px-4 py-5">
         <header className="flex items-center justify-between mb-5">
-          <div><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>El Mostrador</h1></div>
-            <div className="flex items-center gap-1 flex-wrap"><div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Globe size={12} /><input value={publicUrl} placeholder="https://..." onChange={(e) => { setPublicUrl(e.target.value); try { localStorage.setItem("elmo_publicUrl", JSON.stringify(e.target.value)); fetch("/api/public-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: e.target.value }) }).catch(() => {}); } catch {} }} style={{ background: "transparent", border: "none", color: C.text, width: 190, outline: "none", fontSize: 11 }} /></div><div className="flex items-center gap-1"><div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: C.raised, border: "1px solid " + C.border }}><span style={{ color: C.amber }}>{esAdmin ? <User size={15} /> : esVisor ? <ClipboardList size={15} /> : <Lock size={15} />}</span><span style={{ fontSize: 13 }}>{usuario.nombre}</span></div><button onClick={() => window.open("/qr", "_blank")} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><QrCode size={15} /></button>{esAdmin && <button onClick={() => setShowConfig(true)} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Settings size={15} /></button>}<button onClick={() => setShowCocinaPopup(!showCocinaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Flame size={15} />{(deliveries.filter(d => (d.estado || "cocina") !== "entregado").length + MESAS.filter(m => mesaEstado(m.id) === "cocina" || mesaEstado(m.id) === "despachado").length) > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-xs font-bold" style={{ background: C.amber, color: "#241a0c", width: 18, height: 18 }}>{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length + MESAS.filter(m => mesaEstado(m.id) === "cocina" || mesaEstado(m.id) === "despachado").length}</span>}</button><button onClick={() => setShowWaPopup(!showWaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Smartphone size={15} />{waPedidos.length > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-xs font-bold" style={{ background: "#25D366", color: "#fff", width: 18, height: 18 }}>{waPedidos.length}</span>}</button><button onClick={() => { setWhatsappModal("config"); setPedidoRaw(WA_NUMERO); }} className="flex items-center px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Configurar número WhatsApp"><Pencil size={13} /></button><button onClick={logout} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><LogOut size={15} /></button></div></div>
+          <div className="flex items-center gap-3">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover", background: C.raised, border: "1px solid " + C.border }} />}<div><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>{config.nombreLocal || "El Mostrador"}</h1></div></div>
+          <div className="flex items-center gap-1">
+            {!esModoAdmin && <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Globe size={12} /><input value={publicUrl} placeholder="https://..." onChange={(e) => { setPublicUrl(e.target.value); try { localStorage.setItem("elmo_publicUrl", JSON.stringify(e.target.value)); fetch("/api/public-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: e.target.value }) }).catch(() => {}); } catch {} }} style={{ background: "transparent", border: "none", color: C.text, width: 190, outline: "none", fontSize: 11 }} /></div>}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: C.raised, border: "1px solid " + C.border }}><span style={{ color: C.amber }}>{esAdmin ? <User size={15} /> : esGerente ? <ClipboardList size={15} /> : esVisor ? <ClipboardList size={15} /> : <Lock size={15} />}</span><span style={{ fontSize: 13 }}>{usuario.nombre}</span></div>
+            <button onClick={() => { if (syncRef.current) syncRef.current(); setToast({ tipo: "ok", texto: "Datos actualizados." }); }} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Actualizar datos"><RefreshCw size={15} /></button>
+            {!esModoAdmin && <button onClick={() => window.open("/qr", "_blank")} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><QrCode size={15} /></button>}
+            {!esModoAdmin && <button onClick={() => setShowCocinaPopup(!showCocinaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold" style={{ background: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber + "33" : C.raised, border: "1px solid " + ((deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.border), color: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.muted }}><Flame size={20} />{(deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 && <span className="absolute -top-2 -right-2 flex items-center justify-center rounded-full text-xs font-bold animate-pulse" style={{ background: C.red, color: "#fff", width: 22, height: 22, fontSize: 12 }}>{deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length}</span>}</button>}
+            {!esModoAdmin && <button onClick={() => setShowWaPopup(!showWaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: waPedidos.length > 0 ? "#25D36622" : C.raised, border: "1px solid " + (waPedidos.length > 0 ? "#25D366" : C.border), color: waPedidos.length > 0 ? "#25D366" : C.muted }}><Smartphone size={20} />{waPedidos.length > 0 && <span className="absolute -top-2 -right-2 flex items-center justify-center rounded-full text-xs font-bold animate-pulse" style={{ background: "#25D366", color: "#fff", width: 22, height: 22, fontSize: 12 }}>{waPedidos.length}</span>}</button>}
+            {!esModoAdmin && <button onClick={() => { setWhatsappModal("config"); setPedidoRaw(WA_NUMERO); }} className="flex items-center px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Configurar número WhatsApp"><Pencil size={13} /></button>}
+            <button onClick={logout} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><LogOut size={15} /></button>
+          </div>
         </header>
 
         <nav className="flex gap-1 mb-3 p-1 rounded-xl overflow-x-auto" style={{ background: C.raised, width: "fit-content", maxWidth: "100%" }}>
@@ -571,7 +786,7 @@ function App() {
                         </div>
                         <div className="flex flex-col gap-1 mt-2" style={{ fontSize: 13 }}>{wp.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>))}</div>
                         {!esVisor && <div className="flex gap-2 mt-3">
-                          <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Importar y enviar</button>
+                          <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Comanda a cocina</button>
                           <button onClick={() => { fetch(serverUrl + "/api/pedidos/" + wp.id + "/enviado", { method: "POST" }).then(() => setWaPedidos((ps) => ps.filter(p => p.id !== wp.id))); }} className="px-3 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Ignorar</button>
                         </div>}
                       </div>
@@ -593,7 +808,7 @@ function App() {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#3a2a10", color: C.amber }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, display: "inline-block" }} /> En cocina</span>
                       )}</div>
                       <div className="mt-3 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}>{d.items.map((it, k) => (<div key={k} style={{ fontSize: 13 }}><span>{it.cant}x {it.nombre}</span>{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> · {it.nota}</span>}</div>))}</div>
-                      {!esVisor && <div className="flex gap-2 mt-3">{!esDespachado ? <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button> : <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>}</div>}
+                      <div className="flex gap-2 mt-3">{!esDespachado ? (!esVisor && <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button>) : (!esVisor && <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>)}</div>
                     </div>
                   );})}</div></div>
                 )}
@@ -623,12 +838,26 @@ function App() {
           <div className="mt-6 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
             <div className="flex items-center gap-2 mb-3"><DollarSign size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Ventas del día</h3><span className="ml-auto" style={{ fontWeight: 800, fontSize: 18, color: C.amber }}>{dinero(cajaVentas)}</span></div>
             {cajaVentas === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Todavía no se registraron ventas hoy.</p> : (
-              <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta").slice().reverse().map((m) => (
-                <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
-                  <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.usuario ? " · " + m.usuario : ""}</div></div>
-                  <span style={{ fontWeight: 700, color: C.green }}>+{dinero(m.monto)}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <h4 style={{ fontWeight: 700, fontSize: 13, color: C.amber, marginBottom: 6 }}><Users size={13} style={{ marginRight: 4, verticalAlign: "middle" }} />Mesas</h4>
+                  <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Mesa")).slice().reverse().map((m) => (
+                    <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
+                      <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.comprobante ? " · " + m.comprobante : ""}</div></div>
+                      <span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span>
+                    </div>
+                  ))}{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Mesa")).length === 0 && <p style={{ color: C.muted, fontSize: 12 }}>Sin ventas de mesas</p>}</div>
                 </div>
-              ))}</div>
+                <div>
+                  <h4 style={{ fontWeight: 700, fontSize: 13, color: C.green, marginBottom: 6 }}><Bike size={13} style={{ marginRight: 4, verticalAlign: "middle" }} />Delivery</h4>
+                  <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Delivery")).slice().reverse().map((m) => (
+                    <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
+                      <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto.replace("Delivery: ", "")}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.comprobante ? " · " + m.comprobante : ""}</div></div>
+                      <span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span>
+                    </div>
+                  ))}{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Delivery")).length === 0 && <p style={{ color: C.muted, fontSize: 12 }}>Sin ventas de delivery</p>}</div>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -645,7 +874,7 @@ function App() {
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <button onClick={() => limpiarMesa(orden.mesaId)} className="ml-auto px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar</button>}</div>
                 {orden.tipo === "delivery" && (<div className="flex flex-col gap-2 mb-3">{esVisor ? (<div className="flex flex-col gap-1 rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 13, fontWeight: 600 }}>{orden.datos.cliente}</div><div style={{ fontSize: 12, color: C.muted }}>{orden.datos.direccion}{orden.datos.telefono ? " · " + orden.datos.telefono : ""}</div></div>) : (<><input style={inputStyle} placeholder="Nombre del cliente" value={orden.datos.cliente} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="Dirección" value={orden.datos.direccion} onChange={(e) => setD("direccion", e.target.value)} /><input style={inputStyle} placeholder="Teléfono (opcional)" value={orden.datos.telefono} onChange={(e) => setD("telefono", e.target.value)} /></>)}</div>)}
-                {orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0) && (
+                {orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0 || (mesas[orden.mesaId].bebidas || []).length > 0) && (
                   <div className="rounded-lg p-3 mb-3" style={{ background: C.base }}>
                     {mesas[orden.mesaId].enviado.length > 0 && (
                       <div>
@@ -674,18 +903,20 @@ function App() {
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 4, textAlign: "right" }}>Total despachado: {pesos(sumLin(mesas[orden.mesaId].despachado))}</div>
                       </div>
                     )}
-                    {orden.tipo === "mesa" && (mesas[orden.mesaId].bebidas || []).length > 0 && (
-                      <div className="flex flex-col gap-1" style={{ marginTop: 8 }}>{(mesas[orden.mesaId].bebidas || []).map((l, i) => (
-                        <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}</span>
-                          <div className="flex items-center gap-1">
-                            <span style={{ color: C.muted, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
-                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
-                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
-                            {!esVisor && <button onClick={() => setMesas((ms) => ({ ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).filter((_, j) => j !== i) } }))} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.base, color: C.red, border: "none", cursor: "pointer" }}><X size={12} /></button>}
+                    {(mesas[orden.mesaId].bebidas || []).length > 0 && (
+                      <div style={{ marginTop: (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0) ? 8 : 0 }}>
+                        <div className="flex flex-col gap-1">{(mesas[orden.mesaId].bebidas || []).map((l, i) => (
+                          <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}</span>
+                            <div className="flex items-center gap-1">
+                              <span style={{ color: C.muted, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
+                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
+                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).filter((_, j) => j !== i) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.base, color: C.red, border: "none", cursor: "pointer" }}><X size={12} /></button>}
+                            </div>
                           </div>
-                        </div>
-                      ))}</div>
+                        ))}</div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -763,7 +994,7 @@ function App() {
         )}
 
         {/* COMPRAS */}
-        {activeTab === "compras" && esAdmin && (
+        {activeTab === "compras" && (esAdmin || esGerente) && (
           <div className="flex flex-col gap-5">
             <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
               <div className="flex items-center gap-2 mb-4"><span style={{ color: C.amber }}><FileText size={18} /></span><h3 style={{ fontWeight: 800, fontSize: 17 }}>Cargar factura de proveedor</h3></div>
@@ -780,7 +1011,7 @@ function App() {
         )}
 
         {/* PROVEEDORES (ABM) */}
-        {activeTab === "proveedores" && esAdmin && (
+        {activeTab === "proveedores" && (esAdmin || esGerente) && (
           <div>
             <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Proveedores</h2><button onClick={() => setAbmProv(provVacio())} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo proveedor</button></div>
             {proveedores.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>No hay proveedores. Tocá "Nuevo proveedor".</p>) : (
@@ -797,7 +1028,7 @@ function App() {
         )}
 
         {/* INSUMOS (ABM) */}
-        {activeTab === "insumos" && esAdmin && (
+        {activeTab === "insumos" && (esAdmin || esGerente) && (
           <div>
             <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Insumos</h2><div className="flex gap-2"><button onClick={nuevoInsumo} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo insumo</button></div></div>
             <div className="flex flex-col gap-1.5">{insumos.map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{peso(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
@@ -811,6 +1042,162 @@ function App() {
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid " + C.border }}>
               <div className="flex items-center gap-2 px-3 py-2" style={{ background: C.raised2, color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}><span className="flex-1">Producto</span><span style={{ width: 92 }}>Categoría</span><span style={{ width: 70, textAlign: "right" }}>Precio</span><span style={{ width: 64, textAlign: "right" }}>Costo</span><span style={{ width: 64, textAlign: "right" }}>Margen</span><span style={{ width: 22 }}></span></div>
               {productos.map((p, idx) => { const costo = costoProd(p); const mg = p.precio ? Math.round((p.precio - costo) / p.precio * 100) : 0; return (<button key={p.id} onClick={() => editarProducto(p)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ background: idx % 2 ? C.base : C.raised, borderTop: "1px solid " + C.border }}><span className="flex-1 truncate" style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span><span style={{ width: 92, color: C.muted, fontSize: 12 }}>{p.cat}</span><span style={{ width: 70, textAlign: "right", fontSize: 13, fontWeight: 700, color: C.amber }}>{pesos(p.precio)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, color: C.muted }}>{pesos(costo)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, fontWeight: 700, color: mg >= 0 ? C.green : C.red }}>{mg}%</span><span style={{ width: 22, color: C.muted }}><Pencil size={13} /></span></button>); })}
+            </div>
+          </div>
+        )}
+
+        {/* CONFIGURACION */}
+        {activeTab === "config" && esAdmin && (
+          <div>
+            <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}><Settings size={20} style={{ marginRight: 6 }} />Configuración</h2>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Los cambios se guardan automáticamente</div>
+
+            {/* Datos del local */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Datos del local</h3>
+              <div className="flex flex-col gap-3">
+                <div><label style={lbl}>Nombre de fantasía</label><input value={config.nombreLocal || ""} onChange={(e) => setConfig((c) => ({ ...c, nombreLocal: e.target.value }))} placeholder="Ej: El Mostrador" style={inputStyle} /></div>
+                <div><label style={lbl}>Dirección</label><input value={config.direccion || ""} onChange={(e) => setConfig((c) => ({ ...c, direccion: e.target.value }))} placeholder="Ej: Ruta 157 y 64" style={inputStyle} /></div>
+                <button onClick={() => { fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { nombreLocal: config.nombreLocal, logo: config.logo, direccion: config.direccion, destinoComanda: config.destinoComanda, destinoFacturacion: config.destinoFacturacion, nombresDestinos: config.nombresDestinos, enviarBebidas: config.enviarBebidas } }) }).then(() => setToast({ tipo: "ok", texto: "Configuración guardada." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." })); }} className="w-full py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Guardar configuración</button>
+                <div>
+                  <label style={lbl}>Logo del local</label>
+                  <div className="flex items-center gap-4">
+                    {config.logo && <img src={config.logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover", background: C.base, border: "1px solid " + C.border }} />}
+                    <label className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm cursor-pointer" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                      <Upload size={15} /> {config.logo ? "Cambiar logo" : "Subir logo"}
+                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = (ev) => setConfig((c) => ({ ...c, logo: ev.target.result })); reader.readAsDataURL(f); }} />
+                    </label>
+                    {config.logo && <button onClick={() => setConfig((c) => ({ ...c, logo: "" }))} className="text-xs" style={{ color: C.red }}>Quitar</button>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Se muestra en el menú delivery y comandas. Formato cuadrado recomendado.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Impresión */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Impresión</h3>
+              <div className="flex flex-col gap-3">
+                <div><label style={lbl}>Destino de impresión — Comandas (cocina)</label>
+                  <select value={config.destinoComanda} onChange={(e) => setConfig((c) => ({ ...c, destinoComanda: e.target.value }))} style={inputStyle}>
+                    <option value="default">Impresora predeterminada</option>
+                    <option value="cocina1">Cocina 1</option>
+                    <option value="cocina2">Cocina 2</option>
+                    <option value="bar">Bar / Bebidas</option>
+                    <option value="salon">Salón</option>
+                    <option value="ninguna">No imprimir</option>
+                  </select>
+                </div>
+                <div><label style={lbl}>Destino de impresión — Facturación</label>
+                  <select value={config.destinoFacturacion} onChange={(e) => setConfig((c) => ({ ...c, destinoFacturacion: e.target.value }))} style={inputStyle}>
+                    <option value="default">Impresora predeterminada</option>
+                    <option value="caja1">Caja 1</option>
+                    <option value="caja2">Caja 2</option>
+                    <option value="facturacion">Facturación</option>
+                    <option value="ninguna">No imprimir</option>
+                  </select>
+                </div>
+                <div><label style={lbl}>Nombre del destino personalizado</label>
+                  <div className="flex gap-2">
+                    <input value={(config.nombresDestinos || {}).personal || ""} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personal: e.target.value } }))} placeholder="Ej: Cocina 3, Terraza..." style={{ ...inputStyle, flex: 1 }} />
+                    <select value={(config.nombresDestinos || {}).personalTipo || "cocina"} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personalTipo: e.target.value } }))} style={{ ...inputStyle, width: 120 }}>
+                      <option value="cocina">Cocina</option>
+                      <option value="facturacion">Facturación</option>
+                      <option value="bar">Bar</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                  <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 12, color: C.muted }}>Los destinos se usan para identificar la impresora en el navegador. Configuralas desde la impresora del sistema.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bebidas */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Enviar bebidas a comandera</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Si está activo, las bebidas también se envían a cocina al presionar "Enviar"</div>
+                </div>
+                <button onClick={() => setConfig((c) => ({ ...c, enviarBebidas: !c.enviarBebidas }))} className="relative w-11 h-6 rounded-full transition-colors" style={{ background: config.enviarBebidas ? C.amber : C.border }}>
+                  <div className="absolute top-0.5 w-5 h-5 rounded-full transition-transform" style={{ background: "#fff", left: config.enviarBebidas ? 22 : 2 }} />
+                </button>
+              </div>
+            </div>
+
+            {/* AFIP */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>AFIP - Facturación Electrónica</h3>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-4 text-sm" style={{ color: C.muted }}>
+                  <span>CUIT: <strong style={{ color: C.text }}>27-21341447-5</strong></span>
+                  <span>Punto venta: <strong style={{ color: C.text }}>2</strong></span>
+                  <span>Categoría: <strong style={{ color: C.text }}>Monotributo</strong></span>
+                </div>
+                <div className="flex items-center gap-4 text-sm" style={{ color: C.muted }}>
+                  <span>Certificado: <strong style={{ color: C.green }}>cargado</strong></span>
+                  <span>Estado: <strong id="afip-status" style={{ color: C.muted }}>sin verificar</strong></span>
+                </div>
+                <div><label style={lbl}>Access Token (AfipSDK)</label><input value={config.afipAccessToken || ""} onChange={(e) => setConfig((c) => ({ ...c, afipAccessToken: e.target.value }))} placeholder="Token de app.afipsdk.com" style={inputStyle} /></div>
+                <button onClick={async () => { try { setToast({ tipo: "ok", texto: "Verificando conexión con AFIP..." }); const r = await fetch(serverUrl + "/api/afip/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken || "" }) }); const d = await r.json(); if (d.ok) { setToast({ tipo: "ok", texto: d.mensaje }); } else { setToast({ tipo: "error", texto: "Error AFIP: " + d.mensaje }); } } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><RefreshCw size={15} /> Verificar conexión AFIP</button>
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                  <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 12, color: C.muted }}>Homologación (pruebas). Los CAE son válidos solo en el ambiente de prueba de AFIP.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actualizar sistema */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Sistema</h3>
+              <button onClick={async () => { if (!window.confirm("¿Actualizar sistema? Se reiniciará el servidor.")) return; try { const r = await fetch(serverUrl + "/api/update", { method: "POST" }); const d = await r.json(); setToast({ tipo: d.ok ? "ok" : "error", texto: d.texto }); if (d.ok) setTimeout(() => window.location.reload(), 2000); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Actualizar sistema</button>
+              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Descarga la última versión desde GitHub y reinicia el servidor</div>
+            </div>
+
+            {/* Usuarios */}
+            <div className="rounded-xl p-5 mb-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Usuarios</h3>
+              <div className="flex flex-col gap-2 mb-3">
+                {usuarios.map((u, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: C.base }}>
+                    <div style={{ background: C.raised2, borderRadius: 99, padding: 6, color: u.rol === "admin" ? C.amber : C.muted }}>
+                      {u.rol === "admin" ? <User size={16} /> : <Lock size={16} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{u.nombre}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{u.rol} · Clave: {u.clave}</div>
+                    </div>
+                    <button onClick={() => { if (!window.confirm("Eliminar usuario " + u.nombre + "?")) return; setUsuarios((prev) => prev.filter((_, j) => j !== i)); }} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-lg p-3" style={{ background: C.base }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Nuevo usuario</div>
+                <div className="flex flex-col gap-2">
+                  <input style={inputStyle} placeholder="Nombre" value={nuevoUsuario.nombre} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, nombre: e.target.value })} />
+                  <input style={inputStyle} type="password" placeholder="Clave" value={nuevoUsuario.clave} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, clave: e.target.value })} />
+                  <select style={inputStyle} value={nuevoUsuario.rol} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })}>
+                    <option value="admin">Admin (acceso total)</option>
+                    <option value="cajero">Cajero (solo ventas)</option>
+                    <option value="visor">Visor (solo lectura)</option>
+                  </select>
+                  <button onClick={() => { if (!nuevoUsuario.nombre.trim()) { setToast({ tipo: "error", texto: "Poné un nombre." }); return; } if (!nuevoUsuario.clave.trim()) { setToast({ tipo: "error", texto: "Poné una clave." }); return; } if (usuarios.some(u => u.nombre === nuevoUsuario.nombre.trim())) { setToast({ tipo: "error", texto: "Ya existe un usuario con ese nombre." }); return; } setUsuarios((prev) => [...prev, { nombre: nuevoUsuario.nombre.trim(), rol: nuevoUsuario.rol, clave: nuevoUsuario.clave }]); setNuevoUsuario({ nombre: "", clave: "", rol: "cajero" }); setToast({ tipo: "ok", texto: "Usuario creado." }); }} className="w-full py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Agregar usuario</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Backup */}
+            <div className="rounded-xl p-5" style={{ background: C.raised, border: "1px solid " + C.border }}>
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Backup de datos</h3>
+              <div className="flex gap-3">
+                <button onClick={() => { const datos = { insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, config, usuarios }; const blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "backup-elmostrador-" + hoy() + ".json"; a.click(); URL.revokeObjectURL(url); setToast({ tipo: "ok", texto: "Backup descargado." }); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Exportar</button>
+                <label className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm cursor-pointer" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Upload size={15} /> Importar<input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = (ev) => { try { const datos = JSON.parse(ev.target.result); if (datos.insumos) setInsumos(datos.insumos); if (datos.stock) setStock(datos.stock); if (datos.costos) setCostos(datos.costos); if (datos.productos) setProductos(datos.productos); if (datos.proveedores) setProveedores(datos.proveedores); if (datos.facturas) setFacturas(datos.facturas); if (datos.caja) setCaja(datos.caja); if (datos.historialCierres) setHistorialCierres(datos.historialCierres); if (datos.config) setConfig(datos.config); if (datos.usuarios) setUsuarios(datos.usuarios); setToast({ tipo: "ok", texto: "Datos importados correctamente." }); } catch { setToast({ tipo: "error", texto: "Archivo inválido." }); } }; reader.readAsText(f); }} /></label>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Exportá todos los datos como archivo JSON. Importá para restaurar.</div>
+              <button onClick={async () => { if (!window.confirm("¿Restaurar datos desde el servidor? Se sobreescribirán los datos locales.")) return; try { const r = await fetch(serverUrl + "/api/caja"); const data = await r.json(); if (data.caja) setCaja(data.caja); if (data.cajaIniciada !== undefined) setCajaIniciada(data.cajaIniciada); if (data.historialCierres) setHistorialCierres(data.historialCierres); if (data.config) setConfig((c) => ({ ...c, ...data.config })); if (data.deliveries) setDeliveries(data.deliveries); if (data.mesas) setMesas(data.mesas); setToast({ tipo: "ok", texto: "Datos restaurados desde el servidor." }); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm mt-3" style={{ background: C.base, border: "1px solid " + C.border, color: C.amber }}><RotateCcw size={15} /> Restaurar desde servidor</button>
+              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Si los datos locales están desincronizados, cargá todo desde el servidor.</div>
             </div>
           </div>
         )}
@@ -846,8 +1233,8 @@ function App() {
                     </select>
                   </div>
                   <div><label style={lbl}>Efectivo inicial</label><input style={inputStyle} type="number" value={caja.apertura || ""} onChange={(e) => setCaja((c) => ({ ...c, apertura: parseFloat(e.target.value) || 0 }))} placeholder="0" /></div>
-                  <div><label style={lbl}>Usuario</label><input style={inputStyle} type="text" value={caja.usuario} onChange={(e) => setCaja((c) => ({ ...c, usuario: e.target.value }))} placeholder="Nombre del cajero" /></div>
-                  <button onClick={() => { if (!caja.turno) { setToast({ tipo: "error", texto: "Seleccioná el turno." }); return; } if (!caja.usuario.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del usuario." }); return; } if (!caja.apertura || caja.apertura <= 0) { setToast({ tipo: "error", texto: "Poné el efectivo inicial." }); return; } const turno = caja.turno; const apertura = caja.apertura; const usuario = caja.usuario; const nuevaCaja = { fecha: hoy(), apertura, movimientos: [], cierre: null, saldoFinal: null, turno, usuario, arqueo: {} }; setCaja(nuevaCaja); try { localStorage.setItem("elmo_caja", JSON.stringify(nuevaCaja)); } catch {} setCajaIniciada(true); setDeliveries([]); setMesas(Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }]))); setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno + " (mesas y deliveries limpiados)" }); }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold mt-2" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Abrir caja</button>
+                  <div><label style={lbl}>Usuario</label><input style={inputStyle} type="text" value={caja.usuario || usuario.nombre} onChange={(e) => setCaja((c) => ({ ...c, usuario: e.target.value }))} placeholder="Nombre del cajero" /></div>
+                  <button onClick={() => { if (!caja.turno) { setToast({ tipo: "error", texto: "Seleccioná el turno." }); return; } if (!caja.usuario.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del usuario." }); return; } if (caja.apertura === null || caja.apertura === undefined || caja.apertura === "") { setToast({ tipo: "error", texto: "Poné el efectivo inicial." }); return; } const turno = caja.turno; const apertura = caja.apertura; const usuario = caja.usuario; const nuevaCaja = { fecha: hoy(), apertura, movimientos: [], cierre: null, saldoFinal: null, turno, usuario, arqueo: {} }; setCaja(nuevaCaja); try { localStorage.setItem("elmo_caja", JSON.stringify(nuevaCaja)); } catch {} setCajaIniciada(true); cajaDirtyUntilRef.current = Date.now() + 5000; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja, cajaIniciada: true, config: { nombreLocal: config.nombreLocal, logo: config.logo } }) }).catch(() => {}); setDeliveries([]); setMesas(Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }]))); setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno + " (mesas y deliveries limpiados)" }); }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold mt-2" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Abrir caja</button>
                 </div>
               </div>
             )) : (
@@ -879,7 +1266,7 @@ function App() {
                 <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 700, fontSize: 15 }}>Movimientos</h3>{!esVisor && <button onClick={() => { setEgresoConcepto(""); setEgresoMonto(""); setEditEgresoId(null); setShowEgresoModal(true); }} className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold" style={{ background: C.red, color: "#fff" }}>+ Egreso</button>}</div>
                   {cajaMovs.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin movimientos hoy.</p> : (
-                    <div className="flex flex-col gap-1.5 max-h-96 overflow-y-auto">{cajaMovs.slice().reverse().map((m) => (<div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base, cursor: m.tipo === "egreso" ? "pointer" : "default" }} onClick={() => { if (m.tipo === "egreso") { setEgresoConcepto(m.concepto); setEgresoMonto(String(m.monto)); setEditEgresoId(m.id); setShowEgresoModal(true); } }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.usuario ? " · " + m.usuario : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: m.tipo === "venta" ? C.green : C.red }}>{m.tipo === "venta" ? "+" : "-"}{dinero(m.monto)}</span></div>))}</div>
+                    <div className="flex flex-col gap-1.5 max-h-96 overflow-y-auto">{cajaMovs.slice().reverse().map((m) => (<div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base, cursor: m.tipo === "egreso" ? "pointer" : "default" }} onClick={() => { if (m.tipo === "egreso") { setEgresoConcepto(m.concepto); setEgresoMonto(String(m.monto)); setEditEgresoId(m.id); setShowEgresoModal(true); } }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.comprobante ? " · " + m.comprobante : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: m.tipo === "venta" ? C.green : C.red }}>{m.tipo === "venta" ? "+" : "-"}{dinero(m.monto)}</span></div>))}</div>
                   )}
                 </div>
               </div>
@@ -887,7 +1274,7 @@ function App() {
 
             {/* Cierre modal */}
             {showCierreModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowCierreModal(false)}>
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
                 <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Cerrar caja</h3><button onClick={() => setShowCierreModal(false)} style={{ color: C.muted }}><X size={18} /></button></div>
                   <div className="rounded-lg p-3 mb-4" style={{ background: C.base }}>
@@ -903,20 +1290,30 @@ function App() {
                     </div>
                   )}
 
-                  <div><label style={lbl}>Arqueo (contar billetes)</label></div>
-                  {[1000, 500, 200, 100, 50, 20, 10, 5, 2, 1].map((billete) => {
+                  <div><label style={lbl}>Billetes</label></div>
+                  {[20000, 10000, 2000, 1000, 500, 200, 100].map((billete) => {
                     const cant = caja.arqueo?.[billete] || 0;
                     const subtotal = cant * billete;
                     return (
                       <div key={billete} className="flex items-center gap-2 mb-1">
-                        <span style={{ fontSize: 13, minWidth: 60 }}>${billete}</span>
+                        <span style={{ fontSize: 13, minWidth: 60 }}>${billete.toLocaleString("es-AR")}</span>
                         <input type="number" min="0" style={{ ...inputStyle, flex: 1 }} placeholder="cant." value={caja.arqueo?.[billete] ?? ""} onChange={(e) => setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), [billete]: parseInt(e.target.value) || 0 } }))} />
                         <span style={{ fontSize: 12, color: C.muted, minWidth: 70, textAlign: "right" }}>{dinero(subtotal)}</span>
                       </div>
                     );
                   })}
+                  <div className="mt-2"><label style={lbl}>Medios de pago</label></div>
+                  {["Transferencia", "Mercado Pago", "Tarjetas"].map((medio) => (
+                    <div key={medio} className="flex items-center gap-2 mb-1">
+                      <span style={{ fontSize: 13, minWidth: 100 }}>{medio}</span>
+                      <input type="number" min="0" style={{ ...inputStyle, flex: 1 }} placeholder="$0" value={caja.arqueo?.[medio] ?? ""} onChange={(e) => setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), [medio]: parseFloat(e.target.value) || 0 } }))} />
+                      <span style={{ fontSize: 12, color: C.muted, minWidth: 70, textAlign: "right" }}>{dinero(caja.arqueo?.[medio] || 0)}</span>
+                    </div>
+                  ))}
                   {(() => {
-                    const totalArqueo = Object.entries(caja.arqueo || {}).reduce((a, [b, c]) => a + parseInt(b) * c, 0);
+                    const totalBilletes = [20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0);
+                    const totalMedios = ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0);
+                    const totalArqueo = totalBilletes + totalMedios;
                     return <div className="flex justify-between rounded-lg p-2 mt-2" style={{ background: C.base, fontSize: 13 }}>
                       <span>Total arqueo</span><span style={{ fontWeight: 800, fontSize: 15, color: C.amber }}>{dinero(totalArqueo)}</span>
                     </div>;
@@ -934,13 +1331,20 @@ function App() {
                     }
                     const diff = caja.cierre - cajaEsperado;
                     const cierreCompleto = { ...caja, diff, fechaCierre: hoy() + " " + hora() };
-                    setHistorialCierres((h) => [cierreCompleto, ...h]);
+                    const nuevoHistorial = [cierreCompleto, ...historialCierres];
+                    setHistorialCierres(nuevoHistorial);
+                    try { localStorage.setItem("elmo_historialCierres", JSON.stringify(nuevoHistorial)); } catch {}
                     const cajaLimpia = { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
                     setCaja(cajaLimpia);
                     try { localStorage.setItem("elmo_caja", JSON.stringify(cajaLimpia)); } catch {}
                     setCajaIniciada(false);
                     setDeliveries((d) => d.filter(x => x.estado === "entregado"));
                     setMesas((ms) => Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }])));
+                    const mesasVacias = Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }]));
+                    postMesas(mesasVacias);
+                    postDeliveries([]);
+                    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: cajaLimpia, cajaIniciada: false, historialCierres: nuevoHistorial, mesas: mesasVacias, deliveries: [], config: { nombreLocal: config.nombreLocal, logo: config.logo } }) }).catch(() => {});
+                    cajaDirtyUntilRef.current = Date.now() + 5000;
                     setShowCierreModal(false);
                     setToast({ tipo: "ok", texto: "Caja cerrada. Diferencia: " + dinero(diff) + ". Pedidos pendientes limpiados." });
                   }} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-4" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Confirmar cierre</button>
@@ -963,7 +1367,7 @@ function App() {
                       return <div key={i} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                         <div className="flex items-center justify-between">
                           <div><span style={{ fontWeight: 800, fontSize: 15 }}>{hc.fecha}</span><span style={{ color: C.muted, fontSize: 12, marginLeft: 8 }}>{hc.fechaCierre || ""}</span></div>
-                          <span className="px-2 py-0.5 rounded-md text-xs" style={{ background: hc.turno === "Mañana" ? "#fef3c7" : hc.turno === "Tarde" ? "#fde68a" : "#dbeafe", color: "#241a0c" }}>{hc.turno}</span>
+                          {hc.turno && <span className="px-2 py-0.5 rounded-md text-xs" style={{ background: hc.turno === "Mañana" ? "#fef3c7" : hc.turno === "Tarde" ? "#fde68a" : "#dbeafe", color: "#241a0c" }}>{hc.turno}</span>}
                         </div>
                         <div className="grid grid-cols-2 gap-2 mt-2" style={{ fontSize: 13 }}>
                           <span>Usuario: {hc.usuario || "—"}</span>
@@ -1056,10 +1460,10 @@ function App() {
 
       {/* Cobro modal */}
       {showCobroModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowCobroModal(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
           <div className="w-full max-w-xs rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              {cobroMetodo ? <button onClick={() => setCobroMetodo(null)} className="flex items-center gap-1" style={{ color: C.muted }}><ArrowLeft size={15} /> Atrás</button> : <div />}
+              <button onClick={() => { setCobroMetodo(null); setCobroPago(""); setCobroRef(""); }} className="flex items-center gap-1" style={{ color: C.muted }}><ArrowLeft size={15} /> Atrás</button>
               <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cobrar Mesa {showCobroModal.id}</h3>
               <button onClick={() => setShowCobroModal(null)} style={{ color: C.muted }}><X size={18} /></button>
             </div>
@@ -1068,22 +1472,40 @@ function App() {
               <>
                 <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago:</p>
                 <div className="flex flex-col gap-2">{["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
-                  <button key={met} onClick={() => met === "Efectivo" ? setCobroMetodo("Efectivo") : confirmarCobro(showCobroModal.id, met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
+                  <button key={met} onClick={() => met === "Efectivo" ? setCobroMetodo("Efectivo") : setCobroMetodo(met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber }} />
                     {met}
                   </button>
                 ))}</div>
               </>
-            ) : (
+            ) : cobroMetodo === "Efectivo" ? (
               <div className="flex flex-col gap-3">
-                <input style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
+                <input autoFocus style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
                 {cobroPago && parseFloat(cobroPago) >= showCobroModal.total && (
                   <div className="rounded-lg p-3 text-center" style={{ background: C.base }}>
                     <span style={{ fontSize: 13, color: C.muted }}>Vuelto</span>
                     <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(parseFloat(cobroPago) - showCobroModal.total)}</div>
                   </div>
                 )}
-                <button onClick={() => confirmarCobro(showCobroModal.id, "Efectivo")} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Confirmar pago en efectivo</button>
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, "Efectivo", afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: "Efectivo", afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { confirmarCobro(showCobroModal.id, "Efectivo", null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: "Efectivo", afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
+              </div>
+            ) : (cobroMetodo === "Transferencia" || cobroMetodo === "Tarjeta crédito" || cobroMetodo === "Tarjeta débito" || cobroMetodo === "Mercado Pago") ? (
+              <div className="flex flex-col gap-3">
+                <input autoFocus style={inputStyle} placeholder="N° comprobante" value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo, null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo, null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
               </div>
             )}
           </div>
@@ -1092,15 +1514,130 @@ function App() {
 
       {/* Modal forma de pago delivery */}
       {showPagoDelivery && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowPagoDelivery(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
           <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Delivery: {showPagoDelivery.cliente}</h3>
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: null })} className="flex items-center gap-1" style={{ color: C.muted }}><ArrowLeft size={15} /> Atrás</button>
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}>Delivery: {showPagoDelivery.cliente}</h3>
+              <button onClick={() => { setShowPagoDelivery(null); setCobroPago(""); setCobroRef(""); }} style={{ color: C.muted }}><X size={18} /></button>
+            </div>
             <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total</span><div style={{ fontWeight: 800, fontSize: 24, color: C.amber }}>{pesos(showPagoDelivery.total)}</div></div>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>
-            <div className="flex flex-col gap-2">
-              {["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
-                <button key={met} onClick={() => { entregarDelivery(showPagoDelivery.id, met); setShowPagoDelivery(null); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>{met}</button>
-              ))}
+            {!showPagoDelivery._metodoSeleccionado && <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>}
+            {!showPagoDelivery._metodoSeleccionado ? (
+              <div className="flex flex-col gap-2">
+                {["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
+                  <button key={met} onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: met })} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>{met}</button>
+                ))}
+              </div>
+            ) : showPagoDelivery._metodoSeleccionado === "Efectivo" ? (
+              <div className="flex flex-col gap-3">
+                <input autoFocus style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
+                {cobroPago && parseFloat(cobroPago) >= showPagoDelivery.total && (
+                  <div className="rounded-lg p-3 text-center" style={{ background: C.base }}>
+                    <span style={{ fontSize: 13, color: C.muted }}>Vuelto</span>
+                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(parseFloat(cobroPago) - showPagoDelivery.total)}</div>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, "Efectivo", null, afipR); setShowPagoDelivery(null); setCobroPago(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: "Efectivo", telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { entregarDelivery(showPagoDelivery.id, "Efectivo", null, null); setShowPagoDelivery(null); setCobroPago(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: "Efectivo", telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
+              </div>
+            ) : (showPagoDelivery._metodoSeleccionado === "Transferencia" || showPagoDelivery._metodoSeleccionado === "Tarjeta crédito" || showPagoDelivery._metodoSeleccionado === "Tarjeta débito" || showPagoDelivery._metodoSeleccionado === "Mercado Pago") ? (
+              <div className="flex flex-col gap-3">
+                <input autoFocus style={inputStyle} placeholder={showPagoDelivery._metodoSeleccionado === "Transferencia" ? "N° comprobante / operación" : "N° comprobante"} value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, afipR); setShowPagoDelivery(null); setCobroRef(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, null); setShowPagoDelivery(null); setCobroRef(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6 }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, afipR); setShowPagoDelivery(null); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica</button>}
+                  <button onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, null); setShowPagoDelivery(null); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, cliente: showPagoDelivery.cliente, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Recibo X</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal comprobante post-pago */}
+      {showComprobanteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowComprobanteModal(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}>{showComprobanteModal.afip ? "Factura Electrónica" : "Comprobante"}</h3>
+              <button onClick={() => setShowComprobanteModal(null)} style={{ color: C.muted }}><X size={18} /></button>
+            </div>
+            <div id="ticket-content" style={{ background: "#fff", color: "#000", borderRadius: 8, padding: 16, fontFamily: "monospace", fontSize: 12, lineHeight: 1.6 }}>
+              {/* Header */}
+              <div style={{ textAlign: "center", marginBottom: 8, borderBottom: "2px dashed #000", paddingBottom: 8 }}>
+                {config.logo && <img src={config.logo} alt="logo" style={{ maxWidth: 100, maxHeight: 60, margin: "0 auto 6px", display: "block", objectFit: "contain" }} />}
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{config.nombreLocal || "El Mostrador"}</div>
+                <div style={{ fontSize: 11 }}>CUIT: 27-21341447-5</div>
+                <div style={{ fontSize: 11 }}>{config.direccion || "YPF El Cruce / Ruta Nac 157 y 64"}</div>
+              </div>
+              {/* Factura info */}
+              {showComprobanteModal.afip && (
+                <div style={{ textAlign: "center", marginBottom: 8, borderBottom: "1px dashed #ccc", paddingBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>FACTURA B</div>
+                  <div>PV: 0002 · Nº {String(showComprobanteModal.afip.cbteNro || facturaXNum - 1).padStart(8, "0")}</div>
+                </div>
+              )}
+              {/* Items */}
+              <div style={{ borderBottom: "1px dashed #ccc", paddingBottom: 6, marginBottom: 6 }}>
+                {(showComprobanteModal.items || []).map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{it.cant}x {it.nombre}</span>
+                    <span style={{ fontWeight: 600 }}>{pesos(it.precio * it.cant)}</span>
+                  </div>
+                ))}
+                {(!showComprobanteModal.items || showComprobanteModal.items.length === 0) && <div style={{ color: "#999", textAlign: "center" }}>Sin detalle de items</div>}
+              </div>
+              {/* Totales */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 14 }}>
+                  <span>TOTAL</span>
+                  <span>{pesos(showComprobanteModal.total)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666" }}>
+                  <span>Método</span>
+                  <span>{showComprobanteModal.metodo}</span>
+                </div>
+              </div>
+              {/* AFIP */}
+              {showComprobanteModal.afip && (
+                <div style={{ borderTop: "2px dashed #000", paddingTop: 8, textAlign: "center" }}>
+                  <div style={{ fontWeight: 700 }}>CAE: {showComprobanteModal.afip.cae}</div>
+                  <div>Vto CAE: {showComprobanteModal.afip.vencimiento}</div>
+                  <div style={{ marginTop: 6, fontSize: 10 }}>Válido AFIP · Verificá en afip.gob.ar</div>
+                </div>
+              )}
+              {!showComprobanteModal.afip && (
+                <div style={{ borderTop: "2px dashed #000", paddingTop: 8, textAlign: "center", fontSize: 11 }}>
+                  Comprobante interno · Sin valor fiscal
+                </div>
+              )}
+              {/* Footer */}
+              <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: "#999" }}>
+                <div>Gracias por su compra</div>
+                <div>{new Date().toLocaleString("es-AR")}</div>
+              </div>
+            </div>
+            {/* Botones */}
+            <div className="flex flex-col gap-2 mt-3">
+              {!showComprobanteModal.telefono && <input style={inputStyle} type="tel" inputMode="tel" placeholder="Enviar por WhatsApp (teléfono)" value={showComprobanteModal._telInput || ""} onChange={(e) => setShowComprobanteModal({ ...showComprobanteModal, _telInput: e.target.value })} />}
+              <div className="flex gap-2">
+                <button onClick={() => { const el = document.getElementById("ticket-content"); if (!el) return; const w = window.open("", "_blank", "width=360,height=600"); w.document.write("<html><head><title>Comprobante</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:12px;color:#000;line-height:1.6;background:#fff}.center{text-align:center}.bold{font-weight:700}.line{border-top:1px dashed #000;margin:8px 0}.footer{margin-top:10px;font-size:10px;color:#999;text-align:center}</style></head><body>" + el.innerHTML + "</body></html>"); w.document.close(); w.focus(); setTimeout(() => { w.print(); w.close(); }, 400); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                  <Printer size={15} /> Imprimir
+                </button>
+                <button onClick={() => enviarComprobanteWA()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>
+                  <span style={{ fontSize: 15 }}>📱</span> WhatsApp
+                </button>
+                <button onClick={() => setShowComprobanteModal(null)} className="flex-1 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Cerrar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1169,7 +1706,7 @@ function App() {
                   </div>
                   <div className="flex flex-col gap-1 mt-2" style={{ fontSize: 13 }}>{wp.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>))}</div>
                   {!esVisor && <div className="flex gap-2 mt-3">
-                    <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); setShowWaPopup(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Importar</button>
+                    <button onClick={() => { const items = wp.items.map(it => { const porRef = it.ref && Object.values(prodById).find(p => p.ref === it.ref); const porNombre = Object.values(prodById).find(p => p.nombre === it.nombre); const pid = porRef?.id || porNombre?.id || ""; return { lid: uid(), pid, cant: it.cant, nota: it.nota || "" }; }); const prodsOk = items.filter(l => l.pid).length; if (prodsOk === 0) { setToast({ tipo: "error", texto: "No se pudieron identificar los productos del pedido." }); return; } importarWAPedido(wp, items); setShowWaPopup(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Send size={15} /> Enviar a cocina</button>
                     <button onClick={() => { fetch(serverUrl + "/api/pedidos/" + wp.id + "/enviado", { method: "POST" }).then(() => setWaPedidos((ps) => ps.filter(p => p.id !== wp.id))); }} className="px-3 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Ignorar</button>
                   </div>}
                 </div>
@@ -1186,58 +1723,32 @@ function App() {
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}><Flame size={16} style={{ marginRight: 6 }} />Cocina</h3><button onClick={() => setShowCocinaPopup(false)} style={{ color: C.muted }}><X size={18} /></button></div>
             {(() => {
               const enCocina = [];
-              const despachados = [];
               for (const m of MESAS) {
                 if (mesas[m.id].enviado.length > 0) enCocina.push({ tipo: "mesa", id: m.id, label: "Mesa " + m.id, items: mesas[m.id].enviado, total: sumLin(mesas[m.id].enviado) });
-                if ((mesas[m.id].despachado || []).length > 0) despachados.push({ tipo: "mesa", id: m.id, label: "Mesa " + m.id, items: mesas[m.id].despachado, total: sumLin(mesas[m.id].despachado) });
               }
               for (const d of deliveries) {
                 if (d.estado === "cocina") enCocina.push({ tipo: "delivery", id: d.id, label: d.cliente, direccion: d.direccion, items: d.items, total: d.total, hora: d.hora, telefono: d.telefono });
-                if (d.estado === "despachado") despachados.push({ tipo: "delivery", id: d.id, label: d.cliente, direccion: d.direccion, items: d.items, total: d.total, hora: d.hora, telefono: d.telefono });
               }
               return (
                 <div className="flex flex-col gap-4">
-                  {enCocina.length === 0 && despachados.length === 0 ? (
+                  {enCocina.length === 0 ? (
                     <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos en cocina.</p>
                   ) : (
-                    <>
-                      {enCocina.length > 0 && (
-                        <div>
-                          <h4 style={{ fontWeight: 700, fontSize: 14, color: C.amber, marginBottom: 8 }}>En cocina ({enCocina.length})</h4>
-                          <div className="flex flex-col gap-2">{enCocina.map((oc) => (
-                            <div key={oc.tipo + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.amber }}>
-                              <div className="flex items-start justify-between gap-2">
-                                <div style={{ fontWeight: 700, fontSize: 14 }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
-                                <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
-                              </div>
-                              <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
-                                <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
-                              ))}</div>
-                              {!esVisor && <div className="flex gap-2 mt-2"><button onClick={() => { if (oc.tipo === "mesa") despacharMesa(oc.id); else { entregarDelivery(oc.id); if (oc.telefono) abrirWA(oc.telefono, "¡Hola " + oc.label + "! Tu pedido de " + pesos(oc.total) + " fue despachado. ¡Gracias por tu compra!"); } setShowCocinaPopup(true); }} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button></div>}
-                            </div>
+                    <div>
+                      <h4 style={{ fontWeight: 700, fontSize: 14, color: C.amber, marginBottom: 8 }}>En cocina ({enCocina.length})</h4>
+                      <div className="flex flex-col gap-2">{enCocina.map((oc) => (
+                        <div key={oc.tipo + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.amber }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
+                            <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
+                          </div>
+                          <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
+                            <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
                           ))}</div>
+                          {!esVisor && <div className="flex gap-2 mt-2"><button onClick={() => { if (oc.tipo === "mesa") despacharMesa(oc.id); else { entregarDelivery(oc.id); if (oc.telefono) abrirWA(oc.telefono, "¡Hola " + oc.label + "! Tu pedido de " + pesos(oc.total) + " fue despachado. ¡Gracias por tu compra!"); } setShowCocinaPopup(true); }} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button></div>}
                         </div>
-                      )}
-                      {despachados.length > 0 && (
-                        <div>
-                          <h4 style={{ fontWeight: 700, fontSize: 14, color: C.green, marginBottom: 8 }}>Despachados ({despachados.length})</h4>
-                          <div className="flex flex-col gap-2">{despachados.map((oc) => (
-                            <div key={oc.tipo + "-d-" + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.green, opacity: 0.85 }}>
-                              <div className="flex items-start justify-between gap-2">
-                                <div style={{ fontWeight: 700, fontSize: 14, color: C.muted }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
-                                <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
-                              </div>
-                              <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
-                                <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
-                              ))}</div>
-                              {!esVisor && oc.tipo === "delivery" && (
-                                <button onClick={() => { setShowCocinaPopup(false); setShowPagoDelivery({ id: oc.id, cliente: oc.label, total: oc.total, telefono: oc.telefono }); }} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm mt-2" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>
-                              )}
-                            </div>
-                          ))}</div>
-                        </div>
-                      )}
-                    </>
+                      ))}</div>
+                    </div>
                   )}
                 </div>
               );
@@ -1268,64 +1779,6 @@ function App() {
                 setShowEgresoModal(false);
                 setToast({ tipo: "ok", texto: editEgresoId ? "Egreso actualizado." : "Egreso registrado: $" + monto.toLocaleString("es-AR") });
               }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-1" style={{ background: C.red, color: "#fff" }}><span>{editEgresoId ? "Guardar cambios" : "Registrar egreso"}</span></button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowConfig(false)}>
-          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 style={{ fontWeight: 800, fontSize: 18 }}><Settings size={16} style={{ marginRight: 6 }} />Configuraciones</h3>
-              <button onClick={() => setShowConfig(false)} style={{ color: C.muted }}><X size={18} /></button>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Destino de impresión — Comandas (cocina)</label>
-                <select value={config.destinoComanda} onChange={(e) => setConfig((c) => ({ ...c, destinoComanda: e.target.value }))} style={inputStyle}>
-                  <option value="default">Impresora predeterminada</option>
-                  <option value="cocina1">Cocina 1</option>
-                  <option value="cocina2">Cocina 2</option>
-                  <option value="bar">Bar / Bebidas</option>
-                  <option value="salon">Salón</option>
-                  <option value="ninguna">No imprimir</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Destino de impresión — Facturación</label>
-                <select value={config.destinoFacturacion} onChange={(e) => setConfig((c) => ({ ...c, destinoFacturacion: e.target.value }))} style={inputStyle}>
-                  <option value="default">Impresora predeterminada</option>
-                  <option value="caja1">Caja 1</option>
-                  <option value="caja2">Caja 2</option>
-                  <option value="facturacion">Facturación</option>
-                  <option value="ninguna">No imprimir</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Enviar bebidas a comandera</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>Si está activo, las bebidas también se envían a cocina al presionar "Enviar"</div>
-                </div>
-                <button onClick={() => setConfig((c) => ({ ...c, enviarBebidas: !c.enviarBebidas }))} className="relative w-11 h-6 rounded-full transition-colors" style={{ background: config.enviarBebidas ? C.amber : C.border }}>
-                  <div className="absolute top-0.5 w-5 h-5 rounded-full transition-transform" style={{ background: "#fff", left: config.enviarBebidas ? 22 : 2 }} />
-                </button>
-              </div>
-              <div>
-                <label style={{ color: C.muted, fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600 }}>Nombre del destino personalizado</label>
-                <div className="flex gap-2">
-                  <input value={(config.nombresDestinos || {}).personal || ""} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personal: e.target.value } }))} placeholder="Ej: Cocina 3, Terraza..." style={{ ...inputStyle, flex: 1 }} />
-                  <select value={(config.nombresDestinos || {}).personalTipo || "cocina"} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personalTipo: e.target.value } }))} style={{ ...inputStyle, width: 120 }}>
-                    <option value="cocina">Cocina</option>
-                    <option value="facturacion">Facturación</option>
-                    <option value="bar">Bar</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 mt-1 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
-                <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
-                <span style={{ fontSize: 12, color: C.muted }}>Los destinos se usan para identificar la impresora en el navegador. Configuralas desde la impresora del sistema.</span>
-              </div>
             </div>
           </div>
         </div>

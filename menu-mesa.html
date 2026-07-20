@@ -3,7 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>El Mostrador — Menú</title>
+<title id="pageTitle">El Mostrador — Menú</title>
+<meta property="og:title" content="El Mostrador — Menú" id="ogTitle" />
+<meta property="og:description" content="Hacé tu pedido desde tu celular" id="ogDesc" />
+<meta property="og:image" content="/app-icon.png" id="ogImage" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#241a0c" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="El Mostrador" id="appleTitle" />
+<link rel="apple-touch-icon" href="/icon-192.svg" />
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#f5f0eb;color:#1a1715;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:100px}
@@ -70,8 +79,9 @@ body{background:#f5f0eb;color:#1a1715;font-family:'Segoe UI',system-ui,-apple-sy
 </head>
 <body>
 
-<div class="header">
-  <h1>El Mostrador <span>menú</span></h1>
+<div class="header" id="header" style="display:flex;align-items:center;gap:12px">
+  <img id="logoImg" src="" alt="" style="display:none;width:42px;height:42px;border-radius:10px;object-fit:cover;background:#f0ebe6" />
+  <h1 id="headerTitle">El Mostrador <span>menú</span></h1>
   <div class="badge" id="cartBadge" onclick="toggleCart()">🛒 <span id="cartCount">0</span></div>
 </div>
 
@@ -153,6 +163,17 @@ fetch("/api/menu").then(r => r.json()).then(prods => {
 }).catch(() => {
   document.getElementById("prods").innerHTML = '<div class="empty-cat">No se pudo cargar el menú.<br>Verificá que el servidor esté funcionando.</div>';
 });
+
+fetch("/api/config").then(r => r.json()).then(cfg => {
+  if (cfg.nombreLocal) {
+    document.getElementById("headerTitle").innerHTML = cfg.nombreLocal + ' <span>menú</span>';
+    document.getElementById("pageTitle").textContent = cfg.nombreLocal + " — Menú";
+    document.getElementById("ogTitle").setAttribute("content", cfg.nombreLocal + " — Menú");
+    document.getElementById("ogDesc").setAttribute("content", "Hacé tu pedido en " + cfg.nombreLocal);
+    document.getElementById("appleTitle").setAttribute("content", cfg.nombreLocal);
+  }
+  if (cfg.logo) { const img = document.getElementById("logoImg"); img.src = cfg.logo; img.style.display = "block"; document.getElementById("ogImage").setAttribute("content", cfg.logo); }
+}).catch(() => {});
 
 function renderCats() {
   const el = document.getElementById("cats");
@@ -298,6 +319,11 @@ function clearCart() {
   cart = {};
   updateBadge();
   renderCart();
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/service-worker.js").catch(() => {});
 }
 </script>
 </body>

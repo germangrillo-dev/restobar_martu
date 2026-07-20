@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Instructivo - Instalar app del menú</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #fff; color: #1a1715; padding: 40px 30px; max-width: 600px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; color: #241a0c; text-align: center; }
+  .subtitle { color: #8a7a6a; font-size: 14px; margin-bottom: 30px; text-align: center; }
+  .section { margin-bottom: 28px; page-break-inside: avoid; }
+  h2 { font-size: 17px; font-weight: 700; color: #241a0c; margin-bottom: 12px; border-bottom: 2px solid #c8a87c; padding-bottom: 6px; }
+  .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+  .step-num { background: #241a0c; color: #f5f0eb; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .step-text { font-size: 14px; line-height: 1.5; padding-top: 2px; }
+  .step-text strong { color: #241a0c; }
+  .tip { background: #f5f0eb; border-left: 4px solid #c8a87c; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 13px; color: #5a4a3a; }
+  .tip strong { color: #241a0c; }
+  .url-box { background: #f5f0eb; border: 1px solid #e5ddd5; border-radius: 10px; padding: 14px 16px; font-family: monospace; font-size: 12px; word-break: break-all; margin: 12px 0; color: #241a0c; text-align: center; }
+  .divider { border: none; border-top: 1px solid #e5ddd5; margin: 24px 0; }
+  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #8a7a6a; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+
+<h1 id="title">Menú Digital</h1>
+<p class="subtitle">Instalá la app en tu celular en 5 pasos</p>
+
+<div class="url-box" id="urlBox">COMPLETAR CON LA URL</div>
+
+<div class="section">
+  <h2>📱 Android</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-text">Abrí <strong>Google Chrome</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-text">Pegá la dirección del menú en la barra</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-text">Tocá los <strong>3 puntos (⋮)</strong> arriba a la derecha</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-text">Tocá <strong>"Instalar app"</strong></div></div>
+  <div class="step"><div class="step-num">5</div><div class="step-text">Confirmá. Aparece el ícono en tu pantalla</div></div>
+</div>
+
+<hr class="divider" />
+
+<div class="section">
+  <h2>🍎 iPhone</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-text">Abrí <strong>Safari</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-text">Pegá la dirección del menú en la barra</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-text">Tocá el botón de <strong>compartir</strong> (↑) abajo</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-text">Tocá <strong>"Agregar a pantalla de inicio"</strong></div></div>
+  <div class="step"><div class="step-num">5</div><div class="step-text">Tocá "Agregar". Listo</div></div>
+</div>
+
+<div class="tip"><strong>Tip:</strong> Una vez instalada, accedés al menú tocando el ícono como si fuera una app. No necesitás buscar el link cada vez.</div>
+
+<div class="footer">
+  <p>© <span id="year"></span> — <span id="footerName">Menú Digital</span></p>
+</div>
+
+<script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+</body>
+</html>
