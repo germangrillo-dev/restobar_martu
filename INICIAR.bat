@@ -1,5 +1,4 @@
 @echo off
-rem VERSION-TEST-UPDATE-002
 title Martu Resto Bar - Servidor
 cd /d "%~dp0"
 echo ============================================
