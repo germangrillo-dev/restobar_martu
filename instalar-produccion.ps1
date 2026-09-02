@@ -69,7 +69,10 @@ Escribir-Texto "Instalando dependencias de Node.js..." "Yellow"
 Set-Location $InstalarEn
 npm install
 
-# 5. Crear acceso directo en Inicio para arranque automatico con sesion de usuario
+# 5. Crear accesos directos
+$shell = New-Object -ComObject WScript.Shell
+$desktop = [System.Environment]::GetFolderPath("Desktop")
+
 $startupFolder = [System.Environment]::GetFolderPath("Startup")
 $startupShortcut = $shell.CreateShortcut("$startupFolder\Martu Resto Bar.lnk")
 $startupShortcut.TargetPath = "cmd.exe"
@@ -79,9 +82,7 @@ $startupShortcut.IconLocation = "$InstalarEn\icon-192.png"
 $startupShortcut.Save()
 Escribir-Texto "Acceso directo de inicio creado en carpeta Startup." "Green"
 
-# 6. Crear accesos directos
-$shell = New-Object -ComObject WScript.Shell
-$desktop = [System.Environment]::GetFolderPath("Desktop")
+# 6. Crear acceso directo en escritorio
 $shortcut = $shell.CreateShortcut("$desktop\Martu Resto Bar.lnk")
 $shortcut.TargetPath = "http://localhost:3456/prototipo-gestion-bar.html"
 $shortcut.IconLocation = "$InstalarEn\icon-192.png"
@@ -103,7 +104,7 @@ Set-Content -Path "$InstalarEn\desinstalar.ps1" -Value $uninstallScript -Encodin
 # 8. Iniciar ahora
 if ($IniciarAhora) {
     Escribir-Texto "Iniciando servidor..." "Yellow"
-    Start-ScheduledTask -TaskName $taskName
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$InstalarEn\INICIAR.bat`"" -WorkingDirectory $InstalarEn
     Start-Sleep -Seconds 3
 }
 
