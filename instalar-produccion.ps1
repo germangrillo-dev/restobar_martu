@@ -69,15 +69,15 @@ Escribir-Texto "Instalando dependencias de Node.js..." "Yellow"
 Set-Location $InstalarEn
 npm install
 
-# 5. Crear tarea programada para inicio automatico
-$taskName = "MartuRestoBarServer"
-$action = New-ScheduledTaskAction -Execute "node" -Argument "server.js" -WorkingDirectory $InstalarEn
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-Escribir-Texto "Tarea programada creada: $taskName" "Green"
+# 5. Crear acceso directo en Inicio para arranque automatico con sesion de usuario
+$startupFolder = [System.Environment]::GetFolderPath("Startup")
+$startupShortcut = $shell.CreateShortcut("$startupFolder\Martu Resto Bar.lnk")
+$startupShortcut.TargetPath = "cmd.exe"
+$startupShortcut.Arguments = "/c `"$InstalarEn\INICIAR.bat`""
+$startupShortcut.WorkingDirectory = $InstalarEn
+$startupShortcut.IconLocation = "$InstalarEn\icon-192.png"
+$startupShortcut.Save()
+Escribir-Texto "Acceso directo de inicio creado en carpeta Startup." "Green"
 
 # 6. Crear accesos directos
 $shell = New-Object -ComObject WScript.Shell
@@ -91,8 +91,8 @@ Escribir-Texto "Acceso directo creado en el escritorio." "Green"
 # 7. Crear script de desinstalacion
 $uninstallScript = @"
 #Requires -RunAsAdministrator
-`$taskName = 'MartuRestoBarServer'
-Unregister-ScheduledTask -TaskName `$taskName -Confirm:`$false -ErrorAction SilentlyContinue
+`$startup = [System.Environment]::GetFolderPath('Startup')
+Remove-Item -Path '`$startup\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
 Remove-Item -Path '$($InstalarEn -replace '\\', '\\')' -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path '$desktop\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
 Write-Host 'Martu Resto Bar desinstalado.' -ForegroundColor Green
