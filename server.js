@@ -10,10 +10,21 @@ const backup = require("./backup");
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
+app.use((req, res, next) => { const line = new Date().toISOString() + " " + req.method + " " + req.url; console.log("[REQ]", req.method, req.url); try { fs.appendFileSync(path.join(__dirname, "requests.log"), line + "\n"); } catch {} res.set('Cache-Control', 'no-store, no-cache, must-revalidate'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); next(); });
 
 // --- Inicializar DB ---
 db.initDB();
 console.log("✅ Base de datos SQLite inicializada");
+
+// Cerrar cajas viejas que quedaron activas por error
+const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
+try {
+  const oldOpen = db.getDB().prepare("SELECT id FROM caja_sesiones WHERE activa = 1 AND fecha != ?").all(today);
+  if (oldOpen.length > 0) {
+    db.getDB().prepare("UPDATE caja_sesiones SET activa = 0 WHERE activa = 1 AND fecha != ?").run(today);
+    console.log(`🔄 Cerradas ${oldOpen.length} caja(s) vieja(s) que quedaron abiertas`);
+  }
+} catch (e) { console.warn("Error cerrando cajas viejas:", e.message); }
 
 // Migrar desde JSON si la DB está vacía
 const CONFIG = db.getConfig();
@@ -51,10 +62,11 @@ const prodPorRef = Object.fromEntries(PRODUCTOS.map(p => [p.ref, p]));
 const prodPorNombre = Object.fromEntries(PRODUCTOS.map(p => [p.nombre.toLowerCase(), p]));
 const DIR_KEYWORDS = ["calle", "av ", "avenida", "pasaje", "ruta", "bulevar", "esq", "nro", "depto", "piso", "manzana", "barrio", "casa", "km"];
 
-let PUBLIC_URL = "http://localhost:3456";
+let PUBLIC_URL = db.getConfig().publicUrl || "http://localhost:3456";
 
 app.post("/api/public-url", (req, res) => {
   PUBLIC_URL = req.body.url || PUBLIC_URL;
+  db.saveConfig({ publicUrl: PUBLIC_URL });
   res.json({ ok: true, url: PUBLIC_URL });
 });
 
@@ -89,12 +101,12 @@ const parsearPedido = (texto) => {
     const cantNum = p.match(/^(\d+)\s*x\s*(\d{1,3})$/i);
     if (cantNum) {
       const prod = prodPorRef[parseInt(cantNum[2])];
-      if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant: parseInt(cantNum[1]), nota: "" }); continue; }
+      if (prod) { const existing = items.find(i => i.pid === prod.id); if (existing) { existing.cant += parseInt(cantNum[1]); } else { items.push({ pid: prod.id, nombre: prod.nombre, ref: prod.ref, cant: parseInt(cantNum[1]), nota: "" }); } continue; }
     }
     const soloNum = p.match(/^(\d{1,3})$/);
     if (soloNum) {
       const prod = prodPorRef[parseInt(soloNum[1])];
-      if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant: 1, nota: "" }); continue; }
+      if (prod) { const existing = items.find(i => i.pid === prod.id); if (existing) { existing.cant += 1; } else { items.push({ pid: prod.id, nombre: prod.nombre, ref: prod.ref, cant: 1, nota: "" }); } continue; }
     }
     const notaMatch = p.match(/^(.+?)\((.+?)\)$/);
     const sinNota = notaMatch ? notaMatch[1].trim() : p;
@@ -105,7 +117,7 @@ const parsearPedido = (texto) => {
     else { const m2 = sinNota.match(/^(.+?)\s*x\s*(\d+)$/i); if (m2) { cant = parseInt(m2[2]); nombre = m2[1].trim().replace(/^[\s,]+|[\s,]+$/g, ""); } }
     const nlow = nombre.toLowerCase();
     const prod = prodPorNombre[nlow] || PRODUCTOS.find(p => nlow.includes(p.nombre.toLowerCase()) || p.nombre.toLowerCase().includes(nlow) || nlow.startsWith(p.nombre.toLowerCase().slice(0, 5)));
-    if (prod) { items.push({ nombre: prod.nombre, ref: prod.ref, cant, nota }); continue; }
+    if (prod) { const existing = items.find(i => i.pid === prod.id && i.nota === nota); if (existing) { existing.cant += cant; } else { items.push({ pid: prod.id, nombre: prod.nombre, ref: prod.ref, cant, nota }); } continue; }
     partesTexto.push(p);
   }
   let idxDir = -1;
@@ -130,6 +142,7 @@ const WA_OPTS = {
   puppeteer: { headless: true, executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", args: ["--no-sandbox"] },
   authTimeoutMs: 120000,
 };
+const processedMsgIds = new Set();
 
 function iniciarWhatsApp() {
   const authStrategy = new LocalAuth();
@@ -150,6 +163,12 @@ function iniciarWhatsApp() {
   });
 
   client.on("message", async (msg) => {
+    const msgId = msg.id._serialized || msg.id.id || msg.id;
+    if (processedMsgIds.has(msgId)) return;
+    processedMsgIds.add(msgId);
+    if (processedMsgIds.size > 500) { const first = processedMsgIds.values().next().value; processedMsgIds.delete(first); }
+    const msgAge = Date.now() - (msg.timestamp * 1000);
+    if (msgAge > 120000) { console.log(`⏭️ Mensaje viejo (${Math.round(msgAge/1000)}s), ignorado`); return; }
     const remitente = msg.from;
     if (remitente === "status@broadcast" || remitente.endsWith("@newsletter")) return;
     const texto = msg.body.trim().toLowerCase();
@@ -197,7 +216,7 @@ app.get("/api/caja", (req, res) => {
   const caja = db.getCaja();
   const historialCierres = db.getHistorialCierres();
   const mesas = db.getMesas();
-  const deliveries = db.getDeliveries().filter(d => (d.estado || "cocina") !== "entregado");
+  const deliveries = db.getDeliveries();
   const cfg = db.getConfig();
   const insumos = db.getInsumos();
   const stock = db.getStock();
@@ -206,32 +225,39 @@ app.get("/api/caja", (req, res) => {
   const usuarios = db.getUsuarios();
   const facturaXNum = db.getFacturaXNum();
   const cajaIniciada = !!caja;
-  res.json({ caja, cajaIniciada, historialCierres, mesas, deliveries, config: cfg, insumos, stock, costos, proveedores, usuarios, facturaXNum });
+  res.json({ caja, cajaIniciada, historialCierres, mesas, deliveries, config: cfg, insumos, stock, costos, proveedores, usuarios, facturaXNum, productos: PRODUCTOS });
 });
 
 app.post("/api/caja", (req, res) => {
   try {
-    const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios } = req.body;
+    const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos } = req.body;
+    console.log("[POST /api/caja] cajaIniciada:", cajaIniciada, "fecha:", caja?.fecha, "turno:", caja?.turno, "movimientos:", caja?.movimientos?.length || 0);
 
     // Caja
     if (caja !== undefined && caja !== null) {
-      const today = new Date().toLocaleDateString('sv-SE');
-      const serverCaja = db.getCaja();
-      if (serverCaja && serverCaja.fecha !== today && serverCaja.movimientos && serverCaja.movimientos.length > 0) {
-        console.log("[POST /api/caja] New day, archiving old caja");
-      }
-      if (caja.fecha === today) {
-        if (!serverCaja || serverCaja.fecha !== today) {
-          const sesionId = db.createCaja(caja);
-          if (caja.movimientos) {
-            for (const mov of caja.movimientos) db.addMovimiento(sesionId, mov);
-          }
-        } else {
-          if (caja.movimientos) {
-            for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
-          }
+      if (cajaIniciada === false) {
+        // CERRANDO caja: cerrar sesión activa en servidor
+        const serverCaja = db.getCaja();
+        if (serverCaja) {
+          db.closeCaja(serverCaja.id, caja.cierre || 0, caja.arqueo || {}, caja.diff || 0);
+          console.log("[POST /api/caja] Caja cerrada, sesión", serverCaja.id);
         }
+      } else if (cajaIniciada === true) {
+        // ABRIENDO o SINCRONIZANDO caja activa
+        let serverCaja = db.getCaja();
+        if (!serverCaja) {
+          // No hay sesión activa → crear una SOLO si el cliente dice que inició caja
+          const sesionId = db.createCaja(caja);
+          console.log("[POST /api/caja] Nueva sesión:", sesionId);
+          serverCaja = { id: sesionId };
+        }
+        if (caja.movimientos) {
+          for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
+          console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", serverCaja.id);
+        }
+        if (caja.arqueo) db.updateSesionArqueo(serverCaja.id, caja.arqueo);
       }
+      // Si cajaIniciada es undefined/ null → no hacer nada (evita crear sesiones por mistake)
     }
 
     // CajaIniciada
@@ -251,7 +277,7 @@ app.post("/api/caja", (req, res) => {
 
     // Deliveries
     if (deliveries !== undefined && deliveries !== null) {
-      const filtered = Array.isArray(deliveries) ? deliveries.filter(d => (d.estado || "cocina") !== "entregado") : [];
+      const filtered = Array.isArray(deliveries) ? deliveries : [];
       db.saveDeliveries(filtered);
     }
 
@@ -268,6 +294,7 @@ app.post("/api/caja", (req, res) => {
     if (proveedores !== undefined && Array.isArray(proveedores) && proveedores.length > 0) db.saveProveedores(proveedores);
     if (usuarios !== undefined && Array.isArray(usuarios) && usuarios.length > 0) db.saveUsuarios(usuarios);
     if (facturaXNum !== undefined && typeof facturaXNum === "number" && facturaXNum > (db.getFacturaXNum() || 0)) db.setFacturaXNum(facturaXNum);
+    if (productos !== undefined && Array.isArray(productos) && productos.length > 0) { PRODUCTOS = productos.map(p => ({ ...p, receta: p.receta || [] })); db.saveProductos(PRODUCTOS); Object.assign(prodPorRef, Object.fromEntries(PRODUCTOS.map(p => [p.ref, p]))); Object.assign(prodPorNombre, Object.fromEntries(PRODUCTOS.map(p => [p.nombre.toLowerCase(), p]))); }
 
     res.json({ ok: true });
   } catch (e) {
@@ -289,12 +316,23 @@ app.post("/api/mesas", (req, res) => {
 
 // --- API: Deliveries ---
 app.get("/api/deliveries", (req, res) => {
-  res.json(db.getDeliveries().filter(d => (d.estado || "cocina") !== "entregado"));
+  res.json(db.getDeliveries());
 });
 app.post("/api/deliveries", (req, res) => {
   const deliveries = req.body;
   if (!Array.isArray(deliveries)) return res.status(400).json({ error: "invalid" });
-  db.saveDeliveries(deliveries.filter(d => (d.estado || "cocina") !== "entregado"));
+  db.saveDeliveries(deliveries);
+  res.json({ ok: true });
+});
+
+// --- API: Facturas de compra ---
+app.get("/api/facturas", (req, res) => {
+  res.json(db.getFacturas());
+});
+app.post("/api/facturas", (req, res) => {
+  const facturas = req.body;
+  if (!Array.isArray(facturas)) return res.status(400).json({ error: "invalid" });
+  db.saveFacturas(facturas);
   res.json({ ok: true });
 });
 
@@ -340,8 +378,8 @@ app.get("/api/menu", (req, res) => {
 app.get("/api/backups", (req, res) => {
   res.json(db.listarBackups ? backup.listarBackups() : []);
 });
-app.post("/api/backups/crear", (req, res) => {
-  const result = backup.crearBackup("manual");
+app.post("/api/backups/crear", async (req, res) => {
+  const result = await backup.crearBackup("manual");
   res.json(result);
 });
 app.post("/api/backups/restaurar", (req, res) => {
@@ -362,22 +400,15 @@ app.post("/api/backups/restaurar", (req, res) => {
 });
 
 // --- API: Update ---
-app.post("/api/update", (req, res) => {
-  const { execSync, spawn } = require("child_process");
-  const gitPath = "C:\\Program Files\\Git\\cmd\\git.exe";
+const updater = require("./updater");
+app.post("/api/update", async (req, res) => {
   const token = req.body && req.body.token;
   try {
-    if (token) {
-      execSync('"' + gitPath + '" remote set-url origin https://germangrillo-dev:' + token + '@github.com/germangrillo-dev/restobar_martu.git', { encoding: "utf-8", timeout: 10000, cwd: __dirname });
-    }
-    execSync('"' + gitPath + '" pull origin main', { encoding: "utf-8", timeout: 30000, cwd: __dirname });
-    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando..." });
-    setTimeout(() => {
-      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
-      bat.unref();
-      process.exit(0);
-    }, 1000);
+    const result = await updater.updateFromGitHub(token);
+    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando...", backup: result.backupDir });
+    updater.restartServer();
   } catch (e) {
+    console.error("[UPDATE ERROR]", e);
     res.json({ ok: false, texto: "Error al actualizar: " + e.message });
   }
 });
@@ -559,7 +590,7 @@ app.get("/api/afip/token", async (req, res) => {
 app.post("/api/whatsapp/comprobante", async (req, res) => {
   try {
     const cfg = getConfig();
-    const { telefono, items, total, metodo, comprobante, afip: afipData, cliente, localName } = req.body;
+    const { telefono, items, total, metodo, comprobante, afip: afipData, cliente, clienteData, localName } = req.body;
     if (!telefono) return res.status(400).json({ ok: false, error: "Sin teléfono" });
     const nombre = cfg.nombreLocal || localName || "El Mostrador";
     const dir = cfg.direccion || "YPF El Cruce / Ruta Nac 157 y 64";
@@ -568,6 +599,15 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     const fecha = now.toLocaleDateString("es-AR");
     const hora = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
     let itemsHtml = (items || []).map(it => `<tr><td style="padding:4px 0">${it.cant || 1}x ${it.nombre}</td><td style="text-align:right;padding:4px 0">$${((it.precio || 0) * (it.cant || 1)).toLocaleString("es-AR")}</td></tr>`).join("");
+    let clienteHtml = "";
+    if (cliente || (clienteData && (clienteData.cuit || clienteData.direccion || clienteData.telefono))) {
+      clienteHtml = `<div style="margin-bottom:8px;font-size:11px;color:#555">
+        <div><b>Cliente:</b> ${cliente || ""}</div>
+        ${clienteData?.cuit ? `<div>CUIT: ${clienteData.cuit}</div>` : ""}
+        ${clienteData?.direccion ? `<div>${clienteData.direccion}</div>` : ""}
+        ${clienteData?.telefono ? `<div>Tel: ${clienteData.telefono}</div>` : ""}
+      </div>`;
+    }
     let afipHtml = "";
     if (afipData && afipData.cae) {
       afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
@@ -592,6 +632,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
       ${dir ? '<div class="center small">' + dir + '</div>' : ''}
       <div class="center small">CUIT: ${cuit}</div>
       <div class="center small" style="margin-bottom:8px">${fecha} ${hora}</div>
+      ${clienteHtml}
       <div style="border-top:1px dashed #000;margin:8px 0"></div>
       <table>${itemsHtml}</table>
       <div style="border-top:1px dashed #000;margin:8px 0"></div>

@@ -11,7 +11,7 @@ function initDB() {
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
   db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  db.pragma("foreign_keys = OFF");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS config (
@@ -67,6 +67,7 @@ function initDB() {
       cliente TEXT DEFAULT '',
       direccion TEXT DEFAULT '',
       telefono TEXT DEFAULT '',
+      cuit TEXT DEFAULT '',
       hora TEXT DEFAULT '',
       total REAL DEFAULT 0,
       estado TEXT DEFAULT 'cocina'
@@ -98,7 +99,8 @@ function initDB() {
       presentacion TEXT DEFAULT '',
       min REAL DEFAULT 0,
       unidad_compra TEXT DEFAULT 'g',
-      factor_compra REAL DEFAULT 1
+      factor_compra REAL DEFAULT 1,
+      peso_bulto REAL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS stock (
@@ -163,6 +165,12 @@ function initDB() {
     );
   `);
 
+  // Migration: add peso_bulto column if missing
+  try { getDB().exec("ALTER TABLE insumos ADD COLUMN peso_bulto REAL DEFAULT 1"); } catch {}
+
+  // Migration: add cuit column to deliveries if missing
+  try { getDB().exec("ALTER TABLE deliveries ADD COLUMN cuit TEXT DEFAULT ''"); } catch {}
+
   return db;
 }
 
@@ -225,6 +233,7 @@ function getCaja() {
 }
 
 function createCaja(sesion) {
+  getDB().prepare("UPDATE caja_sesiones SET activa = 0 WHERE activa = 1").run();
   const result = getDB().prepare(
     "INSERT INTO caja_sesiones (fecha, turno, usuario, apertura, arqueo, activa) VALUES (?, ?, ?, ?, ?, 1)"
   ).run(sesion.fecha, sesion.turno || "", sesion.usuario || "", sesion.apertura || 0, JSON.stringify(sesion.arqueo || {}));
@@ -239,6 +248,10 @@ function addMovimiento(sesionId, mov) {
     mov.hora || "", mov.ref || "", mov.usuario || "", mov.comprobante || "",
     mov.cae || "", mov.caeVto || "", mov.afipCbte || null, mov.afipTipo || ""
   );
+}
+
+function updateSesionArqueo(sesionId, arqueo) {
+  getDB().prepare("UPDATE caja_sesiones SET arqueo = ? WHERE id = ?").run(JSON.stringify(arqueo || {}), sesionId);
 }
 
 function closeCaja(sesionId, cierre, arqueo, diff) {
@@ -311,7 +324,7 @@ function getDeliveries() {
   return dels.map(d => {
     const items = getDB().prepare("SELECT * FROM delivery_items WHERE delivery_id = ?").all(d.id);
     return {
-      id: d.id, cliente: d.cliente, direccion: d.direccion, telefono: d.telefono,
+      id: d.id, cliente: d.cliente, direccion: d.direccion, telefono: d.telefono, cuit: d.cuit || "",
       hora: d.hora, total: d.total, estado: d.estado,
       items: items.map(i => ({ pid: i.pid, nombre: i.nombre, cant: i.cant, precio: i.precio, nota: i.nota }))
     };
@@ -319,17 +332,14 @@ function getDeliveries() {
 }
 
 function saveDeliveries(deliveries) {
-  const delAll = getDB().prepare("DELETE FROM deliveries");
-  const delItems = getDB().prepare("DELETE FROM delivery_items");
-  const insDel = getDB().prepare("INSERT INTO deliveries (id, cliente, direccion, telefono, hora, total, estado) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const upsertDel = getDB().prepare("INSERT OR REPLACE INTO deliveries (id, cliente, direccion, telefono, cuit, hora, total, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+  const delItemsByDel = getDB().prepare("DELETE FROM delivery_items WHERE delivery_id = ?");
   const insItem = getDB().prepare("INSERT INTO delivery_items (delivery_id, pid, nombre, cant, precio, nota) VALUES (?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
-    delAll.run();
     for (const d of list) {
-      insDel.run(d.id, d.cliente || "", d.direccion || "", d.telefono || "", d.hora || "", d.total || 0, d.estado || "cocina");
-      for (const i of (d.items || [])) {
-        insItem.run(d.id, i.pid || "", i.nombre || "", i.cant || 1, i.precio || 0, i.nota || "");
-      }
+      upsertDel.run(d.id, d.cliente || "", d.direccion || "", d.telefono || "", d.cuit || "", d.hora || "", d.total || 0, d.estado || "cocina");
+      delItemsByDel.run(d.id);
+      for (const it of (d.items || [])) insItem.run(d.id, it.pid || "", it.nombre || "", it.cant || 0, it.precio || 0, it.nota || "");
     }
   });
   tx(deliveries);
@@ -357,16 +367,17 @@ function saveProductos(productos) {
 function getInsumos() {
   return getDB().prepare("SELECT * FROM insumos").all().map(i => ({
     id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion,
-    inicial: getStock(i.id), min: i.min, unidadCompra: i.unidad_compra, factorCompra: i.factor_compra
+    inicial: getStock(i.id), min: i.min, unidadCompra: i.unidad_compra, factorCompra: i.factor_compra,
+    pesoBulto: i.peso_bulto || 1
   }));
 }
 
 function saveInsumos(insumos) {
   const del = getDB().prepare("DELETE FROM insumos");
-  const ins = getDB().prepare("INSERT OR REPLACE INTO insumos (id, nombre, unidad, presentacion, min, unidad_compra, factor_compra) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const ins = getDB().prepare("INSERT OR REPLACE INTO insumos (id, nombre, unidad, presentacion, min, unidad_compra, factor_compra, peso_bulto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
     del.run();
-    for (const i of list) ins.run(i.id, i.nombre || "", i.unidad || "g", i.presentacion || "", i.min || 0, i.unidadCompra || "g", i.factorCompra || 1);
+    for (const i of list) ins.run(i.id, i.nombre || "", i.unidad || "g", i.presentacion || "", i.min || 0, i.unidadCompra || "g", i.factorCompra || 1, i.pesoBulto || 1);
   });
   tx(insumos);
 }
@@ -485,9 +496,8 @@ function markPedidoEnviado(id) {
 }
 
 // ─── Backup ───
-function backupDB(destPath) {
-  const backup = getDB().backup(destPath);
-  return backup.run();
+async function backupDB(destPath) {
+  await getDB().backup(destPath);
 }
 
 // ─── Close ───
@@ -499,7 +509,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, closeCaja, getHistorialCierres,
+  getCaja, createCaja, addMovimiento, closeCaja, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries,

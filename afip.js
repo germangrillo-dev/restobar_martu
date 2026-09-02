@@ -76,8 +76,14 @@ async function facturar(data, produccion, accessToken) {
     docNro = 0,
     puntoVenta = 2,
     items = [],
-    condicionIvaReceptor = 5
+    condicionIvaReceptor = 5,
+    cliente = {}
   } = data;
+
+  const cuitLimpio = (cliente.cuit || "").replace(/[^0-9]/g, "");
+  const finalDocTipo = cuitLimpio ? 80 : 99;
+  const finalDocNro = cuitLimpio ? parseInt(cuitLimpio, 10) : 0;
+  const finalCondicionIva = 5; // Consumidor Final
 
   const total = items.reduce((a, it) => a + (it.precio || 0) * (it.cant || 1), 0);
   const impNeto = parseFloat(total.toFixed(2));
@@ -115,9 +121,9 @@ async function facturar(data, produccion, accessToken) {
         <ar:FeDetReq>
           <ar:FECAEDetRequest>
             <ar:Concepto>${concepto}</ar:Concepto>
-            <ar:DocTipo>${docTipo}</ar:DocTipo>
-            <ar:DocNro>${docNro}</ar:DocNro>
-            <ar:CondicionIVAReceptorId>${condicionIvaReceptor}</ar:CondicionIVAReceptorId>
+            <ar:DocTipo>${finalDocTipo}</ar:DocTipo>
+            <ar:DocNro>${finalDocNro}</ar:DocNro>
+            <ar:CondicionIVAReceptorId>${finalCondicionIva}</ar:CondicionIVAReceptorId>
             <ar:CbteDesde>${nextNum}</ar:CbteDesde>
             <ar:CbteHasta>${nextNum}</ar:CbteHasta>
             <ar:CbteFch>${fecha}</ar:CbteFch>

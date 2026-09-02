@@ -1,8 +1,8 @@
 @echo off
-title El Mostrador - Servidor
+title Martu Resto Bar - Servidor
 cd /d "%~dp0"
 echo ============================================
-echo   EL MOSTRADOR - Servidor
+echo   MARTU RESTO BAR - Servidor
 echo ============================================
 echo.
 echo  Abri el sistema en el navegador:

@@ -18,12 +18,12 @@ function fechaBackup() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}`;
 }
 
-function crearBackup(origen) {
+async function crearBackup(origen) {
   ensureBackupDir();
   const nombre = `martu-${fechaBackup()}.db`;
   const dest = path.join(BACKUP_DIR, nombre);
   try {
-    db.backupDB(dest);
+    await db.backupDB(dest);
     console.log(`[BACKUP] ${origen}: ${nombre}`);
     limpiarBackupsViejos();
     return { ok: true, archivo: nombre };

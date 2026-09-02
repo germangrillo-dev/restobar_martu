@@ -28,3 +28,5 @@ Comprobante.pdf
 *.jpg
 *.jpeg
 data/
+backups-instalacion/
+*.bak

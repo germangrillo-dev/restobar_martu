@@ -6,8 +6,14 @@ const CAJA_STATE_PATH = path.join(__dirname, "caja-state.json");
 const PRODUCTOS_PATH = path.join(__dirname, "productos.json");
 
 function migrate() {
-  console.log("🔄 Iniciando migración de JSON a SQLite...\n");
   db.initDB();
+  const existing = db.getDB().prepare("SELECT COUNT(*) as cnt FROM caja_sesiones").get();
+  if (existing.cnt > 0) {
+    console.log("⏭️  DB ya tiene datos, saltando migración.");
+    return;
+  }
+
+  console.log("🔄 Iniciando migración de JSON a SQLite...\n");
 
   // Migrar caja-state.json
   if (fs.existsSync(CAJA_STATE_PATH)) {
@@ -114,7 +120,6 @@ function migrate() {
   }
 
   console.log("✅ Migración completada.");
-  db.closeDB();
 }
 
-migrate();
+module.exports = migrate;
