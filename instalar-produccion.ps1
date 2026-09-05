@@ -84,7 +84,7 @@ Escribir-Texto "Acceso directo de inicio creado en carpeta Startup." "Green"
 
 # 6. Crear acceso directo en escritorio
 $shortcut = $shell.CreateShortcut("$desktop\Martu Resto Bar.lnk")
-$shortcut.TargetPath = "http://localhost:3456/prototipo-gestion-bar.html"
+$shortcut.TargetPath = "http://localhost:3456/marturestobar.html"
 $shortcut.IconLocation = "$InstalarEn\icon-192.png"
 $shortcut.Save()
 Escribir-Texto "Acceso directo creado en el escritorio." "Green"
@@ -111,7 +111,7 @@ if ($IniciarAhora) {
 Escribir-Texto "========================================" "Green"
 Escribir-Texto "  INSTALACION COMPLETA" "Green"
 Escribir-Texto "========================================" "Green"
-Escribir-Texto "Sistema: http://localhost:3456/prototipo-gestion-bar.html" "Green"
+Escribir-Texto "Sistema: http://localhost:3456/marturestobar.html" "Green"
 Escribir-Texto "Desinstalar: $InstalarEn\desinstalar.ps1" "Green"
 Escribir-Texto "Para actualizar: Configuracion -> Sistema -> Actualizar sistema" "Green"
 

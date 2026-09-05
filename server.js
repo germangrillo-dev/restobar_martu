@@ -414,15 +414,18 @@ app.post("/api/update", async (req, res) => {
 });
 
 // --- Static routes ---
-app.get("/prototipo-gestion-bar.html", (req, res) => {
+app.get("/marturestobar.html", (req, res) => {
   const cfg = getConfig();
   const nombre = cfg.nombreLocal || "El Mostrador";
-  let html = fs.readFileSync(path.join(__dirname, "prototipo-gestion-bar.html"), "utf-8");
+  let html = fs.readFileSync(path.join(__dirname, "marturestobar.html"), "utf-8");
   html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
   html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
   res.set("Content-Type", "text/html");
   res.send(html);
 });
+
+// Redirect legacy URL for backwards compatibility
+app.get("/prototipo-gestion-bar.html", (req, res) => { res.redirect("/marturestobar.html" + (req.url.includes("?") ? "?" + req.url.split("?").slice(1).join("?") : "")); });
 
 app.use(express.static(path.join(__dirname)));
 
@@ -514,8 +517,8 @@ app.get("/instructivo.html", (req, res) => {
 });
 
 app.get("/menu-delivery.html", (req, res) => { serveMenu(req, res); });
-app.get("/admin", (req, res) => { res.redirect("/prototipo-gestion-bar.html?mode=admin"); });
-app.get("/", (req, res) => { res.redirect("/prototipo-gestion-bar.html"); });
+app.get("/admin", (req, res) => { res.redirect("/marturestobar.html?mode=admin"); });
+app.get("/", (req, res) => { res.redirect("/marturestobar.html"); });
 app.get("/menu-mesa.html", (req, res) => { serveMenu(req, res); });
 
 app.post("/api/pedidos/mesa", (req, res) => {
@@ -684,6 +687,6 @@ app.listen(PORT, HOST, () => {
   console.log(`\n🌐 Servidor web: http://localhost:${PORT}`);
   if (ts) console.log(`🔗 Tailscale:      http://${ts}:${PORT}`);
   console.log(`📡 Menú clientes:  http://localhost:${PORT}/menu-mesa.html?mesa=1`);
-  console.log(`📡 Sistema:        http://localhost:${PORT}/prototipo-gestion-bar.html`);
+  console.log(`📡 Sistema:        http://localhost:${PORT}/marturestobar.html`);
   console.log(`💾 SQLite:         ${path.join(__dirname, "data", "martu.db")}`);
 });

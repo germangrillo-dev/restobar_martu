@@ -6,7 +6,7 @@ echo   MARTU RESTO BAR - Servidor
 echo ============================================
 echo.
 echo  Abri el sistema en el navegador:
-echo  http://localhost:3456/prototipo-gestion-bar.html
+echo  http://localhost:3456/marturestobar.html
 echo.
 echo  Para detener: cerrar esta ventana
 echo ============================================
