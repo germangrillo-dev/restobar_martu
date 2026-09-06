@@ -152,7 +152,7 @@ const dinero = (n) => "$" + (n || 0).toLocaleString("es-AR", { minimumFractionDi
 const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 const uid = () => Math.random().toString(36).slice(2, 9);
-const USUARIOS_DEFAULT = [{ nombre: "Sofía (dueña)", rol: "admin", clave: "1234" }, { nombre: "Caja 1", rol: "cajero", clave: "1234" }, { nombre: "Visor Remoto", rol: "visor", clave: "1234" }];
+const USUARIOS_DEFAULT = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
 const lineaVacia = () => ({ lid: uid(), codigo: "", cantidad: "", unitario: "", descuento: "", internos: "" });
 const provVacio = () => ({ nombre: "", cuit: "", condicion: CONDICIONES[0], rubro: "", direccion: "", localidad: "", telefono: "", email: "" });
 let WA_NUMERO = (() => { try { return localStorage.getItem("elmo_wa_numero") || "5491155551234"; } catch { return "5491155551234"; } })();
