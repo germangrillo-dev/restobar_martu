@@ -21,7 +21,7 @@ $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $nodePath) {
     Escribir-Texto "Node.js no encontrado. Descargando e instalando..." "Yellow"
     $nodeInstaller = "$env:TEMP\node-installer.msi"
-    $nodeUrl = "https://nodejs.org/dist/v20.17.0/node-v20.17.0-x64.msi"
+    $nodeUrl = "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi"
     Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeInstaller -UseBasicParsing
     Start-Process msiexec.exe -ArgumentList "/i `"$nodeInstaller`" /qn /norestart" -Wait
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -71,9 +71,18 @@ npm install
 
 # 5. Crear accesos directos
 $shell = New-Object -ComObject WScript.Shell
-$desktop = [System.Environment]::GetFolderPath("Desktop")
 
-$startupFolder = [System.Environment]::GetFolderPath("Startup")
+# Acceso directo en escritorio publico (todos los usuarios)
+$publicDesktop = "C:\Users\Public\Desktop"
+if (-not (Test-Path $publicDesktop)) { New-Item -ItemType Directory -Path $publicDesktop -Force | Out-Null }
+$shortcut = $shell.CreateShortcut("$publicDesktop\Martu Resto Bar.lnk")
+$shortcut.TargetPath = "http://localhost:3456/marturestobar.html"
+$shortcut.IconLocation = "$InstalarEn\icon-192.png"
+$shortcut.Save()
+Escribir-Texto "Acceso directo creado en el escritorio." "Green"
+
+# Acceso directo de inicio para todos los usuarios
+$startupFolder = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
 $startupShortcut = $shell.CreateShortcut("$startupFolder\Martu Resto Bar.lnk")
 $startupShortcut.TargetPath = "cmd.exe"
 $startupShortcut.Arguments = "/c `"$InstalarEn\INICIAR.bat`""
@@ -82,20 +91,12 @@ $startupShortcut.IconLocation = "$InstalarEn\icon-192.png"
 $startupShortcut.Save()
 Escribir-Texto "Acceso directo de inicio creado en carpeta Startup." "Green"
 
-# 6. Crear acceso directo en escritorio
-$shortcut = $shell.CreateShortcut("$desktop\Martu Resto Bar.lnk")
-$shortcut.TargetPath = "http://localhost:3456/marturestobar.html"
-$shortcut.IconLocation = "$InstalarEn\icon-192.png"
-$shortcut.Save()
-Escribir-Texto "Acceso directo creado en el escritorio." "Green"
-
 # 7. Crear script de desinstalacion
 $uninstallScript = @"
 #Requires -RunAsAdministrator
-`$startup = [System.Environment]::GetFolderPath('Startup')
-Remove-Item -Path '`$startup\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path 'C:\Users\Public\Desktop\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
 Remove-Item -Path '$($InstalarEn -replace '\\', '\\')' -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -Path '$desktop\Martu Resto Bar.lnk' -Force -ErrorAction SilentlyContinue
 Write-Host 'Martu Resto Bar desinstalado.' -ForegroundColor Green
 pause
 "@
