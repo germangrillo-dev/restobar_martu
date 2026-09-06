@@ -76,7 +76,7 @@ function getConfig() { return db.getConfig(); }
 const MENU_TEXTO = () => {
   const cfg = getConfig();
   const cats = [...new Set(PRODUCTOS.map(p => p.cat))];
-  let txt = "🍕 *" + (cfg.nombreLocal || "EL MOSTRADOR") + " - MENÚ*\n\n";
+  let txt = "🍕 *" + (cfg.nombreLocal || "Martu Resto Bar") + " - MENÚ*\n\n";
   cats.forEach(cat => {
     txt += `*${cat.toUpperCase()}*\n`;
     PRODUCTOS.filter(p => p.cat === cat).forEach(p => {
@@ -416,7 +416,7 @@ app.post("/api/update", async (req, res) => {
 // --- Static routes ---
 app.get("/marturestobar.html", (req, res) => {
   const cfg = getConfig();
-  const nombre = cfg.nombreLocal || "El Mostrador";
+  const nombre = cfg.nombreLocal || "Martu Resto Bar";
   let html = fs.readFileSync(path.join(__dirname, "marturestobar.html"), "utf-8");
   html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
   html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
@@ -431,7 +431,7 @@ app.use(express.static(path.join(__dirname)));
 
 function serveMenu(req, res) {
   const cfg = getConfig();
-  const nombre = cfg.nombreLocal || "El Mostrador";
+  const nombre = cfg.nombreLocal || "Martu Resto Bar";
   const logo = cfg.logo || "";
   let html = MENU_CACHE.html;
   if (!html) {
@@ -460,7 +460,7 @@ app.get("/app-icon.png", (req, res) => {
 
 app.get("/manifest.json", (req, res) => {
   const cfg = getConfig();
-  const nombre = cfg.nombreLocal || "El Mostrador";
+  const nombre = cfg.nombreLocal || "Martu Resto Bar";
   const manifest = {
     name: nombre + " - Menú",
     short_name: nombre,
@@ -484,7 +484,7 @@ app.get("/manifest.json", (req, res) => {
 
 app.get("/manifest-app.json", (req, res) => {
   const cfg = getConfig();
-  const nombre = cfg.nombreLocal || "El Mostrador";
+  const nombre = cfg.nombreLocal || "Martu Resto Bar";
   const manifest = {
     name: nombre,
     short_name: nombre,
@@ -506,7 +506,7 @@ app.get("/manifest-app.json", (req, res) => {
 
 app.get("/instructivo.html", (req, res) => {
   const cfg = getConfig();
-  const nombre = cfg.nombreLocal || "El Mostrador";
+  const nombre = cfg.nombreLocal || "Martu Resto Bar";
   const url = PUBLIC_URL + "/menu-delivery.html";
   let html = fs.readFileSync(path.join(__dirname, "instructivo.html"), "utf-8");
   html = html.replace("COMPLETAR CON LA URL", url);

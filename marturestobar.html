@@ -708,7 +708,7 @@ function App() {
     const t = setInterval(syncFromServer, 5000);
     return () => clearInterval(t);
   }, [usuario]);
-  React.useEffect(() => { document.title = (config.nombreLocal || "El Mostrador") + " — " + (tab === "pedido" ? "Pedido" : tab === "caja" ? "Caja" : tab === "carta" ? "Carta" : tab === "delivery" ? "Delivery" : tab === "compras" ? "Compras" : tab === "insumos" ? "Insumos" : tab === "config" ? "Config" : "Sistema"); }, [config.nombreLocal, tab]);
+  React.useEffect(() => { document.title = (config.nombreLocal || "Martu Resto Bar") + " — " + (tab === "pedido" ? "Pedido" : tab === "caja" ? "Caja" : tab === "carta" ? "Carta" : tab === "delivery" ? "Delivery" : tab === "compras" ? "Compras" : tab === "insumos" ? "Insumos" : tab === "config" ? "Config" : "Sistema"); }, [config.nombreLocal, tab]);
   React.useEffect(() => { const t = setInterval(() => { fetch(serverUrl + "/api/pedidos/pendientes").then(r => r.json()).then(d => setWaPedidos(d.filter(p => !importedWAPedidosRef.current.has(p.id)))).catch(() => {}); }, 4000); return () => clearInterval(t); }, []);
   const importarWAPedido = (wp, items) => {
     if (!cajaAbierta) { setToast({ tipo: "error", texto: "Abrí la caja antes de enviar pedidos." }); return; }
@@ -762,7 +762,7 @@ function App() {
     return (
       <div style={{ background: C.base, color: C.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
         <div className="w-full max-w-sm px-6">
-          <div className="text-center mb-7">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", margin: "0 auto 12px", display: "block", border: "2px solid " + C.border }} />}<div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{config.nombreLocal || "El Mostrador"}</h1></div>
+          <div className="text-center mb-7">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", margin: "0 auto 12px", display: "block", border: "2px solid " + C.border }} />}<h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{config.nombreLocal || "Martu Resto Bar"}</h1></div>
           {loginUsuario ? (
             <div>
               <p style={{ color: C.muted, fontSize: 14, marginBottom: 12 }}>Ingresá la contraseña para <strong>{loginUsuario.nombre}</strong></p>
@@ -811,7 +811,7 @@ function App() {
     <div style={{ background: C.base, color: C.text, minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-5xl mx-auto px-4 py-5">
         <header className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover", background: C.raised, border: "1px solid " + C.border }} />}<div><div style={{ color: C.amber, letterSpacing: "0.18em", fontSize: 11, fontWeight: 700 }}>PROTOTIPO · ETAPA 1</div><h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>{config.nombreLocal || "El Mostrador"}</h1></div></div>
+          <div className="flex items-center gap-3">{config.logo && <img src={config.logo} alt="Logo" style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover", background: C.raised, border: "1px solid " + C.border }} />}<div><h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>{config.nombreLocal || "Martu Resto Bar"}</h1></div></div>
           <div className="flex items-center gap-1">
             {!esModoAdmin && <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><Globe size={12} /><input value={publicUrl} placeholder="https://..." onChange={(e) => { setPublicUrl(e.target.value); try { localStorage.setItem("elmo_publicUrl", JSON.stringify(e.target.value)); fetch("/api/public-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: e.target.value }) }).catch(() => {}); } catch {} }} style={{ background: "transparent", border: "none", color: C.text, width: 190, outline: "none", fontSize: 11 }} /></div>}
             <div className="flex flex-col items-start px-3 py-2 rounded-lg" style={{ background: C.raised, border: "1px solid " + C.border }}>
@@ -1868,7 +1868,7 @@ function App() {
               {/* Header */}
               <div style={{ textAlign: "center", marginBottom: 8, borderBottom: "2px dashed #000", paddingBottom: 8 }}>
                 {config.logo && <img src={config.logo} alt="logo" style={{ maxWidth: 100, maxHeight: 60, margin: "0 auto 6px", display: "block", objectFit: "contain" }} />}
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{config.nombreLocal || "El Mostrador"}</div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{config.nombreLocal || "Martu Resto Bar"}</div>
                 <div style={{ fontSize: 11 }}>CUIT: 27-21341447-5</div>
                 <div style={{ fontSize: 11 }}>{config.direccion || "YPF El Cruce / Ruta Nac 157 y 64"}</div>
               </div>
