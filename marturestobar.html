@@ -301,7 +301,7 @@ function App() {
   React.useEffect(() => { try { localStorage.setItem("elmo_deliveries", JSON.stringify(deliveries)); } catch {} }, [deliveries]);
   const [cajaIniciada, setCajaIniciada] = useState(() => null);
   const [historialCierres, setHistorialCierres] = useState(() => []);
-  const [usuarios, setUsuarios] = useState(() => cargar("usuarios", USUARIOS_DEFAULT));
+  const [usuarios, setUsuarios] = useState(() => { const loaded = cargar("usuarios", USUARIOS_DEFAULT); return loaded && loaded.length > 0 ? loaded : USUARIOS_DEFAULT; });
   const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", clave: "", rol: "cajero" });
   const [nuevoCliente, setNuevoCliente] = useState({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" });
   const [editCliente, setEditCliente] = useState(null);
