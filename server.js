@@ -37,23 +37,7 @@ if (!CONFIG.nombreLocal && fs.existsSync(path.join(__dirname, "caja-state.json")
 backup.iniciarBackupsAutomaticos();
 
 // --- Productos (en memoria para WhatsApp parsing) ---
-const DEFAULT_PRODUCTOS = [
-  { id: "pz-muzza", ref: 1, nombre: "Muzzarella", cat: "Pizzas", precio: 7000, receta: [["masa",1],["muzza",250],["salsa",150]] },
-  { id: "pz-napo", ref: 2, nombre: "Napolitana", cat: "Pizzas", precio: 8000, receta: [["masa",1],["muzza",250],["salsa",150],["tomate",2]] },
-  { id: "pz-fuga", ref: 3, nombre: "Fugazzeta", cat: "Pizzas", precio: 8500, receta: [["masa",1],["muzza",300],["cebolla",2]] },
-  { id: "pz-esp", ref: 4, nombre: "Especial", cat: "Pizzas", precio: 9000, receta: [["masa",1],["muzza",250],["salsa",150],["jamon",60],["morron",1]] },
-  { id: "mi-simple", ref: 5, nombre: "Mila simple c/ papas", cat: "Milanesas", precio: 6500, receta: [["milcarne",1],["huevo",1]] },
-  { id: "mi-napo", ref: 6, nombre: "Mila napolitana", cat: "Milanesas", precio: 8000, receta: [["milcarne",1],["huevo",1],["muzza",100],["jamon",60],["tomate",1]] },
-  { id: "mi-caballo", ref: 7, nombre: "Mila a caballo", cat: "Milanesas", precio: 7500, receta: [["milcarne",1],["huevo",3]] },
-  { id: "pa-noquis", ref: 8, nombre: "Ñoquis c/ salsa", cat: "Pastas", precio: 6000, receta: [["noquis",250],["salsa",150]] },
-  { id: "pa-ravioles", ref: 9, nombre: "Ravioles c/ salsa", cat: "Pastas", precio: 6500, receta: [["ravioles",250],["salsa",150]] },
-  { id: "pa-tallarines", ref: 10, nombre: "Tallarines c/ salsa", cat: "Pastas", precio: 6000, receta: [["tallarines",200],["salsa",150]] },
-  { id: "ha-simple", ref: 11, nombre: "Hamburguesa simple", cat: "Hamburguesas", precio: 4500, receta: [["pan",1],["carne",120],["cheddar",40]] },
-  { id: "ha-completa", ref: 12, nombre: "Hamburguesa completa", cat: "Hamburguesas", precio: 6500, receta: [["pan",1],["carne",120],["cheddar",80],["panceta",40],["lechuga",1]] },
-  { id: "be-gaseosa", ref: 13, nombre: "Gaseosa", cat: "Bebidas", precio: 2000, receta: [["gaseosa",1]] },
-  { id: "be-cerveza", ref: 14, nombre: "Cerveza", cat: "Bebidas", precio: 3000, receta: [["cerveza",1]] },
-  { id: "be-agua", ref: 15, nombre: "Agua", cat: "Bebidas", precio: 1800, receta: [["agua",1]] },
-];
+const DEFAULT_PRODUCTOS = [];
 
 let PRODUCTOS = db.getProductos();
 if (!PRODUCTOS.length) { PRODUCTOS = DEFAULT_PRODUCTOS; db.saveProductos(PRODUCTOS); }
