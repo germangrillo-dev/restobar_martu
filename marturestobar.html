@@ -1517,7 +1517,7 @@ function App() {
                 <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Abrir caja</h3>
                 <div className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
                   <div><label style={lbl}>Turno</label>
-                    <select style={inputStyle} value={caja.turno} onChange={(e) => setCaja((c) => ({ ...c, turno: e.target.value }))}>
+                    <select style={inputStyle} value={caja.turno} onChange={(e) => { cajaDirtyUntilRef.current = Date.now() + 30000; setCaja((c) => ({ ...c, turno: e.target.value })); }} onFocus={() => { cajaDirtyUntilRef.current = Date.now() + 30000; }}>
                       <option value="">Seleccionar…</option>
                       <option value="Mañana">Mañana</option>
                       <option value="Tarde">Tarde</option>
