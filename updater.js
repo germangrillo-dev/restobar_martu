@@ -99,6 +99,17 @@ async function updateFromGitHub(token) {
 
   console.log("[UPDATER] Archivos descargados. Backup en:", backupDir);
 
+  // Guardar versión aplicada (SHA del commit) para mostrarla en el sistema
+  try {
+    const commitUrl = `https://api.github.com/repos/${OWNER}/${REPO}/commits/${BRANCH}`;
+    const commitData = await apiRequest(commitUrl, token);
+    const sha = commitData && commitData.sha ? commitData.sha : "desconocido";
+    fs.writeFileSync(path.join(installDir, "version.json"), JSON.stringify({ sha, fecha: new Date().toISOString() }, null, 2));
+    console.log("[UPDATER] Versión aplicada:", sha);
+  } catch (e) {
+    console.error("[UPDATER] No se pudo registrar la versión:", e.message);
+  }
+
   // Reinstall dependencies if package.json changed
   if (files.some(f => f.path === "package.json") && fs.existsSync(path.join(installDir, "package.json"))) {
     console.log("[UPDATER] package.json actualizado. Instalando dependencias...");

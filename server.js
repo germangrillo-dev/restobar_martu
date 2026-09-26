@@ -417,11 +417,18 @@ app.post("/api/backups/restaurar", (req, res) => {
 
 // --- API: Update ---
 const updater = require("./updater");
+app.get("/api/version", (req, res) => {
+  let version = {};
+  try { version = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8")); } catch {}
+  res.json(version);
+});
 app.post("/api/update", async (req, res) => {
   const token = req.body && req.body.token;
   try {
     const result = await updater.updateFromGitHub(token);
-    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando...", backup: result.backupDir });
+    let version = {};
+    try { version = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8")); } catch {}
+    res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando...", backup: result.backupDir, version });
     updater.restartServer();
   } catch (e) {
     console.error("[UPDATE ERROR]", e);
