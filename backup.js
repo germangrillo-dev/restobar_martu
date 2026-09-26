@@ -26,10 +26,24 @@ async function crearBackup(origen) {
     await db.backupDB(dest);
     console.log(`[BACKUP] ${origen}: ${nombre}`);
     limpiarBackupsViejos();
+    copiarADrive(dest, nombre);
     return { ok: true, archivo: nombre };
   } catch (e) {
     console.error(`[BACKUP] Error: ${e.message}`);
     return { ok: false, error: e.message };
+  }
+}
+
+function copiarADrive(src, nombre) {
+  try {
+    const dir = db.getConfig ? db.getConfig().backupDriveDir : null;
+    if (!dir || typeof dir !== "string" || !dir.trim()) return;
+    const driveDir = dir.trim();
+    if (!fs.existsSync(driveDir)) { console.log(`[BACKUP] Carpeta Drive no existe: ${driveDir}`); return; }
+    fs.copyFileSync(src, path.join(driveDir, nombre));
+    console.log(`[BACKUP] Copiado a Drive: ${path.join(driveDir, nombre)}`);
+  } catch (e) {
+    console.error(`[BACKUP] Error copiando a Drive: ${e.message}`);
   }
 }
 

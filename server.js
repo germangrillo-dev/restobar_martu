@@ -12,6 +12,23 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use((req, res, next) => { const line = new Date().toISOString() + " " + req.method + " " + req.url; console.log("[REQ]", req.method, req.url); try { fs.appendFileSync(path.join(__dirname, "requests.log"), line + "\n"); } catch {} res.set('Cache-Control', 'no-store, no-cache, must-revalidate'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); next(); });
 
+// Acceso público (Tailscale Funnel): solo menú de delivery + visor + sus recursos
+const PATHS_PUBLICOS = [
+  "/", "/menu-delivery.html", "/visor.html",
+  "/api/menu", "/api/config", "/api/pedidos/mesa", "/api/visor",
+  "/app-icon.png", "/icon-192.png", "/icon-512.png", "/icon-192.svg", "/icon-512.svg",
+  "/manifest.json", "/service-worker.js", "/favicon.ico"
+];
+app.use((req, res, next) => {
+  const host = (req.headers.host || "").toLowerCase();
+  if (!host.endsWith(".tail9c04cc.ts.net")) return next();
+  const p = req.path;
+  if (PATHS_PUBLICOS.indexOf(p) === -1) {
+    return res.status(403).send("<!DOCTYPE html><html><body style=\"background:#1a1715;color:#f5efe6;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px\"><div><h1 style=\"color:#e8a23d\">Acceso restringido</h1><p style=\"color:#a89a8c\">Esta URL p\u00fablica es solo para el men\u00fa de delivery.</p><p><a href=\"/menu-delivery.html\" style=\"color:#e8a23d\">Ir al men\u00fa</a></p></div></body></html>");
+  }
+  next();
+});
+
 // --- Inicializar DB ---
 db.initDB();
 console.log("✅ Base de datos SQLite inicializada");
@@ -193,6 +210,21 @@ function iniciarWhatsApp() {
 // --- API: Config ---
 app.get("/api/config", (req, res) => {
   res.json(db.getConfig());
+});
+
+// Visor remoto (solo lectura): caja activa + movimientos + historial, protegido por PIN
+app.get("/api/visor", (req, res) => {
+  try {
+    const cfg = getConfig();
+    const pin = String(req.query.pin || "");
+    const esperado = String(cfg.visorPin || "2468");
+    if (pin !== esperado) return res.status(401).json({ ok: false, error: "PIN incorrecto" });
+    const caja = db.getCaja();
+    const historial = db.getHistorialCierres();
+    res.json({ ok: true, caja, historial });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // --- API: Caja ---
@@ -502,7 +534,7 @@ app.get("/instructivo.html", (req, res) => {
 
 app.get("/menu-delivery.html", (req, res) => { serveMenu(req, res); });
 app.get("/admin", (req, res) => { res.redirect("/marturestobar.html?mode=admin"); });
-app.get("/", (req, res) => { res.redirect("/marturestobar.html"); });
+app.get("/", (req, res) => { const esPublico = ((req.headers.host || "").toLowerCase()).endsWith(".tail9c04cc.ts.net"); res.redirect(esPublico ? "/menu-delivery.html" : "/marturestobar.html"); });
 app.get("/menu-mesa.html", (req, res) => { serveMenu(req, res); });
 
 app.post("/api/pedidos/mesa", (req, res) => {
@@ -571,6 +603,19 @@ app.get("/api/afip/token", async (req, res) => {
     res.json({ ok: true, token: token.token ? token.token.substring(0, 20) + "..." : "OK" });
   } catch (e) {
     res.json({ ok: false, error: e.message });
+  }
+});
+
+// Guardar el Access Token de AfipSDK en el servidor (persistente y compartido entre equipos)
+app.post("/api/afip/token", (req, res) => {
+  try {
+    const tok = (req.body && req.body.accessToken) || "";
+    const cfg = getConfig();
+    cfg.afipAccessToken = tok;
+    db.saveConfig({ afipAccessToken: tok });
+    res.json({ ok: true, guardado: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 

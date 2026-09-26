@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Visor — Martu Resto Bar</title>
+<meta name="theme-color" content="#1a1715" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1715;color:#f5efe6;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:40px}
+.top{position:sticky;top:0;background:#1a1715;border-bottom:1px solid #2c2622;padding:14px 18px;display:flex;align-items:center;gap:10px;z-index:20}
+.top h1{font-size:17px;font-weight:800;flex:1;line-height:1.2}
+.top h1 span{color:#c8a87c}
+.top .pill{background:#2c2622;color:#a89a8c;font-size:11px;font-weight:700;padding:5px 12px;border-radius:99px;white-space:nowrap}
+.top .pill.live{background:#1f3d2e;color:#6fa84a}
+.top .pill.wait{background:#3d3222;color:#e8a23d}
+.contenido{padding:16px 18px;display:flex;flex-direction:column;gap:16px}
+.tarjeta{background:#211d1a;border:1px solid #2c2622;border-radius:16px;padding:16px}
+.tarjeta h2{font-size:13px;font-weight:700;color:#a89a8c;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.fila{display:flex;justify-content:space-between;align-items:center;padding:5px 0}
+.fila .k{color:#a89a8c;font-size:13px}
+.fila .v{font-weight:700;font-size:14px;text-align:right}
+.fila .v.amber{color:#e8a23d}
+.fila .v.green{color:#6fa84a}
+.fila .v.red{color:#e0666a}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.celda{background:#2a2521;border-radius:12px;padding:12px 14px}
+.celda .label{font-size:11px;color:#a89a8c;margin-bottom:3px}
+.celda .num{font-size:18px;font-weight:800}
+.porcentaje{font-size:11px;color:#8a7a6a;margin-top:6px;padding-bottom:4px;border-bottom:1px dashed #3a332e;margin-bottom:6px}
+.cred{font-size:13px;font-weight:700;color:#f5efe6}
+.descr{font-size:11px;color:#8a7a6a;margin-top:1px}
+.movs{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto}
+.mov{background:#2a2521;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+.mov .ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.mov .ico.in{background:#1f3d2e}
+.mov .ico.out{background:#3d2a2a}
+.mov .info{flex:1;min-width:0}
+.mov .info .c{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mov .info .d{font-size:11px;color:#8a7a6a;margin-top:1px}
+.mov .mnt{font-size:14px;font-weight:800}
+.mov .mnt.in{color:#6fa84a}
+.mov .mnt.out{color:#e0666a}
+.vacio{text-align:center;color:#8a7a6a;font-size:13px;padding:20px 0}
+.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card-pin{background:#211d1a;border:1px solid #2c2622;border-radius:20px;padding:32px 26px;width:100%;max-width:340px;text-align:center}
+.card-pin .logo{font-size:38px;margin-bottom:8px}
+.card-pin h2{font-size:20px;font-weight:800;margin-bottom:4px}
+.card-pin p{color:#a89a8c;font-size:13px;margin-bottom:20px}
+.card-pin input{width:100%;padding:14px;border-radius:12px;border:1px solid #3a332e;background:#1a1715;color:#f5efe6;font-size:22px;font-weight:700;text-align:center;letter-spacing:8px;outline:none}
+.card-pin input:focus{border-color:#e8a23d}
+.card-pin button{width:100%;margin-top:14px;padding:14px;border-radius:12px;border:none;background:#e8a23d;color:#241a0c;font-size:16px;font-weight:800;cursor:pointer}
+.card-pin .err{color:#e0666a;font-size:12px;margin-top:10px;min-height:16px}
+.pie{position:fixed;bottom:0;left:0;right:0;background:#1a1715;border-top:1px solid #2c2622;padding:8px 18px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#8a7a6a}
+.pie button{background:none;border:none;color:#e8a23d;font-size:11px;font-weight:700;cursor:pointer;padding:4px}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="screen">
+  <div class="card-pin">
+    <div class="logo">🔒</div>
+    <h2 id="loginTitle">Visor remoto</h2>
+    <p>Ingresá el PIN para ver caja y movimientos</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" />
+    <button onclick="entrar()">Ingresar</button>
+    <div class="err" id="pinErr"></div>
+  </div>
+</div>
+
+<div id="mainScreen" style="display:none">
+  <div class="top">
+    <h1 id="nombreLocal">Martu Resto Bar <span>· visor</span></h1>
+    <span class="pill" id="estadoPill">…</span>
+  </div>
+  <div class="contenido" id="contenido"></div>
+  <div class="pie">
+    <span id="ultimaActualizacion">—</span>
+    <button onclick="salir()">Salir</button>
+  </div>
+</div>
+
+<script>
+const dinero = (n) => "$" + Math.round((n || 0)).toLocaleString("es-AR");
+let pin = sessionStorage.getItem("visor_pin") || "";
+let timer = null;
+
+function entrar() {
+  pin = document.getElementById("pinInput").value.trim();
+  if (!pin) return;
+  cargar(true).then(ok => {
+    if (ok) {
+      document.getElementById("loginScreen").style.display = "none";
+      document.getElementById("mainScreen").style.display = "";
+      sessionStorage.setItem("visor_pin", pin);
+      iniciarAuto();
+    } else {
+      sessionStorage.removeItem("visor_pin");
+      const err = document.getElementById("pinErr");
+      err.textContent = "PIN incorrecto";
+    }
+    document.getElementById("pinInput").value = "";
+  });
+}
+
+function salir() {
+  pin = "";
+  sessionStorage.removeItem("visor_pin");
+  clearInterval(timer);
+  document.getElementById("mainScreen").style.display = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+}
+
+function iniciarAuto() {
+  clearInterval(timer);
+  timer = setInterval(() => cargar(), 10000);
+}
+
+async function cargar(marcarError) {
+  const pill = document.getElementById("estadoPill");
+  const cont = document.getElementById("contenido");
+  try {
+    const r = await fetch("/api/visor?pin=" + encodeURIComponent(pin), { cache: "no-store" });
+    if (r.status === 401) {
+      if (marcarError) return false;
+      salir();
+      return false;
+    }
+    const d = await r.json();
+    if (!d.ok) {
+      if (marcarError) return false;
+      return true;
+    }
+    pill.textContent = "● EN VIVO";
+    pill.className = "pill live";
+    document.getElementById("ultimaActualizacion").textContent = "Actualizado " + new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    fetch("/api/config").then(rt => rt.json()).then(cfg => { if (cfg.nombreLocal) document.getElementById("nombreLocal").innerHTML = cfg.nombreLocal + " <span>· visor</span>"; }).catch(() => {});
+    render(d.caja, d.historial);
+    return true;
+  } catch {
+    pill.textContent = "● SIN CONEXIÓN";
+    pill.className = "pill wait";
+    if (marcarError) return false;
+    return true;
+  }
+}
+
+function render(caja, historial) {
+  const cont = document.getElementById("contenido");
+  if (!caja) {
+    cont.innerHTML = `
+      <div class="tarjeta">
+        <h2>Caja</h2>
+        <div class="vacio">La caja está cerrada en este momento.</div>
+      </div>
+      ${historialY(historial)}`;
+    return;
+  }
+  const movs = caja.movimientos || [];
+  const ventas = movs.filter(m => m.tipo === "venta");
+  const egresos = movs.filter(m => m.tipo === "egreso");
+  const totalV = ventas.reduce((a, m) => a + (m.monto || 0), 0);
+  const totalE = egresos.reduce((a, m) => a + (m.monto || 0), 0);
+  const metodos = {};
+  ventas.forEach(m => { const k = m.metodo || "Otro"; metodos[k] = (metodos[k] || 0) + (m.monto || 0); });
+  const cantMovs = movs.length;
+  const recientes = [...movs].sort((a, b) => (b.hora || "").localeCompare(a.hora || "")).slice(0, 30);
+  const metodosHtml = Object.entries(metodos).map(([k, v]) => `
+    <div class="porcentaje"><span class="cred">${k}</span><span style="float:right;color:#f5efe6">${dinero(v)}</span></div>
+  `).join("") || '<div class="porcentaje"><span class="cred">Sin ventas</span></div>';
+
+  cont.innerHTML = `
+    <div class="tarjeta">
+      <h2>Caja activa · ${caja.turno || "Sin turno"}</h2>
+      <div class="fila"><span class="k">Usuario</span><span class="v">${caja.usuario || "—"}</span></div>
+      <div class="fila"><span class="k">Fecha</span><span class="v">${caja.fecha || "—"}</span></div>
+      <div class="fila"><span class="k">Efectivo inicial</span><span class="v">${dinero(caja.apertura)}</span></div>
+      <div class="fila"><span class="k">Movimientos</span><span class="v">${cantMovs}</span></div>
+    </div>
+
+    <div class="grid2">
+      <div class="celda"><div class="label">Ventas</div><div class="num" style="color:#6fa84a">${dinero(totalV)}</div></div>
+      <div class="celda"><div class="label">Egresos</div><div class="num" style="color:#e0666a">${dinero(totalE)}</div></div>
+      <div class="celda"><div class="label">Diferencia (ventas - egresos)</div><div class="num">${dinero(totalV - totalE)}</div></div>
+      <div class="celda"><div class="label">Total en caja (apertura + neto)</div><div class="num" style="color:#e8a23d">${dinero((caja.apertura || 0) + totalV - totalE)}</div></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Ventas por método</h2>
+      ${metodosHtml}
+    </div>
+
+    <div class="tarjeta">
+      <h2>Últimos movimientos</h2>
+      ${movs.length === 0 ? '<div class="vacio">Sin movimientos todavía.</div>' : `
+        <div class="movs">${recientes.map(m => `
+          <div class="mov">
+            <div class="ico ${m.tipo === "venta" ? "in" : "out"}">${m.tipo === "venta" ? "↑" : "↓"}</div>
+            <div class="info">
+              <div class="c">${(m.concepto || "Movimiento").replace(/</g, "&lt;")}</div>
+              <div class="d">${m.hora || ""}${m.metodo ? " · " + m.metodo : ""}</div>
+            </div>
+            <div class="mnt ${m.tipo === "venta" ? "in" : "out"}">${m.tipo === "venta" ? "+" : "-"}${dinero(m.monto)}</div>
+          </div>`).join("")}</div>`}
+    </div>
+
+    ${historialY(historial)}`;
+}
+
+function historialY(historial) {
+  if (!historial || !historial.length) return "";
+  const ult = historial[0];
+  const ventas = (ult.movimientos || []).filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0);
+  const egresos = (ult.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
+  return `
+    <div class="tarjeta">
+      <h2>Último cierre · ${ult.fecha || ""}</h2>
+      <div class="fila"><span class="k">Turno</span><span class="v">${ult.turno || "—"}</span></div>
+      <div class="fila"><span class="k">Usuario</span><span class="v">${ult.usuario || "—"}</span></div>
+      <div class="fila"><span class="k">Cierre</span><span class="v">${dinero(ult.cierre)}</span></div>
+      <div class="fila"><span class="k">Ventas</span><span class="v green">${dinero(ventas)}</span></div>
+      <div class="fila"><span class="k">Egresos</span><span class="v red">${dinero(egresos)}</span></div>
+      ${ult.diff != null ? `<div class="fila"><span class="k">Diferencia</span><span class="v ${ult.diff >= 0 ? "green" : "red"}">${dinero(ult.diff)}</span></div>` : ""}
+    </div>`;
+}
+
+document.getElementById("pinInput").addEventListener("keydown", (e) => { if (e.key === "Enter") entrar(); });
+if (pin) { document.getElementById("loginScreen").style.display = "none"; document.getElementById("mainScreen").style.display = ""; cargar().then(ok => { if (ok) iniciarAuto(); }); }
+</script>
+</body>
+</html>
