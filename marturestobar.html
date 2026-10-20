@@ -271,6 +271,10 @@ const parsearPedidoWhatsApp = (texto, prods) => {
 
 const cerrarSiFondo = (fn) => (e) => { if (e.target === e.currentTarget) fn(); };
 
+const METODOS_PAGO = ["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"];
+const teclaNumero = (e) => (e.key >= "1" && e.key <= "5") ? Number(e.key) : 0;
+const badgeTecla = { fontSize: 11, fontWeight: 800, color: C.muted, background: C.raised2, border: "1px solid " + C.border, borderRadius: 5, padding: "1px 7px", lineHeight: 1.4, flexShrink: 0 };
+
 function App() {
   const cargar = (key, def) => { try { const v = localStorage.getItem("elmo_" + key); return v ? JSON.parse(v) : def; } catch { return def; } };
   const mesasRef = React.useRef({}); const deliveriesRef = React.useRef([]);
@@ -648,6 +652,17 @@ function App() {
     window.addEventListener("keydown", onAtajoMesa);
     return () => window.removeEventListener("keydown", onAtajoMesa);
   }, [showCobroModal, orden, mesas, usuario]);
+  React.useEffect(() => {
+    const onNum = (e) => {
+      const n = teclaNumero(e);
+      if (!n) return;
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (showCobroModal && !cobroMetodo) { e.preventDefault(); setCobroMetodo(METODOS_PAGO[n - 1]); return; }
+      if (showPagoDelivery && !showPagoDelivery._metodoSeleccionado) { e.preventDefault(); setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: METODOS_PAGO[n - 1] }); }
+    };
+    window.addEventListener("keydown", onNum);
+    return () => window.removeEventListener("keydown", onNum);
+  }, [showCobroModal, cobroMetodo, showPagoDelivery]);
   React.useEffect(() => { fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (typeof data.cajaIniciada === "boolean") setCajaIniciada(data.cajaIniciada); if (data.caja && data.cajaIniciada !== false) {
               setCaja(prev => {
                 const localMovs = prev?.movimientos || [];
@@ -1942,11 +1957,12 @@ function App() {
             <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total a cobrar</span><div style={{ fontWeight: 800, fontSize: 28, color: C.amber }}>{pesos(showCobroModal.total)}</div></div>
             {!cobroMetodo ? (
               <>
-                <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago:</p>
-                <div className="flex flex-col gap-2">{["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
-                  <button key={met} onClick={() => met === "Efectivo" ? setCobroMetodo("Efectivo") : setCobroMetodo(met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
+                <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago: <span style={{ fontSize: 11, opacity: .75 }}>· o teclá 1 al 5</span></p>
+                <div className="flex flex-col gap-2">{METODOS_PAGO.map((met, i) => (
+                  <button key={met} onClick={() => setCobroMetodo(met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber }} />
-                    {met}
+                    <span style={{ flex: 1 }}>{met}</span>
+                    <span style={badgeTecla}>{i + 1}</span>
                   </button>
                 ))}</div>
               </>
@@ -2000,8 +2016,8 @@ function App() {
             {!showPagoDelivery._metodoSeleccionado && <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>}
             {!showPagoDelivery._metodoSeleccionado ? (
               <div className="flex flex-col gap-2">
-                {["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercado Pago", "Transferencia"].map((met) => (
-                  <button key={met} onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: met })} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>{met}</button>
+                {METODOS_PAGO.map((met, i) => (
+                  <button key={met} onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: met })} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><span style={{ flex: 1 }}>{met}</span><span style={badgeTecla}>{i + 1}</span></button>
                 ))}
               </div>
             ) : showPagoDelivery._metodoSeleccionado === "Efectivo" ? (
