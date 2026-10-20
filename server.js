@@ -458,7 +458,7 @@ app.get("/api/menu", (req, res) => {
 
 // --- API: Backup ---
 app.get("/api/backups", (req, res) => {
-  res.json(db.listarBackups ? backup.listarBackups() : []);
+  try { res.json(backup.listarBackups()); } catch (e) { res.json([]); }
 });
 app.post("/api/backups/crear", async (req, res) => {
   const result = await backup.crearBackup("manual");
