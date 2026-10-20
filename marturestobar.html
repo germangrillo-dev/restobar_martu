@@ -141,6 +141,21 @@ const ESCPOS = {
     push(27, 64); // ESC @ init
     push(27, 97, 1); // centrado por defecto
     for (const l of lineas) {
+      if (l.logo) {
+        try {
+          const raw = Uint8Array.from(atob(l.logo), (c) => c.charCodeAt(0));
+          const ancho = Number(l.ancho) || 576;
+          const fila = Math.ceil(ancho / 8);
+          const alto = Number(l.alto) || Math.floor(raw.length / fila);
+          if (raw.length && alto) {
+            push(27, 97, 1);
+            push(29, 118, 48, 0, fila & 255, (fila >> 8) & 255, alto & 255, (alto >> 8) & 255);
+            for (let i = 0; i < raw.length; i++) b.push(raw[i]);
+            nl();
+          }
+        } catch {}
+        continue;
+      }
       const t = l.t == null ? "" : String(l.t);
       if (l.izq) push(27, 97, 0); else if (l.der) push(27, 97, 2); else push(27, 97, 1);
       push(27, 69, l.bold ? 1 : 0); // ESC E negrita
@@ -294,7 +309,6 @@ function App() {
   const [salonVista, setSalonVista] = useState("salon");
   const [orden, setOrden] = useState(() => cargar("orden", null));
   const [cat, setCat] = useState("Pizzas");
-  const [ticket, setTicket] = useState(null);
   const [abmIns, setAbmIns] = useState(null);
   const [abmProd, setAbmProd] = useState(null);
   const [abmProv, setAbmProv] = useState(null);
@@ -422,14 +436,13 @@ function App() {
     if (descuentaStock) setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
     const itemsTicket = orden.lineas.map((l) => ({ nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
     const total = sumLin(orden.lineas);
-    setTicket({ tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket });
+    const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
     if (orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
-    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); }
+    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); setSalonVista("delivery"); setVista("mapa"); }
+    mandarComanda(comanda);
   };
-  const cerrarTicket = () => { const eraDelivery = ticket && ticket.tipo === "delivery"; setTicket(null); setToast({ tipo: "ok", texto: "Comanda enviada a cocina y stock actualizado." }); if (eraDelivery) { setOrden(null); setSalonVista("delivery"); setVista("mapa"); } };
   const cerrarMesa = (id) => {
-    markMesaDirty(id);
-    const datosActuales = (orden && orden.tipo === "mesa" && orden.mesaId === id) ? orden.datos : {};
+    markMesaDirty(id);    const datosActuales = (orden && orden.tipo === "mesa" && orden.mesaId === id) ? orden.datos : {};
     const mesasActualizadas = (datosActuales.cliente || datosActuales.cuit) ? { ...mesas, [id]: { ...mesas[id], datos: { ...(mesas[id]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...datosActuales } } } : mesas;
     if (datosActuales.cliente || datosActuales.cuit) setMesas(mesasActualizadas);
     postMesas(mesasActualizadas);
@@ -622,14 +635,19 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [showCobroModal]);
   React.useEffect(() => {
-    const onF4 = (e) => {
-      if (e.key !== "F4") return;
+    const onAtajoMesa = (e) => {
+      if (e.key !== "F4" && e.key !== "F2") return;
       if (showCobroModal) return;
-      if (orden && orden.tipo === "mesa" && orden.mesaId) { e.preventDefault(); limpiarMesa(orden.mesaId); }
+      if (usuario && usuario.rol === "visor") return;
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (!orden || orden.tipo !== "mesa" || !orden.mesaId) return;
+      e.preventDefault();
+      if (e.key === "F4") limpiarMesa(orden.mesaId);
+      else cerrarMesa(orden.mesaId);
     };
-    window.addEventListener("keydown", onF4);
-    return () => window.removeEventListener("keydown", onF4);
-  }, [showCobroModal, orden]);
+    window.addEventListener("keydown", onAtajoMesa);
+    return () => window.removeEventListener("keydown", onAtajoMesa);
+  }, [showCobroModal, orden, mesas, usuario]);
   React.useEffect(() => { fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => { if (typeof data.cajaIniciada === "boolean") setCajaIniciada(data.cajaIniciada); if (data.caja && data.cajaIniciada !== false) {
               setCaja(prev => {
                 const localMovs = prev?.movimientos || [];
@@ -767,7 +785,7 @@ function App() {
       setMesas((ms) => { const nm = { ...ms, [wp.mesa]: { ...ms[wp.mesa], enviado: [...ms[wp.mesa].enviado, ...items] } }; markMesaDirty(wp.mesa); postMesas(nm); return nm; });
       const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
       const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
-      setTicket({ tipo: "mesa", mesaId: wp.mesa, cliente: "Mesa " + wp.mesa, direccion: "", telefono: "", hora: hora(), total, items: totalItems });
+      mandarComanda({ tipo: "mesa", mesaId: wp.mesa, cliente: "Mesa " + wp.mesa, direccion: "", telefono: "", hora: hora(), total, items: totalItems });
       setSalonVista("salon"); setVista("mapa"); setTab("pedido");
       setToast({ tipo: "ok", texto: "Pedido de Mesa " + wp.mesa + " enviado a cocina." });
     } else {
@@ -783,7 +801,8 @@ function App() {
         const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
         const newDel = { id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems, estado: "cocina" };
         setDeliveries((d) => { const nds = [newDel, ...d]; postDeliveries(nds); return nds; });
-        setTicket({ tipo: "delivery", mesaId: null, cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems });
+        mandarComanda({ tipo: "delivery", mesaId: null, cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems });
+        setOrden(null);
         setSalonVista("delivery"); setVista("mapa"); setTab("pedido");
         setToast({ tipo: "ok", texto: "Pedido de " + nombre + " enviado a cocina." });
       } else {
@@ -875,9 +894,45 @@ function App() {
       if (it.nota) l.push({ t: "  > " + it.nota, izq: true });
     });
     l.push({ t: "", rayita: true });
-    l.push({ t: "SUBTOTAL " + pesos(t.total || 0), izq: true, bold: true });
     l.push({ t: "" });
     return l;
+  };
+  const mandarComanda = async (tk) => {
+    const ok = await imprimirTicket("comanda", lineasComanda(tk));
+    if (ok) setToast({ tipo: "ok", texto: "Comanda enviada a cocina." });
+    return ok;
+  };
+  const logoRaster = async () => {
+    const src = config.logo;
+    if (!src) return null;
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("logo")); i.crossOrigin = "anonymous"; i.src = src; });
+      const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+      if (!w0 || !h0) return null;
+      const MAXW = 576, MAXH = 220;
+      const esc = Math.min(MAXW / w0, MAXH / h0, 1);
+      const w = Math.max(1, Math.round(w0 * esc)), h = Math.max(1, Math.round(h0 * esc));
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d", { willReadFrequently: true });
+      cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h);
+      cx.drawImage(img, 0, 0, w, h);
+      const d = cx.getImageData(0, 0, w, h).data;
+      const fila = Math.ceil(w / 8);
+      const out = new Uint8Array(fila * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+          if (d[i + 3] > 40 && lum < 165) out[y * fila + (x >> 3)] |= (0x80 >> (x & 7));
+        }
+      }
+      let bin = ""; for (let i = 0; i < out.length; i++) bin += String.fromCharCode(out[i]);
+      return { logo: btoa(bin), ancho: w, alto: h };
+    } catch { return null; }
+  };
+  const conLogo = async (lineas) => {
+    const r = await logoRaster();
+    return r ? [{ logo: r.logo, ancho: r.ancho, alto: r.alto }, ...lineas] : lineas;
   };
   const lineasComprobante = (m) => {
     if (!m) return [];
@@ -1068,7 +1123,7 @@ function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, minHeight: 34 }}>{p.nombre}</div><div style={{ color: C.amber, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
               </div>
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
-                <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <button onClick={() => limpiarMesa(orden.mesaId)} className="ml-auto px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button>}</div>
+                <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <div className="ml-auto flex gap-1.5"><button id="atajo-cobrar" onClick={() => cerrarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.amber, color: "#241a0c", fontWeight: 700 }}>Cobrar <span style={{ fontSize: 10, opacity: .8 }}>(F2)</span></button><button onClick={() => limpiarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button></div>}</div>
                 {orden.tipo === "delivery" && (<div className="flex flex-col gap-2 mb-3">{esVisor ? (<div className="flex flex-col gap-1 rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 13, fontWeight: 600 }}>{orden.datos.cliente}</div><div style={{ fontSize: 12, color: C.muted }}>{orden.datos.direccion}{orden.datos.telefono ? " · " + orden.datos.telefono : ""}</div></div>) : (<>{(config.clientes || []).length > 0 && <select style={inputStyle} value="" onChange={(e) => { const c = (config.clientes || []).find(x => x.id === e.target.value); if (c) setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: c.nombre, direccion: c.direccion || "", telefono: c.telefono || "", cuit: c.cuit || "" } })); }}><option value="">Seleccionar cliente...</option>{(config.clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? " (" + c.cuit + ")" : ""}</option>)}</select>}<button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>+ Agregar cliente nuevo</button><input style={inputStyle} placeholder="Nombre del cliente" value={orden.datos.cliente} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="CUIT / DNI" value={orden.datos.cuit || ""} onChange={(e) => setD("cuit", e.target.value)} /><input style={inputStyle} placeholder="Dirección" value={orden.datos.direccion} onChange={(e) => setD("direccion", e.target.value)} /><input style={inputStyle} placeholder="Teléfono (opcional)" value={orden.datos.telefono} onChange={(e) => setD("telefono", e.target.value)} /></>)}</div>)}
                 {orden.tipo === "mesa" && !esVisor && (<div className="flex flex-col gap-2 mb-3">{(config.clientes || []).length > 0 && <select style={inputStyle} value="" onChange={(e) => { const c = (config.clientes || []).find(x => x.id === e.target.value); if (c) setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: c.nombre, direccion: c.direccion || "", telefono: c.telefono || "", cuit: c.cuit || "" } })); }}><option value="">Seleccionar cliente...</option>{(config.clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? " (" + c.cuit + ")" : ""}</option>)}</select>}<button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>+ Agregar cliente nuevo</button><input style={inputStyle} placeholder="Nombre del cliente (opcional)" value={orden.datos.cliente || ""} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="CUIT / DNI" value={orden.datos.cuit || ""} onChange={(e) => setD("cuit", e.target.value)} /></div>)}
                 {orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0 || (mesas[orden.mesaId].bebidas || []).length > 0) && (
@@ -1868,19 +1923,6 @@ function App() {
         );
       })()}
 
-      {/* Comanda */}
-      {ticket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
-          <div className="w-full max-w-xs rounded-lg p-5" style={{ background: "#fbf9f4", color: "#1a1715", fontFamily: "'Courier New', monospace" }}>
-            <div className="text-center" style={{ borderBottom: "1px dashed #999", paddingBottom: 10, marginBottom: 10 }}><div style={{ fontWeight: 700, fontSize: 18, letterSpacing: 2 }}>COMANDA</div><div style={{ fontSize: 12, textTransform: "uppercase", marginTop: 2 }}>{ticket.tipo === "mesa" ? "Mesa " + ticket.mesaId : "Delivery"}</div><div style={{ fontSize: 12 }}>{ticket.hora} hs</div></div>
-            {ticket.tipo === "delivery" && (<div style={{ fontSize: 13, borderBottom: "1px dashed #999", paddingBottom: 10, marginBottom: 10 }}><div><b>Cliente:</b> {ticket.cliente}</div><div><b>Dirección:</b> {ticket.direccion}</div>{ticket.telefono && <div><b>Tel:</b> {ticket.telefono}</div>}</div>)}
-            <div style={{ fontSize: 13 }}>{ticket.items.map((it, k) => (<div key={k} style={{ marginBottom: 6 }}><div className="flex justify-between"><span>{it.cant}x {it.nombre}</span><span>{pesos(it.precio * it.cant)}</span></div>{it.nota && <div style={{ fontSize: 12, fontStyle: "italic", paddingLeft: 16 }}>&gt; {it.nota}</div>}</div>))}</div>
-            <div className="flex justify-between" style={{ borderTop: "1px dashed #999", marginTop: 6, paddingTop: 8, fontWeight: 700 }}><span>SUBTOTAL</span><span>{pesos(ticket.total)}</span></div>
-            <button onClick={async () => { await imprimirTicket("comanda", lineasComanda(ticket)); cerrarTicket(); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md mt-4 font-bold" style={{ background: "#1a1715", color: "#fbf9f4" }}><Printer size={15} /> Imprimir y enviar</button>
-          </div>
-        </div>
-      )}
-
       {/* Cobro modal */}
       {showCobroModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
@@ -1912,7 +1954,7 @@ function App() {
                 )}
                 <div className="flex flex-col gap-2">
                   {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, "Efectivo", afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
-                  <button id="cobro-remito" onClick={() => { confirmarCobro(showCobroModal.id, "Efectivo", null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
+                  <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, "Efectivo", null); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, "Efectivo", null); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
               </div>
@@ -1921,7 +1963,7 @@ function App() {
                 <input autoFocus style={inputStyle} placeholder="N° comprobante" value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
                 <div className="flex flex-col gap-2">
                   {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
-                  <button id="cobro-remito" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo, null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
+                  <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, cobroMetodo, null); setCobroRef(""); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
               </div>
@@ -1929,7 +1971,7 @@ function App() {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
                   {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
-                  <button id="cobro-remito" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo, null); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
+                  <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, cobroMetodo, null); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
               </div>
@@ -2065,7 +2107,7 @@ function App() {
             <div className="flex flex-col gap-2 mt-3">
               {!showComprobanteModal.telefono && <input style={inputStyle} type="tel" inputMode="tel" placeholder="Enviar por WhatsApp (teléfono)" value={showComprobanteModal._telInput || ""} onChange={(e) => setShowComprobanteModal({ ...showComprobanteModal, _telInput: e.target.value })} />}
               <div className="flex gap-2">
-                <button onClick={() => imprimirTicket("facturacion", lineasComprobante(showComprobanteModal))} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                <button onClick={async () => { await imprimirTicket("facturacion", await conLogo(lineasComprobante(showComprobanteModal))); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
                   <Printer size={15} /> Imprimir
                 </button>
                 <button onClick={() => enviarComprobanteWA()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>

@@ -88,6 +88,21 @@ function construirESCPOS(lineas) {
   push(27, 64);                 // ESC @ init
   push(27, 97, 1);              // centrado
   for (const l of (lineas || [])) {
+    if (l.logo) {
+      try {
+        const raw = Buffer.from(String(l.logo), "base64");
+        const ancho = Number(l.ancho) || 576;
+        const fila = Math.ceil(ancho / 8);
+        const alto = Number(l.alto) || Math.floor(raw.length / fila);
+        if (raw.length > 0 && alto > 0) {
+          push(27, 97, 1);                                                   // centrado
+          push(29, 118, 48, 0, fila & 255, (fila >> 8) & 255, alto & 255, (alto >> 8) & 255); // GS v 0
+          for (let i = 0; i < raw.length; i++) b.push(raw[i]);
+          push(10);
+        }
+      } catch (e) { console.warn("[IMPRIMIR] Logo inválido:", e.message); }
+      continue;
+    }
     const t = l.t == null ? "" : String(l.t);
     if (l.izq) push(27, 97, 0); else if (l.der) push(27, 97, 2); else push(27, 97, 1);
     push(27, 69, l.bold ? 1 : 0);        // ESC E negrita
