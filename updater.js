@@ -7,84 +7,113 @@ const OWNER = "germangrillo-dev";
 const REPO = "restobar_martu";
 const BRANCH = "main";
 
-function apiRequest(url, token) {
+function httpGet(url, headers, redirects) {
+  redirects = redirects === undefined ? 5 : redirects;
   return new Promise((resolve, reject) => {
-    const options = {
-      headers: {
-        "User-Agent": "martu-updater",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+    https.get(url, { headers }, (res) => {
+      const loc = res.headers.location;
+      if (res.statusCode >= 300 && res.statusCode < 400 && loc && redirects > 0) {
+        res.resume();
+        const next = loc.indexOf("http") === 0 ? loc : new URL(loc, url).toString();
+        return resolve(httpGet(next, headers, redirects - 1));
       }
-    };
-    if (token) options.headers["Authorization"] = "Bearer " + token;
-    https.get(url, options, (res) => {
-      if (res.statusCode === 302 && res.headers.location) {
-        return https.get(res.headers.location, { headers: { "User-Agent": "martu-updater" } }, (r2) => collect(r2, resolve, reject));
-      }
-      collect(res, resolve, reject);
+      resolve(res);
     }).on("error", reject);
   });
 }
 
-function collect(res, resolve, reject) {
-  let data = "";
-  res.on("data", (chunk) => data += chunk);
-  res.on("end", () => {
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      try { resolve(JSON.parse(data)); } catch { resolve(data); }
-    } else {
-      reject(new Error("HTTP " + res.statusCode + ": " + data.slice(0, 500)));
-    }
+function readAll(res) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    res.on("data", (c) => (data += c));
+    res.on("end", () => resolve(data));
+    res.on("error", reject);
   });
 }
 
-function downloadFile(url, dest, token) {
+function download(url, dest, token, redirectCount) {
+  redirectCount = redirectCount === undefined ? 5 : redirectCount;
+  const headers = { "User-Agent": "martu-updater" };
+  if (token) headers["Authorization"] = "Bearer " + token;
   return new Promise((resolve, reject) => {
-    const options = {
-      headers: {
-        "User-Agent": "martu-updater",
-        "Accept": "application/vnd.github.raw+json"
+    https.get(url, { headers }, (res) => {
+      const loc = res.headers.location;
+      if (res.statusCode >= 300 && res.statusCode < 400 && loc && redirectCount > 0) {
+        res.resume();
+        const next = loc.indexOf("http") === 0 ? loc : new URL(loc, url).toString();
+        return resolve(download(next, dest, token, redirectCount - 1));
       }
-    };
-    if (token) options.headers["Authorization"] = "Bearer " + token;
-    https.get(url, options, (res) => {
-      if (res.statusCode === 302 && res.headers.location) {
-        return https.get(res.headers.location, { headers: { "User-Agent": "martu-updater" } }, (r2) => writeStream(r2, dest, resolve, reject));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        return reject(new Error("HTTP " + res.statusCode + " descargando " + url));
       }
-      writeStream(res, dest, resolve, reject);
+      const dir = path.dirname(dest);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on("finish", () => { file.close(); resolve(); });
+      file.on("error", reject);
     }).on("error", reject);
   });
 }
 
-function writeStream(res, dest, resolve, reject) {
-  if (res.statusCode < 200 || res.statusCode >= 300) {
-    return reject(new Error("HTTP " + res.statusCode + " downloading " + dest));
+function borrarDir(dir) {
+  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+}
+
+function listarArchivos(base, prefix, out) {
+  prefix = prefix || "";
+  out = out || [];
+  for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+    const rel = prefix ? prefix + "/" + entry.name : entry.name;
+    if (entry.isDirectory()) listarArchivos(path.join(base, entry.name), rel, out);
+    else out.push(rel);
   }
-  const dir = path.dirname(dest);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const file = fs.createWriteStream(dest);
-  res.pipe(file);
-  file.on("finish", () => { file.close(); resolve(); });
-  file.on("error", reject);
+  return out;
+}
+
+function obtenerSha() {
+  const url = `https://github.com/${OWNER}/${REPO}/commits/${BRANCH}.atom`;
+  return httpGet(url, { "User-Agent": "martu-updater" })
+    .then((res) => readAll(res))
+    .then((xml) => {
+      const m = xml.match(/Grit::Commit\/([0-9a-f]{40})/i) || xml.match(/<id>tag:github\.com[^<]*\/([0-9a-f]{40})<\/id>/i);
+      return m ? m[1] : null;
+    })
+    .catch((e) => { console.error("[UPDATER] No se pudo leer el SHA:", e.message); return null; });
 }
 
 async function updateFromGitHub(token) {
   const installDir = process.cwd();
   const backupDir = path.join(installDir, "backups-instalacion", "pre-update-" + Date.now());
+  const staging = path.join(installDir, "backups-instalacion", "actualizacion_tmp");
+  const zipFile = path.join(installDir, "backups-instalacion", "actualizacion.zip");
 
-  console.log("[UPDATER] Obteniendo listado de archivos del repo...");
-  const treeUrl = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
-  const treeData = await apiRequest(treeUrl, token);
-  const files = (treeData.tree || []).filter(item => item.type === "blob");
+  const sha = await obtenerSha();
+  if (sha) console.log("[UPDATER] Commit a aplicar:", sha);
+
+  // Descarga en un solo request: el zip de codeload NO tiene límite de peticiones
+  console.log("[UPDATER] Descargando el repositorio (zip)...");
+  borrarDir(staging);
+  await download(`https://github.com/${OWNER}/${REPO}/archive/refs/heads/${BRANCH}.zip`, zipFile, token);
+  console.log("[UPDATER] Zip descargado.");
+
+  execSync(
+    `powershell -NoProfile -NonInteractive -Command "Expand-Archive -LiteralPath '${zipFile}' -DestinationPath '${staging}' -Force"`,
+    { stdio: "ignore", timeout: 120000 }
+  );
+
+  const root = fs.readdirSync(staging)[0];
+  const origen = path.join(staging, root);
+  const files = listarArchivos(origen);
 
   const exclude = ["data/", "node_modules/", ".git/", "backups-instalacion/", "caja-state.json", "caja-state.json.bak"];
+  const aCopiar = files.filter((rel) => !exclude.some((p) => rel.startsWith(p)));
 
-  console.log("[UPDATER] Archivos a sincronizar:", files.length);
+  console.log("[UPDATER] Archivos a sincronizar:", aCopiar.length);
 
-  for (const file of files) {
-    const relPath = file.path.replace(/\//g, path.sep);
-    if (exclude.some(p => relPath.startsWith(p))) continue;
-
+  for (const rel of aCopiar) {
+    const relPath = rel.replace(/\//g, path.sep);
     const localPath = path.join(installDir, relPath);
     const backupPath = path.join(backupDir, relPath);
 
@@ -92,35 +121,32 @@ async function updateFromGitHub(token) {
       if (!fs.existsSync(path.dirname(backupPath))) fs.mkdirSync(path.dirname(backupPath), { recursive: true });
       fs.copyFileSync(localPath, backupPath);
     }
-
-    const contentUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${file.path}?ref=${BRANCH}`;
-    await downloadFile(contentUrl, localPath, token);
+    if (!fs.existsSync(path.dirname(localPath))) fs.mkdirSync(path.dirname(localPath), { recursive: true });
+    fs.copyFileSync(path.join(origen, relPath), localPath);
   }
 
-  console.log("[UPDATER] Archivos descargados. Backup en:", backupDir);
+  borrarDir(staging);
+  try { if (fs.existsSync(zipFile)) fs.unlinkSync(zipFile); } catch (e) { /* ignore */ }
 
-  // Guardar versión aplicada (SHA del commit) para mostrarla en el sistema
+  console.log("[UPDATER] Archivos aplicados. Backup en:", backupDir);
+
   try {
-    const commitUrl = `https://api.github.com/repos/${OWNER}/${REPO}/commits/${BRANCH}`;
-    const commitData = await apiRequest(commitUrl, token);
-    const sha = commitData && commitData.sha ? commitData.sha : "desconocido";
-    fs.writeFileSync(path.join(installDir, "version.json"), JSON.stringify({ sha, fecha: new Date().toISOString() }, null, 2));
-    console.log("[UPDATER] Versión aplicada:", sha);
+    fs.writeFileSync(path.join(installDir, "version.json"), JSON.stringify({ sha: sha || "desconocido", fecha: new Date().toISOString() }, null, 2));
+    console.log("[UPDATER] Versión aplicada:", sha || "desconocido");
   } catch (e) {
     console.error("[UPDATER] No se pudo registrar la versión:", e.message);
   }
 
-  // Reinstall dependencies if package.json changed
-  if (files.some(f => f.path === "package.json") && fs.existsSync(path.join(installDir, "package.json"))) {
+  if (aCopiar.some((rel) => rel === "package.json") && fs.existsSync(path.join(installDir, "package.json"))) {
     console.log("[UPDATER] package.json actualizado. Instalando dependencias...");
     try {
-      execSync("npm install", { cwd: installDir, stdio: "inherit", timeout: 120000 });
+      execSync("npm install", { cwd: installDir, stdio: "ignore", timeout: 120000 });
     } catch (e) {
       console.error("[UPDATER] Error en npm install:", e.message);
     }
   }
 
-  return { ok: true, backupDir };
+  return { ok: true, backupDir, sha: sha || "desconocido" };
 }
 
 function restartServer() {
