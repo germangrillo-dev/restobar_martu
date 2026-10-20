@@ -914,16 +914,23 @@ function App() {
       const w = Math.max(1, Math.round(w0 * esc)), h = Math.max(1, Math.round(h0 * esc));
       const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
       const cx = cv.getContext("2d", { willReadFrequently: true });
-      cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h);
+      cx.clearRect(0, 0, w, h);
       cx.drawImage(img, 0, 0, w, h);
       const d = cx.getImageData(0, 0, w, h).data;
       const fila = Math.ceil(w / 8);
       const out = new Uint8Array(fila * h);
+      let sumaLum = 0, nVis = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 40) { sumaLum += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114; nVis++; }
+      }
+      // Logo claro (blanco) sobre fondo transparente: si no se invierte, sale invisible en papel blanco
+      const claro = nVis > 0 && (1 - nVis / (w * h)) > 0.15 && (sumaLum / nVis) > 140;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const i = (y * w + x) * 4;
+          if (d[i + 3] <= 40) continue;
           const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-          if (d[i + 3] > 40 && lum < 165) out[y * fila + (x >> 3)] |= (0x80 >> (x & 7));
+          if (claro ? lum >= 140 : lum < 165) out[y * fila + (x >> 3)] |= (0x80 >> (x & 7));
         }
       }
       let bin = ""; for (let i = 0; i < out.length; i++) bin += String.fromCharCode(out[i]);
