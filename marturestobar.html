@@ -108,6 +108,74 @@ const lineaVacia = () => ({ lid: uid(), codigo: "", cantidad: "", unitario: "", 
 const provVacio = () => ({ nombre: "", cuit: "", condicion: CONDICIONES[0], rubro: "", direccion: "", localidad: "", telefono: "", email: "" });
 let WA_NUMERO = (() => { try { return localStorage.getItem("elmo_wa_numero") || "5491155551234"; } catch { return "5491155551234"; } })();
 
+// --- Impresora termica via WebUSB (ESC/POS) ---
+const CP437 = { "á":160,"é":130,"í":161,"ó":162,"ú":163,"ñ":165,"Ñ":165,"ü":129,"Á":157,"É":147,"Í":161,"Ó":162,"Ú":163,"°":248,"º":167,"¿":191,"¡":173,"“":34,"”":34,"‘":39,"’":39,"—":45,"–":45,"…":26,"€":213,"·":250 };
+const bytesTexto = (s) => { const out = []; for (const ch of String(s == null ? "" : s)) { if (CP437[ch] !== undefined) out.push(CP437[ch]); else { const c = ch.charCodeAt(0); out.push(c < 256 ? c : 63); } } return out; };
+const ESCPOS = {
+  soportado: () => typeof navigator !== "undefined" && !!navigator.usb,
+  async elegir() {
+    if (!this.soportado()) throw new Error("Este navegador no soporta WebUSB. Usá Brave o Chrome y entrá por http://localhost:3456");
+    const d = await navigator.usb.requestDevice({ filters: [] });
+    return { vendorId: d.vendorId, productId: d.productId, nombre: d.productName || "Impresora" };
+  },
+  async _buscar(ref) {
+    const devices = await navigator.usb.getDevices();
+    return devices.find(d => d.vendorId === ref.vendorId && d.productId === ref.productId) || null;
+  },
+  async _abrir(ref) {
+    let d = await this._buscar(ref);
+    if (!d) d = await navigator.usb.requestDevice({ filters: [{ vendorId: ref.vendorId, productId: ref.productId }] });
+    if (d.opened) await d.close();
+    await d.open();
+    if (!d.configuration) await d.selectConfiguration(1);
+    const iface = d.configuration.interfaces[0].interfaceNumber;
+    await d.claimInterface(iface);
+    return d;
+  },
+  async imprimir(ref, lineas) {
+    if (!ref || !ref.vendorId) throw new Error("No hay impresora configurada para ese destino.");
+    const d = await this._abrir(ref);
+    const b = [];
+    const push = (...x) => b.push(...x);
+    const nl = () => push(10);
+    push(27, 64); // ESC @ init
+    push(27, 97, 1); // centrado por defecto
+    for (const l of lineas) {
+      const t = l.t == null ? "" : String(l.t);
+      if (l.izq) push(27, 97, 0); else if (l.der) push(27, 97, 2); else push(27, 97, 1);
+      push(27, 69, l.bold ? 1 : 0); // ESC E negrita
+      const sz = l.grande ? 17 : (l.chico ? 0 : 0); // GS ! n
+      push(29, 33, l.grande ? 17 : 0);
+      if (l.rayita) push(29, 68, 2); // GS D n -> punteado
+      push(...bytesTexto(t));
+      if (l.rayita) push(29, 68, 0);
+      push(27, 69, 0);
+      push(29, 33, 0);
+      nl();
+      if (l.salto) for (let i = 0; i < l.salto; i++) nl();
+    }
+    push(10, 10, 10);
+    push(29, 86, 66, 0); // GS V B 0 -> corte total
+    const alt = d.configuration.interfaces[0].alternate;
+    const ep = (alt.endpoints || []).find(e => e.direction === "out");
+    if (!ep) { await d.close(); throw new Error("La impresora no expone un canal de salida."); }
+    await d.transferOut(ep.endpointNumber, new Uint8Array(b));
+    await d.close();
+  }
+};
+// Envia a la impresora del destino: por red (IP:9100) o por USB (WebUSB)
+const imprimirEn = async (ref, lineas, serverUrl) => {
+  if (!ref || (!ref.ip && !ref.vendorId)) throw new Error("No hay impresora configurada para ese destino. Andá a Configuración → Impresión.");
+  if (ref.ip) {
+    const r = await fetch(serverUrl + "/api/imprimir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip: ref.ip, puerto: ref.puerto, lineas }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.texto || "Error al imprimir");
+    return d.texto;
+  }
+  await ESCPOS.imprimir(ref, lineas);
+  return "Enviado a " + (ref.nombre || "impresora");
+};
+
 const generarMenuTexto = (prods, cats) => {
   let txt = "🍕 *EL MOSTRADOR - MENÚ*\n\n";
   cats.forEach(cat => {
@@ -198,7 +266,7 @@ function App() {
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
-    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, categorias: cfg.categorias, clientes: cfg.clientes } : undefined;
+    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes } : undefined;
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
     const payload = { caja: cajaVal, historialCierres, mesas: mesasLimpias, orden, config: configLiviano, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos };
     if (cajaIniciadaRef.current) { payload.cajaIniciada = true; payload.deliveries = deliveriesVal || []; }
@@ -207,7 +275,7 @@ function App() {
   const guardar = (opts) => {
     postAlServer(cajaRef.current, mesasRef.current, deliveriesRef.current);
   };
-  const [usuario, setUsuario] = useState(() => cargar("usuario", null));
+  const [usuario, setUsuario] = useState(() => null);
   const [tab, setTab] = useState("pedido");
   const [insumos, setInsumos] = useState(() => []);
   const [stock, setStock] = useState(() => ({}));
@@ -269,7 +337,7 @@ function App() {
   const [configModal, setConfigModal] = useState(null);
   const [facturaXNum, setFacturaXNum] = useState(() => cargar("facturaXNum", 1));
   const [showConfig, setShowConfig] = useState(false);
-  const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false, githubToken: "", clientes: [], qrUrl: "http://192.168.1.230:3456", visorPin: "2468" }));
+  const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false, githubToken: "", clientes: [], qrUrl: "http://192.168.1.230:3456", visorPin: "2468", impresoras: {} }));
   const cajaIniciadaRef = React.useRef(cajaIniciada);
   cajaIniciadaRef.current = cajaIniciada;
   React.useEffect(() => {
@@ -760,6 +828,86 @@ function App() {
   const esVisor = usuario.rol === "visor";
   const esGerente = usuario.rol === "gerente";
   const puedeCarta = esAdmin || esVisor || esGerente;
+
+  // --- Impresoras (Configuración → Impresión) ---
+  const impDe = (k) => (config.impresoras || {})[k] || {};
+  const setImp = (k, patch) => setConfig((c) => ({ ...c, impresoras: { ...(c.impresoras || {}), [k]: { ...((c.impresoras || {})[k] || {}), ...patch } } }));
+  const guardarImpresoras = () => {
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { impresoras: config.impresoras } }) })
+      .then(() => setToast({ tipo: "ok", texto: "Impresoras guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
+  };
+  const elegirUSB = async (k) => {
+    try { const ref = await ESCPOS.elegir(); setImp(k, { ...ref, ip: "", puerto: 9100 }); setToast({ tipo: "ok", texto: "Asignada: " + ref.nombre }); }
+    catch (e) { setToast({ tipo: "error", texto: e.message }); }
+  };
+  const probarImpresora = async (k) => {
+    try {
+      const msg = await imprimirEn(impDe(k), [
+        { t: "PRUEBA DE IMPRESION", bold: true, grande: true },
+        { t: k === "comanda" ? "Destino: COCINA" : "Destino: BARRA" },
+        { t: new Date().toLocaleString("es-AR"), salto: 1 }
+      ], serverUrl);
+      setToast({ tipo: "ok", texto: msg });
+    } catch (e) { setToast({ tipo: "error", texto: e.message }); }
+  };
+  const imprimirTicket = async (destino, lineas) => {
+    try { const msg = await imprimirEn(impDe(destino), lineas, serverUrl); setToast({ tipo: "ok", texto: msg }); return true; }
+    catch (e) { setToast({ tipo: "error", texto: e.message }); return false; }
+  };
+  const lineasComanda = (t) => {
+    if (!t) return [];
+    const l = [
+      { t: "COMANDA", bold: true, grande: true },
+      { t: t.tipo === "mesa" ? "MESA " + t.mesaId : "DELIVERY", bold: true },
+      { t: (t.hora || hora()) + " hs" }
+    ];
+    if (t.tipo === "delivery") {
+      l.push({ t: "", rayita: true });
+      l.push({ t: "Cliente: " + (t.cliente || ""), izq: true, bold: true });
+      if (t.direccion) l.push({ t: "Dir: " + t.direccion, izq: true });
+      if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true });
+    }
+    l.push({ t: "", rayita: true });
+    (t.items || []).forEach((it) => {
+      l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true });
+      if (it.nota) l.push({ t: "  > " + it.nota, izq: true });
+    });
+    l.push({ t: "", rayita: true });
+    l.push({ t: "SUBTOTAL " + pesos(t.total || 0), izq: true, bold: true });
+    l.push({ t: "" });
+    return l;
+  };
+  const lineasComprobante = (m) => {
+    if (!m) return [];
+    const cfg = config;
+    const l = [
+      { t: cfg.nombreLocal || "Martu Resto Bar", bold: true, grande: true },
+      { t: "CUIT: 27-21341447-5" },
+      { t: cfg.direccion || "" },
+      { t: "", rayita: true }
+    ];
+    if (m.afip) {
+      l.push({ t: "FACTURA B", bold: true });
+      l.push({ t: "PV: 0002 · Nº " + String(m.afip.cbteNro || facturaXNum - 1).padStart(8, "0") });
+      l.push({ t: "", rayita: true });
+    }
+    if (m.cliente) l.push({ t: "Cliente: " + m.cliente, izq: true, bold: true });
+    if (m.clienteData && m.clienteData.cuit) l.push({ t: "CUIT: " + m.clienteData.cuit, izq: true });
+    if (m.cliente) l.push({ t: "", rayita: true });
+    (m.items || []).forEach((it) => {
+      l.push({ t: it.cant + "x " + it.nombre, izq: true });
+      l.push({ t: pesos((it.precio || 0) * (it.cant || 1)), der: true });
+    });
+    l.push({ t: "", rayita: true });
+    l.push({ t: "TOTAL", izq: true, bold: true, grande: true });
+    l.push({ t: pesos(m.total || 0), der: true, bold: true, grande: true });
+    if (m.metodo) { l.push({ t: "" }); l.push({ t: "Pago: " + m.metodo, izq: true }); }
+    l.push({ t: "" });
+    l.push({ t: "Gracias por su compra", grande: false });
+    l.push({ t: new Date().toLocaleString("es-AR") });
+    l.push({ t: "" });
+    return l;
+  };
   const tabsAll = [
     { id: "pedido", label: "Vender", icon: ClipboardList, admin: false },
     { id: "estado", label: "Estado", icon: LayoutGrid, admin: false },
@@ -1248,38 +1396,34 @@ function App() {
                     <button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <div><label style={lbl}>Destino de impresión — Comandas (cocina)</label>
-                      <select value={config.destinoComanda} onChange={(e) => setConfig((c) => ({ ...c, destinoComanda: e.target.value }))} style={inputStyle}>
-                        <option value="default">Impresora predeterminada</option>
-                        <option value="cocina1">Cocina 1</option>
-                        <option value="cocina2">Cocina 2</option>
-                        <option value="bar">Bar / Bebidas</option>
-                        <option value="salon">Salón</option>
-                        <option value="ninguna">No imprimir</option>
-                      </select>
-                    </div>
-                    <div><label style={lbl}>Destino de impresión — Facturación</label>
-                      <select value={config.destinoFacturacion} onChange={(e) => setConfig((c) => ({ ...c, destinoFacturacion: e.target.value }))} style={inputStyle}>
-                        <option value="default">Impresora predeterminada</option>
-                        <option value="caja1">Caja 1</option>
-                        <option value="caja2">Caja 2</option>
-                        <option value="facturacion">Facturación</option>
-                        <option value="ninguna">No imprimir</option>
-                      </select>
-                    </div>
-                    <div><label style={lbl}>Nombre del destino personalizado</label>
-                      <div className="flex gap-2">
-                        <input value={(config.nombresDestinos || {}).personal || ""} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personal: e.target.value } }))} placeholder="Ej: Cocina 3, Terraza..." style={{ ...inputStyle, flex: 1 }} />
-                        <select value={(config.nombresDestinos || {}).personalTipo || "cocina"} onChange={(e) => setConfig((c) => ({ ...c, nombresDestinos: { ...(c.nombresDestinos || {}), personalTipo: e.target.value } }))} style={{ ...inputStyle, width: 120 }}>
-                          <option value="cocina">Cocina</option>
-                          <option value="facturacion">Facturación</option>
-                          <option value="bar">Bar</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                    {[{ k: "comanda", titulo: "Comandas (cocina)", desc: "Imprime los pedidos enviados a cocina" },
+                      { k: "facturacion", titulo: "Facturación (barra)", desc: "Imprime el ticket al cobrar" }].map((dest) => {
+                      const ref = impDe(dest.k);
+                      const conectada = !!(ref.ip || ref.vendorId);
+                      return (
+                        <div key={dest.k} className="rounded-xl p-4" style={{ background: C.base, border: "1px solid " + C.border }}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Printer size={16} style={{ color: C.amber }} />
+                            <span style={{ fontWeight: 700, fontSize: 14 }}>{dest.titulo}</span>
+                            <span className="ml-auto" style={{ fontSize: 11, fontWeight: 700, color: conectada ? C.green : C.red }}>{conectada ? "● configurada" : "○ sin configurar"}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>{dest.desc}</div>
+                          <div className="flex gap-2 items-center">
+                            <input value={ref.ip || ""} onChange={(e) => setImp(dest.k, { ip: e.target.value.trim() })} placeholder="IP de la impresora (ej: 192.168.1.50)" style={{ ...inputStyle, flex: 1 }} />
+                            <input value={ref.puerto || 9100} onChange={(e) => setImp(dest.k, { puerto: e.target.value.trim() })} style={{ ...inputStyle, width: 70 }} />
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <button onClick={() => probarImpresora(dest.k)} className="flex-1 py-2 rounded-lg text-xs font-semibold" style={{ background: C.raised, border: "1px solid " + C.border, color: C.amber }}><Printer size={13} style={{ marginRight: 4 }} />Probar impresión</button>
+                            <button onClick={() => elegirUSB(dest.k)} className="flex-1 py-2 rounded-lg text-xs font-semibold" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>Elegir por USB</button>
+                          </div>
+                          {ref.nombre && <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>Actual: {ref.ip ? "red " + ref.ip + ":" + (ref.puerto || 9100) : "USB " + ref.nombre}</div>}
+                        </div>
+                      );
+                    })}
+                    <button onClick={guardarImpresoras} className="w-full py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Guardar impresoras</button>
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.raised, border: "1px solid " + C.border }}>
                       <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
-                      <span style={{ fontSize: 12, color: C.muted }}>Los destinos se usan para identificar la impresora en el navegador. Configuralas desde la impresora del sistema.</span>
+                      <span style={{ fontSize: 12, color: C.muted }}>Las impresoras por red usan el puerto 9100 (impresión raw). Asignales IP fija en el router para que no cambien.</span>
                     </div>
                   </div>
                 </div>
@@ -1730,7 +1874,7 @@ function App() {
             {ticket.tipo === "delivery" && (<div style={{ fontSize: 13, borderBottom: "1px dashed #999", paddingBottom: 10, marginBottom: 10 }}><div><b>Cliente:</b> {ticket.cliente}</div><div><b>Dirección:</b> {ticket.direccion}</div>{ticket.telefono && <div><b>Tel:</b> {ticket.telefono}</div>}</div>)}
             <div style={{ fontSize: 13 }}>{ticket.items.map((it, k) => (<div key={k} style={{ marginBottom: 6 }}><div className="flex justify-between"><span>{it.cant}x {it.nombre}</span><span>{pesos(it.precio * it.cant)}</span></div>{it.nota && <div style={{ fontSize: 12, fontStyle: "italic", paddingLeft: 16 }}>&gt; {it.nota}</div>}</div>))}</div>
             <div className="flex justify-between" style={{ borderTop: "1px dashed #999", marginTop: 6, paddingTop: 8, fontWeight: 700 }}><span>SUBTOTAL</span><span>{pesos(ticket.total)}</span></div>
-            <button onClick={cerrarTicket} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md mt-4 font-bold" style={{ background: "#1a1715", color: "#fbf9f4" }}><Printer size={15} /> Imprimir y enviar</button>
+            <button onClick={async () => { await imprimirTicket("comanda", lineasComanda(ticket)); cerrarTicket(); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md mt-4 font-bold" style={{ background: "#1a1715", color: "#fbf9f4" }}><Printer size={15} /> Imprimir y enviar</button>
           </div>
         </div>
       )}
@@ -1919,7 +2063,7 @@ function App() {
             <div className="flex flex-col gap-2 mt-3">
               {!showComprobanteModal.telefono && <input style={inputStyle} type="tel" inputMode="tel" placeholder="Enviar por WhatsApp (teléfono)" value={showComprobanteModal._telInput || ""} onChange={(e) => setShowComprobanteModal({ ...showComprobanteModal, _telInput: e.target.value })} />}
               <div className="flex gap-2">
-                <button onClick={() => { const el = document.getElementById("ticket-content"); if (!el) return; const w = window.open("", "_blank", "width=360,height=600"); w.document.write("<html><head><title>Comprobante</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:12px;color:#000;line-height:1.6;background:#fff}.center{text-align:center}.bold{font-weight:700}.line{border-top:1px dashed #000;margin:8px 0}.footer{margin-top:10px;font-size:10px;color:#999;text-align:center}</style></head><body>" + el.innerHTML + "</body></html>"); w.document.close(); w.focus(); setTimeout(() => { w.print(); w.close(); }, 400); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                <button onClick={() => imprimirTicket("facturacion", lineasComprobante(showComprobanteModal))} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
                   <Printer size={15} /> Imprimir
                 </button>
                 <button onClick={() => enviarComprobanteWA()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>
@@ -1927,6 +2071,7 @@ function App() {
                 </button>
                 <button onClick={() => setShowComprobanteModal(null)} className="flex-1 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Cerrar</button>
               </div>
+              <button onClick={() => { const el = document.getElementById("ticket-content"); if (!el) return; const w = window.open("", "_blank", "width=360,height=600"); w.document.write("<html><head><title>Comprobante</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:12px;color:#000;line-height:1.6;background:#fff}.center{text-align:center}.bold{font-weight:700}.line{border-top:1px dashed #000;margin:8px 0}.footer{margin-top:10px;font-size:10px;color:#999;text-align:center}</style></head><body>" + el.innerHTML + "</body></html>"); w.document.close(); w.focus(); setTimeout(() => { w.print(); w.close(); }, 400); }} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, textDecoration: "underline", cursor: "pointer", padding: 0 }}>Imprimir por el navegador (impresora por defecto)</button>
             </div>
           </div>
         </div>

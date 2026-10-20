@@ -1,4 +1,5 @@
 const express = require("express");
+const net = require("net");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const path = require("path");
@@ -70,6 +71,56 @@ app.post("/api/public-url", (req, res) => {
   db.saveConfig({ publicUrl: PUBLIC_URL });
   res.json({ ok: true, url: PUBLIC_URL });
 });
+
+// --- Impresion termica por red (ESC/POS sobre TCP 9100) ---
+const CP437 = { "á":160,"é":130,"í":161,"ó":162,"ú":163,"ñ":165,"Ñ":165,"ü":129,"Á":157,"É":147,"Í":161,"Ó":162,"Ú":163,"°":248,"º":167,"¿":191,"¡":173,"“":34,"”":34,"‘":39,"’":39,"—":45,"–":45,"…":26,"€":213,"·":250 };
+function bytesTexto(s) {
+  const out = [];
+  for (const ch of String(s == null ? "" : s)) {
+    if (CP437[ch] !== undefined) out.push(CP437[ch]);
+    else { const c = ch.charCodeAt(0); out.push(c < 256 ? c : 63); }
+  }
+  return out;
+}
+function construirESCPOS(lineas) {
+  const b = [];
+  const push = (...x) => b.push(...x);
+  push(27, 64);                 // ESC @ init
+  push(27, 97, 1);              // centrado
+  for (const l of (lineas || [])) {
+    const t = l.t == null ? "" : String(l.t);
+    if (l.izq) push(27, 97, 0); else if (l.der) push(27, 97, 2); else push(27, 97, 1);
+    push(27, 69, l.bold ? 1 : 0);        // ESC E negrita
+    push(29, 33, l.grande ? 17 : 0);     // GS ! tamano
+    if (l.rayita) push(29, 68, 2);       // GS D punteado
+    push(...bytesTexto(t));
+    if (l.rayita) push(29, 68, 0);
+    push(27, 69, 0);
+    push(29, 33, 0);
+    push(10);
+    for (let i = 0; i < (l.salto || 0); i++) push(10);
+  }
+  push(10, 10, 10);
+  push(29, 86, 66, 0);          // GS V B 0 -> corte total
+  return Buffer.from(b);
+}
+app.post("/api/imprimir", (req, res) => {
+  const { ip, puerto, lineas } = req.body || {};
+  if (!ip) return res.json({ ok: false, texto: "Falta la IP de la impresora." });
+  const p = Number(puerto) || 9100;
+  const data = construirESCPOS(lineas);
+  const sock = new net.Socket();
+  let respondido = false;
+  const fin = (ok, texto) => { if (respondido) return; respondido = true; try { sock.destroy(); } catch {} res.json({ ok, texto }); };
+  sock.setTimeout(5000);
+  sock.on("timeout", () => fin(false, "Sin respuesta de " + ip + ":" + p));
+  sock.on("error", (e) => fin(false, "No se pudo imprimir en " + ip + ":" + p + " (" + e.message + ")"));
+  sock.connect(p, ip, () => {
+    sock.write(data);
+    setTimeout(() => fin(true, "Enviado a " + ip), 400);
+  });
+});
+
 
 const MENU_CACHE = {};
 function getConfig() { return db.getConfig(); }
