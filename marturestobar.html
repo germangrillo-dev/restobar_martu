@@ -104,6 +104,8 @@ const dinero = (n) => "$" + (n || 0).toLocaleString("es-AR", { minimumFractionDi
 const numExacto = (n) => { const v = Number(n); if (!isFinite(v)) return "0"; return String(Math.round(v * 10000) / 10000); };
 const numDec = (s) => { if (s === null || s === undefined) return NaN; let t = String(s).trim().replace(/[\s\u00a0]/g, "").replace(/%/g, ""); if (!t) return NaN; if (t.indexOf(",") >= 0) t = t.replace(/\./g, "").replace(",", "."); const v = parseFloat(t); return isNaN(v) ? NaN : v; };
 const esPorcentaje = (s) => /%/.test(String(s == null ? "" : s));
+const UNI_ESC = { "g|kg": 0.001, "kg|g": 1000, "ml|L": 0.001, "L|ml": 1000 };
+const escUnidad = (a, b) => (a === b ? 1 : (UNI_ESC[a + "|" + b] != null ? UNI_ESC[a + "|" + b] : 1));
 const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -568,7 +570,7 @@ function App() {
 
   // ABM Insumos
   const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "", pesoBulto: "", factorCompra: "", costo: "" });
-  const editarInsumo = (i) => setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", pesoBulto: i.pesoBulto || "", factorCompra: i.factorCompra || "", costo: costos[i.id] != null ? costos[i.id] : "" });
+  const editarInsumo = (i) => setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], stockOriginal: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", pesoBulto: i.pesoBulto || "", factorCompra: i.factorCompra || "", costo: costos[i.id] != null ? costos[i.id] : "", costoOriginal: costos[i.id] != null ? costos[i.id] : "" });
   const guardarInsumo = () => {
     if (!abmIns.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del insumo." }); return; }
     const sa = numDec(abmIns.stockActual) || 0, mn = numDec(abmIns.min) || 0;
@@ -576,9 +578,27 @@ function App() {
     const pb = numDec(abmIns.pesoBulto) || 1;
     const fc = numDec(abmIns.factorCompra) || 1;
     const costoV = abmIns.costo === "" || abmIns.costo == null ? NaN : numDec(abmIns.costo);
-    if (abmIns.id) { setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc } : i)); setStock((s) => ({ ...s, [abmIns.id]: sa })); if (!isNaN(costoV)) setCostos((c) => ({ ...c, [abmIns.id]: costoV })); }
+    let saF = sa;
+    let costoF = isNaN(costoV) ? (costos[abmIns.id] || 0) : costoV;
+    let aviso = "Insumo guardado.";
+    if (abmIns.id) {
+      const prev = insumos.find((x) => x.id === abmIns.id);
+      if (prev) {
+        const fPrev = (prev.pesoBulto || 1) * (prev.factorCompra || 1);
+        const fNue = pb * fc;
+        const r = (fPrev > 0 ? fNue / fPrev : 1) * escUnidad(prev.unidad, abmIns.unidad);
+        if (isFinite(r) && r > 0 && Math.abs(r - 1) > 1e-9) {
+          if (Number(abmIns.stockActual) === Number(abmIns.stockOriginal)) saF = +(sa * r).toFixed(4);
+          if (abmIns.costo === "" || Number(abmIns.costo) === Number(abmIns.costoOriginal)) costoF = +(((costos[abmIns.id] || 0) / r)).toFixed(4);
+          aviso = "Insumo guardado. Stock y costo ajustados a la nueva conversión (1 " + uc + " = " + numExacto(fNue) + " " + abmIns.unidad + ").";
+        }
+      }
+      setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc } : i));
+      setStock((s) => ({ ...s, [abmIns.id]: saF }));
+      setCostos((c) => ({ ...c, [abmIns.id]: costoF }));
+    }
     else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: sa, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: sa })); setCostos((c) => ({ ...c, [id]: isNaN(costoV) ? 0 : costoV })); }
-    setAbmIns(null); setToast({ tipo: "ok", texto: "Insumo guardado." });
+    setAbmIns(null); setToast({ tipo: "ok", texto: aviso });
   };
   const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); setStock((s) => { const n = { ...s }; delete n[id]; return n; }); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
 
