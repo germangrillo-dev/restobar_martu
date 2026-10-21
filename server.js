@@ -646,9 +646,25 @@ app.post("/api/pedidos/mesa", (req, res) => {
 app.get("/qr", (req, res) => {
   try {
     const qr = fs.readFileSync("qr.txt", "utf-8");
-    res.send(`<html><body style="background:#1a1715;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;font-family:sans-serif"><h2 style="color:#e8a23d">Escaneá con WhatsApp</h2><p style="color:#a89a8c;margin-top:-8px">Abrí WhatsApp > 3 puntitos > WhatsApp Web</p><div style="background:#fff;padding:20px;border-radius:16px;margin-top:10px"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" alt="QR WhatsApp"></div><p style="color:#6fa84a;font-size:13px;margin-top:16px">✅ Servidor funcionando en puerto 3456</p></body></html>`);
+    res.send(`<html><body style="background:#1a1715;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;font-family:sans-serif"><h2 style="color:#e8a23d">Escaneá con WhatsApp</h2><p style="color:#a89a8c;margin-top:-8px">Abrí WhatsApp > 3 puntitos > WhatsApp Web</p><div style="background:#fff;padding:20px;border-radius:16px;margin-top:10px"><img src="/api/qr?size=300&data=${encodeURIComponent(qr)}" alt="QR WhatsApp"></div><p style="color:#6fa84a;font-size:13px;margin-top:16px">✅ Servidor funcionando en puerto 3456</p></body></html>`);
   } catch {
     res.send(`<html><body style="background:#1a1715;color:#f5efe6;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>⚠️ QR no disponible aún. Esperá a que se genere...</p></body></html>`);
+  }
+});
+
+// --- QR local (sin depender de internet) ---
+app.get("/api/qr", async (req, res) => {
+  try {
+    const QRCode = require("qrcode");
+    const data = String(req.query.data || "");
+    const size = Math.min(1024, Math.max(64, parseInt(req.query.size, 10) || 300));
+    if (!data) return res.status(400).send("");
+    const buf = await QRCode.toBuffer(data, { width: size, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+    res.set("Content-Type", "image/png");
+    res.send(buf);
+  } catch (e) {
+    console.error("[QR] ERROR:", e.message);
+    res.status(500).send("");
   }
 });
 

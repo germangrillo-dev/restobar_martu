@@ -32,10 +32,10 @@
   }catch(e){}
 })();
 </script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="/vendor/tailwind.js"></script>
+<script src="/vendor/react.production.min.js"></script>
+<script src="/vendor/react-dom.production.min.js"></script>
+<script src="/vendor/babel.min.js"></script>
 <style>body{margin:0;background:#1a1715}</style>
 </head>
 <body>
@@ -1048,7 +1048,7 @@ function App() {
                 <button onClick={() => setSalonVista("salon")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "salon" ? C.amber : "transparent", color: salonVista === "salon" ? "#241a0c" : C.muted }}><LayoutGrid size={15} /> Salón</button>
                 <button onClick={() => setSalonVista("delivery")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "delivery" ? C.amber : "transparent", color: salonVista === "delivery" ? "#241a0c" : C.muted }}><Bike size={15} /> Delivery{deliveries.filter(d => (d.estado||"cocina")!=="entregado").length ? " (" + deliveries.filter(d => (d.estado||"cocina")!=="entregado").length + ")" : ""}</button>
               </div>
-              {!esVisor && <div className="flex gap-2"><button onClick={() => { const qrBase = config.qrUrl || publicUrl || window.location.origin; const win = window.open("", "_blank"); let html = "<html><head><style>body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:20px;justify-content:center} .qr{text-align:center;border:1px solid #ddd;border-radius:12px;padding:16px;page-break-inside:avoid} .qr img{width:200px;height:200px} .qr p{margin:6px 0 0;font-size:12px;color:#555} h1{width:100%;text-align:center}</style></head><body><h1>QR Mesas</h1>"; MESAS.forEach(m => { html += "<div class='qr'><img src='https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(qrBase + "/menu-mesa.html?mesa=" + m.id) + "'/><p>Mesa " + m.id + "</p><p style='font-size:10px;color:#999;word-break:break-all'>" + qrBase + "/menu-mesa.html?mesa=" + m.id + "</p></div>"; }); html += "</body></html>"; win.document.write(html); win.print(); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}><Printer size={16} /> Imprimir QR</button>
+              {!esVisor && <div className="flex gap-2"><button onClick={() => { const qrBase = config.qrUrl || publicUrl || window.location.origin; const win = window.open("", "_blank"); let html = "<html><head><style>body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:20px;justify-content:center} .qr{text-align:center;border:1px solid #ddd;border-radius:12px;padding:16px;page-break-inside:avoid} .qr img{width:200px;height:200px} .qr p{margin:6px 0 0;font-size:12px;color:#555} h1{width:100%;text-align:center}</style></head><body><h1>QR Mesas</h1>"; MESAS.forEach(m => { html += "<div class='qr'><img src='/api/qr?size=300&data=" + encodeURIComponent(qrBase + "/menu-mesa.html?mesa=" + m.id) + "'/><p>Mesa " + m.id + "</p><p style='font-size:10px;color:#999;word-break:break-all'>" + qrBase + "/menu-mesa.html?mesa=" + m.id + "</p></div>"; }); html += "</body></html>"; win.document.write(html); win.print(); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}><Printer size={16} /> Imprimir QR</button>
               <button onClick={abrirDelivery} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo delivery</button></div>}
             </div>
 
@@ -2221,11 +2221,11 @@ function App() {
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Mesa {qrMesa}</h3><button onClick={() => setQrMesa(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <div>
               <p style={{ color: C.muted, fontSize: 11, marginBottom: 8 }}>📱 Escaneá para pedir</p>
-              <img id={"qr-img-" + qrMesa} src={"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent((config.qrUrl || publicUrl || window.location.origin) + "/menu-mesa.html?mesa=" + qrMesa)} alt={"QR Web Mesa " + qrMesa} style={{ width: 200, height: 200, margin: "0 auto", borderRadius: 12, background: "#fff", padding: 6 }} />
+              <img id={"qr-img-" + qrMesa} src={"/api/qr?size=300&data=" + encodeURIComponent((config.qrUrl || publicUrl || window.location.origin) + "/menu-mesa.html?mesa=" + qrMesa)} alt={"QR Web Mesa " + qrMesa} style={{ width: 200, height: 200, margin: "0 auto", borderRadius: 12, background: "#fff", padding: 6 }} />
               <p style={{ color: "#a89a8c", fontSize: 10, marginTop: 6, wordBreak: "break-all" }}>{(config.qrUrl || publicUrl || window.location.origin)}/menu-mesa.html?mesa={qrMesa}</p>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={() => { window.open("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent((config.qrUrl || publicUrl || window.location.origin) + "/menu-mesa.html?mesa=" + qrMesa), "_blank"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Printer size={15} /> Descargar QR</button>
+              <button onClick={() => { window.open("/api/qr?size=300&data=" + encodeURIComponent((config.qrUrl || publicUrl || window.location.origin) + "/menu-mesa.html?mesa=" + qrMesa), "_blank"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><Printer size={15} /> Descargar QR</button>
               <button onClick={() => setQrMesa(null)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Cerrar</button>
             </div>
           </div>
