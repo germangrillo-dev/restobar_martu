@@ -101,6 +101,9 @@ const TIPOS_FAC = ["Factura A", "Factura B", "Factura C", "Pedido / Remito"];
 const peso = (n) => (Number.isInteger(n) ? n : Math.round(n));
 const pesos = (n) => "$" + Math.round(n).toLocaleString("es-AR");
 const dinero = (n) => "$" + (n || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const numExacto = (n) => { const v = Number(n); if (!isFinite(v)) return "0"; return String(Math.round(v * 10000) / 10000); };
+const numDec = (s) => { if (s === null || s === undefined) return NaN; let t = String(s).trim().replace(/[\s\u00a0]/g, "").replace(/%/g, ""); if (!t) return NaN; if (t.indexOf(",") >= 0) t = t.replace(/\./g, "").replace(",", "."); const v = parseFloat(t); return isNaN(v) ? NaN : v; };
+const esPorcentaje = (s) => /%/.test(String(s == null ? "" : s));
 const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -453,7 +456,7 @@ function App() {
     const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
     let descuentaStock = true;
     if (faltan.length) {
-      const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ");
+      const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ");
       setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." });
       descuentaStock = false;
     }
@@ -568,10 +571,10 @@ function App() {
   const editarInsumo = (i) => setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", pesoBulto: i.pesoBulto || "", factorCompra: i.factorCompra || "" });
   const guardarInsumo = () => {
     if (!abmIns.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del insumo." }); return; }
-    const sa = parseFloat(abmIns.stockActual) || 0, mn = parseFloat(abmIns.min) || 0;
+    const sa = numDec(abmIns.stockActual) || 0, mn = numDec(abmIns.min) || 0;
     const uc = abmIns.unidadCompra || abmIns.unidad;
-    const pb = parseFloat(abmIns.pesoBulto) || 1;
-    const fc = parseFloat(abmIns.factorCompra) || 1;
+    const pb = numDec(abmIns.pesoBulto) || 1;
+    const fc = numDec(abmIns.factorCompra) || 1;
     if (abmIns.id) { setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc } : i)); setStock((s) => ({ ...s, [abmIns.id]: sa })); }
     else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: sa, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: sa })); setCostos((c) => ({ ...c, [id]: 0 })); }
     setAbmIns(null); setToast({ tipo: "ok", texto: "Insumo guardado." });
@@ -585,14 +588,14 @@ function App() {
   const setIng = (rid, k, v) => setAbmProd((p) => ({ ...p, receta: p.receta.map((r) => r.rid === rid ? { ...r, [k]: v } : r) }));
   const addIng = () => setAbmProd((p) => ({ ...p, receta: [...p.receta, { rid: uid(), insumoId: "", cantidad: "" }] }));
   const delIng = (rid) => setAbmProd((p) => ({ ...p, receta: p.receta.filter((r) => r.rid !== rid) }));
-  const recetaActual = () => (abmProd ? abmProd.receta.filter((r) => r.insumoId && parseFloat(r.cantidad) > 0).map((r) => [r.insumoId, parseFloat(r.cantidad)]) : []);
+  const recetaActual = () => (abmProd ? abmProd.receta.filter((r) => r.insumoId && (numDec(r.cantidad) || 0) > 0).map((r) => [r.insumoId, numDec(r.cantidad)]) : []);
   const syncProductosAlServer = (ps) => {
     const paraServer = ps.map(p => ({ id: p.id, ref: p.ref, nombre: p.nombre, cat: p.cat, precio: p.precio, receta: p.receta || [] }));
     fetch(serverUrl + "/api/productos", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(paraServer) }).catch(() => { try { setToast({ tipo: "error", texto: "Error al sincronizar productos con el servidor." }); } catch {} });
   };
   const guardarProducto = () => {
     if (!abmProd.nombre.trim()) { setToast({ tipo: "error", texto: "El nombre del producto es obligatorio." }); return; }
-    const precio = parseFloat(abmProd.precio) || 0, receta = recetaActual();
+    const precio = numDec(abmProd.precio) || 0, receta = recetaActual();
     if (abmProd.id) { setProductos((ps) => { const nps = ps.map((p) => p.id === abmProd.id ? { ...p, nombre: abmProd.nombre, cat: abmProd.cat, precio, receta } : p); syncProductosAlServer(nps); return nps; }); }
     else { setProductos((ps) => { const maxRef = Math.max(0, ...ps.map(p => p.ref || 0)); const nps = [...ps, { id: uid(), ref: maxRef + 1, nombre: abmProd.nombre, cat: abmProd.cat, precio, receta }]; syncProductosAlServer(nps); return nps; }); }
     setAbmProd(null); setToast({ tipo: "ok", texto: "Producto guardado." });
@@ -617,12 +620,12 @@ function App() {
   const delFacItem = (lid) => setFac((f) => { const its = f.items.filter((it) => it.lid !== lid); return { ...f, items: its.length ? its : [lineaVacia()] }; });
   const articulosProv = (() => { const byInsumo = {}; ARTICULOS.forEach(a => { byInsumo[a.insumo] = true; }); const extras = insumos.filter(i => !byInsumo[i.id]).map(i => ({ codigo: "INS-" + i.id, desc: i.nombre, prov: "", insumo: i.id, factor: (i.pesoBulto || 1) * (i.factorCompra || 1), bulto: i.unidadCompra || i.unidad })); return [...ARTICULOS, ...extras]; })();
   const artByCodigo = useMemo(() => Object.fromEntries(articulosProv.map((a) => [a.codigo, a])), [insumos]);
-  const calcItem = (it) => { const a = it.codigo ? artByCodigo[it.codigo] : null; const cantB = parseFloat(it.cantidad) || 0, unit = parseFloat(it.unitario) || 0, desc = parseFloat(it.descuento) || 0, internos = parseFloat(it.internos) || 0; const neto = cantB * unit - desc, ivaL = esA ? neto * 0.21 : 0, sub = neto + internos + ivaL, ingreso = a ? cantB * a.factor : 0; return { a, cantB, unit, desc, internos, neto, ivaL, sub, ingreso }; };
+  const calcItem = (it) => { const a = it.codigo ? artByCodigo[it.codigo] : null; const cantB = numDec(it.cantidad) || 0, unit = numDec(it.unitario) || 0, bruto = cantB * unit, desc = esPorcentaje(it.descuento) ? bruto * ((numDec(it.descuento) || 0) / 100) : (numDec(it.descuento) || 0), internos = numDec(it.internos) || 0; const neto = bruto - desc, ivaL = esA ? neto * 0.21 : 0, sub = neto + internos + ivaL, ingreso = a ? cantB * a.factor : 0; return { a, cantB, unit, desc, internos, neto, ivaL, sub, ingreso }; };
   const tot = fac.items.reduce((acc, it) => { const c = calcItem(it); return { neto: acc.neto + c.neto, internos: acc.internos + c.internos, iva: acc.iva + c.ivaL, total: acc.total + c.sub }; }, { neto: 0, internos: 0, iva: 0, total: 0 });
   const provSel = proveedores.find((p) => p.id === fac.provId);
   const cargarFactura = () => {
     if (!fac.provId) { setToast({ tipo: "error", texto: "Elegí un proveedor." }); return; }
-    const validos = fac.items.filter((it) => it.codigo && (parseFloat(it.cantidad) || 0) > 0);
+    const validos = fac.items.filter((it) => it.codigo && (numDec(it.cantidad) || 0) > 0);
     if (validos.length === 0) { setToast({ tipo: "error", texto: "Agregá al menos un artículo con cantidad." }); return; }
     setStock((s) => { const n = { ...s }; for (const it of validos) { const c = calcItem(it); n[c.a.insumo] = +((n[c.a.insumo] || 0) + c.ingreso).toFixed(2); } return n; });
     setCostos((cs) => { const n = { ...cs }; for (const it of validos) { const c = calcItem(it); if (c.sub > 0 && c.cantB > 0) n[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } return n; });
@@ -815,7 +818,7 @@ function App() {
       const req = {};
       for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
       const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
-      if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
+      if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
       setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
       setMesas((ms) => { const nm = { ...ms, [wp.mesa]: { ...ms[wp.mesa], enviado: [...ms[wp.mesa].enviado, ...items] } }; markMesaDirty(wp.mesa); postMesas(nm); return nm; });
       const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
@@ -830,7 +833,7 @@ function App() {
         const req = {};
         for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
         const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
-        if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + peso(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
+        if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
         setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
         const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota }));
         const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
@@ -1324,7 +1327,7 @@ function App() {
 <th style={{ textAlign: "left", padding: "6px 8px" }}>Artículo</th>
 <th style={{ textAlign: "right", padding: "6px 8px", width: 60 }}>Cant.</th>
 <th style={{ textAlign: "right", padding: "6px 8px", width: 80 }}>Unitario</th>
-<th style={{ textAlign: "right", padding: "6px 8px", width: 70 }}>Dcto.</th>
+<th style={{ textAlign: "right", padding: "6px 8px", width: 70 }}>Dcto. $/%</th>
 <th style={{ textAlign: "right", padding: "6px 8px", width: 60 }}>Int.</th>
 <th style={{ textAlign: "right", padding: "6px 8px", width: 90 }}>Subtotal</th>
 <th style={{ width: 30 }}></th>
@@ -1333,10 +1336,10 @@ function App() {
 {fac.items.map((it) => { const c = calcItem(it); return (
 <tr key={it.lid} style={{ borderTop: "1px solid " + C.border }}>
 <td style={{ padding: "4px 8px" }}><select style={{ ...miniInput, width: "100%", fontSize: 12, background: C.base, color: C.text, border: "1px solid " + C.border, borderRadius: 4, colorScheme: "dark" }} value={it.codigo} onChange={(e) => setFacItem(it.lid, "codigo", e.target.value)}><option value="">Artículo…</option>{articulosProv.map((ar) => <option key={ar.codigo} value={ar.codigo}>{ar.desc}</option>)}</select></td>
-<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="number" placeholder="0" value={it.cantidad} onChange={(e) => setFacItem(it.lid, "cantidad", e.target.value)} /></td>
-<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="number" placeholder="0" value={it.unitario} onChange={(e) => setFacItem(it.lid, "unitario", e.target.value)} /></td>
-<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="number" placeholder="0" value={it.descuento} onChange={(e) => setFacItem(it.lid, "descuento", e.target.value)} /></td>
-<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="number" placeholder="0" value={it.internos} onChange={(e) => setFacItem(it.lid, "internos", e.target.value)} /></td>
+<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.cantidad} onChange={(e) => setFacItem(it.lid, "cantidad", e.target.value)} /></td>
+<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.unitario} onChange={(e) => setFacItem(it.lid, "unitario", e.target.value)} /></td>
+<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.descuento} onChange={(e) => setFacItem(it.lid, "descuento", e.target.value)} /></td>
+<td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.internos} onChange={(e) => setFacItem(it.lid, "internos", e.target.value)} /></td>
 <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, fontSize: 12 }}>{dinero(c.sub)}</td>
 <td style={{ padding: "4px 4px", textAlign: "center" }}><button onClick={() => delFacItem(it.lid)} style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer", fontSize: 14 }}>✕</button></td>
 </tr>
@@ -1345,6 +1348,7 @@ function App() {
 </table>
 </div>
 <button onClick={addFacItem} className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={15} /> Agregar artículo</button>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Dcto.: escribí <b style={{ color: C.amber }}>722</b> para descontar $722, o <b style={{ color: C.amber }}>7%</b> para descontar el 7% de esa fila. Se aceptan comas decimales.</div>
               <div className="mt-4 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}><div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Neto</span><span>{dinero(tot.neto)}</span></div>{tot.internos > 0 && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Impuestos internos</span><span>{dinero(tot.internos)}</span></div>}{esA && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>IVA 21%</span><span>{dinero(tot.iva)}</span></div>}<div className="flex justify-between items-baseline"><span style={{ fontWeight: 700 }}>Total</span><span style={{ fontWeight: 800, fontSize: 20, color: C.amber }}>{dinero(tot.total)}</span></div></div>
               <button onClick={cargarFactura} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-3" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Cargar y sumar al stock</button>
             </div>
@@ -1382,8 +1386,8 @@ function App() {
               <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
                 {f.items.map((it, k) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: C.muted }}>{peso(it.cantidad)} {it.bulto} · {it.desc}</span>
-                    <span style={{ color: C.green, fontWeight: 700 }}>+{peso(it.ingreso)} {it.insumoUn}</span>
+                    <span style={{ color: C.muted }}>{numExacto(it.cantidad)} {it.bulto} · {it.desc}</span>
+                    <span style={{ color: C.green, fontWeight: 700 }}>+{numExacto(it.ingreso)} {it.insumoUn}</span>
                   </div>
                 ))}
               </div>
@@ -1421,7 +1425,7 @@ function App() {
         {activeTab === "insumos" && (esAdmin || esGerente) && (
           <div>
             <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Insumos</h2><div className="flex gap-2"><button onClick={nuevoInsumo} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo insumo</button></div></div>
-            <div className="flex flex-col gap-1.5">{insumos.map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}{i.pesoBulto > 1 ? " · 1 bulto = " + peso(i.pesoBulto) + " " + (i.unidadCompra || i.unidad) : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{peso(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
+            <div className="flex flex-col gap-1.5">{insumos.map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}{i.pesoBulto > 1 ? " · 1 bulto = " + numExacto(i.pesoBulto) + " " + (i.unidadCompra || i.unidad) : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{numExacto(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
           </div>
         )}
 
@@ -1840,7 +1844,7 @@ function App() {
                       <option value="Noche">Noche</option>
                     </select>
                   </div>
-                  <div><label style={lbl}>Efectivo inicial</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.apertura || ""} onChange={(e) => { cajaDirtyUntilRef.current = Date.now() + 30000; setCaja((c) => ({ ...c, apertura: parseFloat(e.target.value) || 0 })); }} onFocus={() => { cajaDirtyUntilRef.current = Date.now() + 30000; }} placeholder="Ingresar monto" onKeyDown={(e) => e.key === "Enter" && e.preventDefault()} /></div>
+                  <div><label style={lbl}>Efectivo inicial</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.apertura || ""} onChange={(e) => { cajaDirtyUntilRef.current = Date.now() + 30000; setCaja((c) => ({ ...c, apertura: numDec(e.target.value) || 0 })); }} onFocus={() => { cajaDirtyUntilRef.current = Date.now() + 30000; }} placeholder="Ingresar monto" onKeyDown={(e) => e.key === "Enter" && e.preventDefault()} /></div>
                   <div><label style={lbl}>Usuario</label><input style={inputStyle} type="text" value={caja.usuario || ""} onChange={(e) => { cajaDirtyUntilRef.current = Date.now() + 30000; setCaja((c) => ({ ...c, usuario: e.target.value })); }} onFocus={() => { cajaDirtyUntilRef.current = Date.now() + 30000; }} placeholder="Nombre del cajero" onKeyDown={(e) => e.key === "Enter" && e.preventDefault()} /></div>
                   <div style={{ marginTop: 8 }}>
                     <button type="button" id="btn-abrir-caja" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); if (!caja.turno) { setToast({ tipo: "error", texto: "Seleccioná el turno." }); return; } if (!caja.usuario.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del usuario." }); return; } if (caja.apertura === null || caja.apertura === undefined || isNaN(caja.apertura)) { setToast({ tipo: "error", texto: "Poné el efectivo inicial (puede ser 0)." }); return; } if (!window.confirm("¿Abrir caja con " + dinero(caja.apertura) + "?")) return; const turno = caja.turno; const apertura = caja.apertura; const usuario = caja.usuario; const nuevaCaja = { fecha: hoy(), apertura, movimientos: [], cierre: null, saldoFinal: null, turno, usuario, arqueo: {} }; setCaja(nuevaCaja); setCajaIniciada(true); cajaDirtyUntilRef.current = Date.now() + 5000; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja, cajaIniciada: true, config: { nombreLocal: config.nombreLocal, logo: config.logo } }) }).then(() => setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno })).catch(() => setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno + " (sin sync)" })); }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Abrir caja</button>
@@ -1919,7 +1923,7 @@ function App() {
                   {["Transferencia", "Mercado Pago", "Tarjetas"].map((medio) => (
                     <div key={medio} className="flex items-center gap-2 mb-1">
                       <span style={{ fontSize: 13, minWidth: 100 }}>{medio}</span>
-                      <input type="text" inputMode="decimal" style={{ ...inputStyle, flex: 1, MozAppearance: "textfield" }} placeholder="$0" value={caja.arqueo?.[medio] != null ? caja.arqueo[medio] : ""} onChange={(e) => { const v = e.target.value === "" ? undefined : parseFloat(e.target.value) || 0; setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), [medio]: v } })); }} />
+                      <input type="text" inputMode="decimal" style={{ ...inputStyle, flex: 1, MozAppearance: "textfield" }} placeholder="$0" value={caja.arqueo?.[medio] != null ? caja.arqueo[medio] : ""} onChange={(e) => { const v = e.target.value === "" ? undefined : numDec(e.target.value) || 0; setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), [medio]: v } })); }} />
                       <span style={{ fontSize: 12, color: C.muted, minWidth: 70, textAlign: "right" }}>{dinero(caja.arqueo?.[medio] || 0)}</span>
                     </div>
                   ))}
@@ -1932,7 +1936,7 @@ function App() {
                     </div>;
                   })()}
 
-                  <div className="mt-3"><label style={lbl}>Cierre (efectivo contado)</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.cierre != null ? caja.cierre : ""} onChange={(e) => { const v = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0; setCaja((c) => ({ ...c, cierre: v })); }} placeholder="Ingresar monto" /></div>
+                  <div className="mt-3"><label style={lbl}>Cierre (efectivo contado)</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.cierre != null ? caja.cierre : ""} onChange={(e) => { const v = e.target.value === "" ? 0 : numDec(e.target.value) || 0; setCaja((c) => ({ ...c, cierre: v })); }} placeholder="Ingresar monto" /></div>
                   {caja.cierre > 0 && <div className="rounded-lg p-3 text-center mt-2" style={{ background: C.base }}><span style={{ fontSize: 13, color: C.muted }}>Diferencia: </span><span style={{ fontWeight: 800, fontSize: 18, color: Math.round((caja.cierre - cajaEsperado) * 100) / 100 >= 0 ? C.green : C.red }}>{dinero(Math.round((caja.cierre - cajaEsperado) * 100) / 100)}</span></div>}
                   <button onClick={() => {
                     if (caja.cierre === null || caja.cierre <= 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre primero." }); return; }
@@ -2031,8 +2035,8 @@ function App() {
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
               <div><label style={lbl}>Presentación (cómo viene)</label><input style={inputStyle} placeholder="Ej: Sachet 3 kg, Cajón x24, Bolsa 1 kg" value={abmIns.presentacion} onChange={(e) => setAbmIns((p) => ({ ...p, presentacion: e.target.value }))} /></div>
-               <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se mide en</label><select style={inputStyle} value={abmIns.unidad} onChange={(e) => setAbmIns((p) => ({ ...p, unidad: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Stock actual</label><input style={inputStyle} type="number" value={abmIns.stockActual} onChange={(e) => setAbmIns((p) => ({ ...p, stockActual: e.target.value }))} /></div><div><label style={lbl}>Mínimo</label><input style={inputStyle} type="number" value={abmIns.min} onChange={(e) => setAbmIns((p) => ({ ...p, min: e.target.value }))} /></div></div>
-              <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se compra en</label><select style={inputStyle} value={abmIns.unidadCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, unidadCompra: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Peso por bulto</label><input style={inputStyle} type="number" placeholder="Ej: 25" value={abmIns.pesoBulto || ""} onChange={(e) => setAbmIns((p) => ({ ...p, pesoBulto: e.target.value }))} /></div><div><label style={lbl}>Factor (1 u compra = ? stock)</label><input style={inputStyle} type="number" placeholder="Ej: 40" value={abmIns.factorCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, factorCompra: e.target.value }))} /></div></div>
+               <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se mide en</label><select style={inputStyle} value={abmIns.unidad} onChange={(e) => setAbmIns((p) => ({ ...p, unidad: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Stock actual</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.stockActual} onChange={(e) => setAbmIns((p) => ({ ...p, stockActual: e.target.value }))} /></div><div><label style={lbl}>Mínimo</label><input style={inputStyle} type="number" value={abmIns.min} onChange={(e) => setAbmIns((p) => ({ ...p, min: e.target.value }))} /></div></div>
+              <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se compra en</label><select style={inputStyle} value={abmIns.unidadCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, unidadCompra: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Peso por bulto</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="Ej: 25" value={abmIns.pesoBulto || ""} onChange={(e) => setAbmIns((p) => ({ ...p, pesoBulto: e.target.value }))} /></div><div><label style={lbl}>Factor (1 u compra = ? stock)</label><input style={inputStyle} type="number" placeholder="Ej: 40" value={abmIns.factorCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, factorCompra: e.target.value }))} /></div></div>
               <button onClick={guardarInsumo} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-1" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar insumo</button>
             </div>
           </div>
@@ -2041,16 +2045,16 @@ function App() {
 
       {/* Modal ABM producto */}
       {abmProd && (() => {
-        const costo = costoReceta(recetaActual()); const precio = parseFloat(abmProd.precio) || 0; const mg = precio ? Math.round((precio - costo) / precio * 100) : 0;
+        const costo = costoReceta(recetaActual()); const precio = numDec(abmProd.precio) || 0; const mg = precio ? Math.round((precio - costo) / precio * 100) : 0;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setAbmProd(null))}>
             <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProd.id ? "Editar producto" : "Nuevo producto"}</h3><button onClick={() => setAbmProd(null)} style={{ color: C.muted }}><X size={18} /></button></div>
               <div className="flex flex-col gap-3">
                 <div><label style={lbl}>Nombre *</label><input style={inputStyle} placeholder="Ej: Milanesa napolitana" value={abmProd.nombre} onChange={(e) => setProdF("nombre", e.target.value)} /></div>
-                <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Categoría</label><div className="flex gap-1"><select style={{ ...inputStyle, flex: 1 }} value={abmProd.cat} onChange={(e) => { setProdF("cat", e.target.value); }}>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}<option value="__new__">+ Nueva…</option></select></div></div><div><label style={lbl}>Precio de venta</label><input style={inputStyle} type="number" value={abmProd.precio} onChange={(e) => setProdF("precio", e.target.value)} /></div></div>
+                <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Categoría</label><div className="flex gap-1"><select style={{ ...inputStyle, flex: 1 }} value={abmProd.cat} onChange={(e) => { setProdF("cat", e.target.value); }}>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}<option value="__new__">+ Nueva…</option></select></div></div><div><label style={lbl}>Precio de venta</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmProd.precio} onChange={(e) => setProdF("precio", e.target.value)} /></div></div>
                 {abmProd.cat === "__new__" && <div className="flex gap-2 items-center"><input style={{ ...inputStyle, flex: 1 }} placeholder="Nombre de la nueva categoría" value={abmProd.nuevaCat || ""} onChange={(e) => setProdF("nuevaCat", e.target.value)} /><button onClick={() => { if (!abmProd.nuevaCat?.trim()) return; const c = abmProd.nuevaCat.trim(); if (categorias.includes(c)) { setProdF("cat", c); setProdF("nuevaCat", ""); return; } setCategorias((prev) => { const next = [...prev, c]; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { ...config, categorias: next } }) }).catch(() => {}); return next; }); setProdF("cat", c); setProdF("nuevaCat", ""); }} className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: C.amber, color: "#241a0c" }}>Agregar</button></div>}
-                <div><label style={lbl}>Receta (ingredientes)</label><div className="flex flex-col gap-2">{abmProd.receta.map((r) => (<div key={r.rid} className="flex items-center gap-2"><select style={{ ...miniInput, flex: 1 }} value={r.insumoId} onChange={(e) => setIng(r.rid, "insumoId", e.target.value)}><option value="">Insumo…</option>{insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}</select><input style={{ ...miniInput, width: 70 }} type="number" placeholder="cant" value={r.cantidad} onChange={(e) => setIng(r.rid, "cantidad", e.target.value)} /><span style={{ width: 22, color: C.muted, fontSize: 12 }}>{r.insumoId ? unidadDe(r.insumoId) : ""}</span><button onClick={() => delIng(r.rid)} className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><X size={14} /></button></div>))}</div><button onClick={addIng} className="flex items-center gap-1 mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={14} /> Agregar ingrediente</button></div>
+                <div><label style={lbl}>Receta (ingredientes)</label><div className="flex flex-col gap-2">{abmProd.receta.map((r) => (<div key={r.rid} className="flex items-center gap-2"><select style={{ ...miniInput, flex: 1 }} value={r.insumoId} onChange={(e) => setIng(r.rid, "insumoId", e.target.value)}><option value="">Insumo…</option>{insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}</select><input style={{ ...miniInput, width: 70 }} type="text" inputMode="decimal" placeholder="cant" value={r.cantidad} onChange={(e) => setIng(r.rid, "cantidad", e.target.value)} /><span style={{ width: 22, color: C.muted, fontSize: 12 }}>{r.insumoId ? unidadDe(r.insumoId) : ""}</span><button onClick={() => delIng(r.rid)} className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><X size={14} /></button></div>))}</div><button onClick={addIng} className="flex items-center gap-1 mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={14} /> Agregar ingrediente</button></div>
                 <div className="flex justify-between items-baseline pt-2" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13 }}>Costo {pesos(costo)} · Margen</span><span style={{ fontWeight: 800, color: mg >= 0 ? C.green : C.red }}>{precio ? pesos(precio - costo) : "—"} ({mg}%)</span></div>
                 <div className="flex gap-2"><button onClick={guardarProducto} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar</button>{abmProd.id && <button onClick={() => borrarProducto(abmProd.id)} className="px-4 rounded-lg" style={{ background: C.base, color: C.red, border: "1px solid " + C.border }}><Trash2 size={16} /></button>}</div>
               </div>
@@ -2082,11 +2086,11 @@ function App() {
               </>
             ) : cobroMetodo === "Efectivo" ? (
               <div className="flex flex-col gap-3">
-                <input autoFocus style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
-                {cobroPago && parseFloat(cobroPago) >= showCobroModal.total && (
+                <input autoFocus style={inputStyle} type="text" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
+                {cobroPago && numDec(cobroPago) >= showCobroModal.total && (
                   <div className="rounded-lg p-3 text-center" style={{ background: C.base }}>
                     <span style={{ fontSize: 13, color: C.muted }}>Vuelto</span>
-                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(parseFloat(cobroPago) - showCobroModal.total)}</div>
+                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(numDec(cobroPago) - showCobroModal.total)}</div>
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
@@ -2136,11 +2140,11 @@ function App() {
               </div>
             ) : showPagoDelivery._metodoSeleccionado === "Efectivo" ? (
               <div className="flex flex-col gap-3">
-                <input autoFocus style={inputStyle} type="number" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
-                {cobroPago && parseFloat(cobroPago) >= showPagoDelivery.total && (
+                <input autoFocus style={inputStyle} type="text" inputMode="decimal" placeholder="Con cuánto paga" value={cobroPago} onChange={(e) => setCobroPago(e.target.value)} />
+                {cobroPago && numDec(cobroPago) >= showPagoDelivery.total && (
                   <div className="rounded-lg p-3 text-center" style={{ background: C.base }}>
                     <span style={{ fontSize: 13, color: C.muted }}>Vuelto</span>
-                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(parseFloat(cobroPago) - showPagoDelivery.total)}</div>
+                    <div style={{ fontWeight: 800, fontSize: 24, color: C.green }}>{pesos(numDec(cobroPago) - showPagoDelivery.total)}</div>
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
@@ -2400,10 +2404,10 @@ function App() {
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{editEgresoId ? "Editar egreso" : "Nuevo egreso"}</h3><button onClick={() => setShowEgresoModal(false)} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Concepto</label><input style={inputStyle} placeholder="Ej: Pan, verduras..." value={egresoConcepto} onChange={(e) => setEgresoConcepto(e.target.value)} autoFocus /></div>
-              <div><label style={lbl}>Monto ($)</label><input style={inputStyle} type="number" min="0" placeholder="0" value={egresoMonto} onChange={(e) => setEgresoMonto(e.target.value)} /></div>
+              <div><label style={lbl}>Monto ($)</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={egresoMonto} onChange={(e) => setEgresoMonto(e.target.value)} /></div>
               <button onClick={() => {
                 const concepto = egresoConcepto.trim();
-                const monto = parseFloat(egresoMonto);
+                const monto = numDec(egresoMonto);
                 if (!concepto) { setToast({ tipo: "error", texto: "Falta el concepto." }); return; }
                 if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Monto inválido." }); return; }
                 setCaja((c) => {
