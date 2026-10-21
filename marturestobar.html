@@ -106,6 +106,9 @@ const numDec = (s) => { if (s === null || s === undefined) return NaN; let t = S
 const esPorcentaje = (s) => /%/.test(String(s == null ? "" : s));
 const UNI_ESC = { "g|kg": 0.001, "kg|g": 1000, "ml|L": 0.001, "L|ml": 1000 };
 const escUnidad = (a, b) => (a === b ? 1 : (UNI_ESC[a + "|" + b] != null ? UNI_ESC[a + "|" + b] : 1));
+const fDeIns = (p) => (numDec(p && p.factor) || 1);
+const ucDeIns = (p) => ((p && (p.unidadCompra || "").trim()) || (p ? p.unidad : ""));
+const autoFDeIns = (p) => escUnidad(ucDeIns(p), p ? p.unidad : "");
 const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -569,35 +572,35 @@ function App() {
   const despacharMesa = (id) => { markMesaDirty(id); const nuevasMesas = { ...mesas, [id]: { ...mesas[id], despachado: [...(mesas[id].despachado || []), ...mesas[id].enviado], enviado: [] } }; setMesas(nuevasMesas); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); postMesas(nuevasMesas); };
 
   // ABM Insumos
-  const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "", pesoBulto: "", factorCompra: "", costo: "" });
-  const editarInsumo = (i) => setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], stockOriginal: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", pesoBulto: i.pesoBulto || "", factorCompra: i.factorCompra || "", costo: costos[i.id] != null ? costos[i.id] : "", costoOriginal: costos[i.id] != null ? costos[i.id] : "" });
+  const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "kg", factor: "1000", costoCompra: "" });
+  const editarInsumo = (i) => { const f = (i.pesoBulto || 1) * (i.factorCompra || 1); const cv = costos[i.id]; setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], stockOriginal: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", factor: String(f), costoCompra: cv != null ? String(+(cv * f).toFixed(4)) : "" }); };
   const guardarInsumo = () => {
     if (!abmIns.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del insumo." }); return; }
     const sa = numDec(abmIns.stockActual) || 0, mn = numDec(abmIns.min) || 0;
-    const uc = abmIns.unidadCompra || abmIns.unidad;
-    const pb = numDec(abmIns.pesoBulto) || 1;
-    const fc = numDec(abmIns.factorCompra) || 1;
-    const costoV = abmIns.costo === "" || abmIns.costo == null ? NaN : numDec(abmIns.costo);
+    const uc = ucDeIns(abmIns);
+    const f = fDeIns(abmIns);
+    const pb = f, fc = 1;
+    const costoCompra = abmIns.costoCompra === "" || abmIns.costoCompra == null ? NaN : numDec(abmIns.costoCompra);
     let saF = sa;
-    let costoF = isNaN(costoV) ? (costos[abmIns.id] || 0) : costoV;
+    let costoF = (isNaN(costoCompra) ? (costos[abmIns.id] || 0) * (abmIns.id ? (insumos.find((x) => x.id === abmIns.id) ? (insumos.find((x) => x.id === abmIns.id).pesoBulto || 1) * (insumos.find((x) => x.id === abmIns.id).factorCompra || 1) : f) : f) : costoCompra) / f;
+    if (!isFinite(costoF)) costoF = 0;
+    costoF = +costoF.toFixed(4);
     let aviso = "Insumo guardado.";
     if (abmIns.id) {
       const prev = insumos.find((x) => x.id === abmIns.id);
       if (prev) {
         const fPrev = (prev.pesoBulto || 1) * (prev.factorCompra || 1);
-        const fNue = pb * fc;
-        const r = (fPrev > 0 ? fNue / fPrev : 1) * escUnidad(prev.unidad, abmIns.unidad);
+        const r = (fPrev > 0 ? f / fPrev : 1) * escUnidad(prev.unidad, abmIns.unidad);
         if (isFinite(r) && r > 0 && Math.abs(r - 1) > 1e-9) {
           if (Number(abmIns.stockActual) === Number(abmIns.stockOriginal)) saF = +(sa * r).toFixed(4);
-          if (abmIns.costo === "" || Number(abmIns.costo) === Number(abmIns.costoOriginal)) costoF = +(((costos[abmIns.id] || 0) / r)).toFixed(4);
-          aviso = "Insumo guardado. Stock y costo ajustados a la nueva conversión (1 " + uc + " = " + numExacto(fNue) + " " + abmIns.unidad + ").";
+          aviso = "Insumo guardado. Stock ajustado a la nueva conversión.";
         }
       }
       setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc } : i));
       setStock((s) => ({ ...s, [abmIns.id]: saF }));
       setCostos((c) => ({ ...c, [abmIns.id]: costoF }));
     }
-    else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: sa, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: sa })); setCostos((c) => ({ ...c, [id]: isNaN(costoV) ? 0 : costoV })); }
+    else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: saF, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: saF })); setCostos((c) => ({ ...c, [id]: costoF })); }
     setAbmIns(null); setToast({ tipo: "ok", texto: aviso });
   };
   const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); setStock((s) => { const n = { ...s }; delete n[id]; return n; }); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
@@ -2056,8 +2059,8 @@ function App() {
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
               <div><label style={lbl}>Presentación (cómo viene)</label><input style={inputStyle} placeholder="Ej: Sachet 3 kg, Cajón x24, Bolsa 1 kg" value={abmIns.presentacion} onChange={(e) => setAbmIns((p) => ({ ...p, presentacion: e.target.value }))} /></div>
-               <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se mide en</label><select style={inputStyle} value={abmIns.unidad} onChange={(e) => setAbmIns((p) => ({ ...p, unidad: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Stock actual</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.stockActual} onChange={(e) => setAbmIns((p) => ({ ...p, stockActual: e.target.value }))} /></div><div><label style={lbl}>Mínimo</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.min} onChange={(e) => setAbmIns((p) => ({ ...p, min: e.target.value }))} /></div></div>
-              <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se compra en</label><select style={inputStyle} value={abmIns.unidadCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, unidadCompra: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Peso por bulto</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="Ej: 25" value={abmIns.pesoBulto || ""} onChange={(e) => setAbmIns((p) => ({ ...p, pesoBulto: e.target.value }))} /></div><div><label style={lbl}>Factor (1 u compra = ? stock)</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="Ej: 40" value={abmIns.factorCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, factorCompra: e.target.value }))} /></div></div><div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Costo unitario ({abmIns.unidad})</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.costo != null ? abmIns.costo : ""} onChange={(e) => setAbmIns((p) => ({ ...p, costo: e.target.value }))} /></div><div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.amber, border: "1px solid " + C.border, borderRadius: 8, padding: "6px 12px", minHeight: 42, gap: 2 }}><div>1 {(abmIns.unidadCompra || abmIns.unidad)} = {numExacto((numDec(abmIns.pesoBulto) || 1) * (numDec(abmIns.factorCompra) || 1))} {abmIns.unidad}</div><div style={{ fontWeight: 400, fontSize: 12, color: C.muted }}>Costo: 1 {(abmIns.unidadCompra || abmIns.unidad)} = {dinero((numDec(abmIns.costo) || 0) * ((numDec(abmIns.pesoBulto) || 1) * (numDec(abmIns.factorCompra) || 1)))}</div></div></div>
+               <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se mide en</label><select style={inputStyle} value={abmIns.unidad} onChange={(e) => setAbmIns((p) => ({ ...p, unidad: e.target.value }))}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</select></div><div><label style={lbl}>Stock actual</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.stockActual} onChange={(e) => setAbmIns((p) => ({ ...p, stockActual: e.target.value }))} /><div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>= {numExacto((numDec(abmIns.stockActual) || 0) / fDeIns(abmIns))} {ucDeIns(abmIns)}</div></div><div><label style={lbl}>Mínimo</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.min} onChange={(e) => setAbmIns((p) => ({ ...p, min: e.target.value }))} /></div></div>
+              <div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Se compra en</label><input style={inputStyle} list="dl-unidades" placeholder="kg" value={abmIns.unidadCompra || ""} onChange={(e) => setAbmIns((p) => ({ ...p, unidadCompra: e.target.value }))} /><datalist id="dl-unidades">{UNIDADES.map((u) => <option key={u} value={u} />)}</datalist></div><div style={{ gridColumn: "span 2" }}><label style={lbl}>Conversión</label><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>1 {ucDeIns(abmIns)} =</span><input style={{ ...inputStyle, flex: 1, textAlign: "right" }} type="text" inputMode="decimal" value={abmIns.factor} onChange={(e) => setAbmIns((p) => ({ ...p, factor: e.target.value }))} /><span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>{abmIns.unidad}</span></div>{autoFDeIns(abmIns) !== 1 && autoFDeIns(abmIns) !== fDeIns(abmIns) && <button type="button" onClick={() => setAbmIns((p) => ({ ...p, factor: String(autoFDeIns(p)) }))} style={{ marginTop: 5, fontSize: 11, fontWeight: 700, color: C.green, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>→ usar {numExacto(autoFDeIns(abmIns))}</button>}</div></div><div className="grid grid-cols-3 gap-3"><div><label style={lbl}>Costo por 1 {ucDeIns(abmIns)}</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmIns.costoCompra != null ? abmIns.costoCompra : ""} onChange={(e) => setAbmIns((p) => ({ ...p, costoCompra: e.target.value }))} /></div><div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.amber, border: "1px solid " + C.border, borderRadius: 8, padding: "6px 12px", minHeight: 42, gap: 2 }}><div>Receta: {dinero((numDec(abmIns.costoCompra) || 0) / fDeIns(abmIns))} por {abmIns.unidad}</div><div style={{ fontWeight: 400, fontSize: 12, color: C.muted }}>Stock: {numExacto(numDec(abmIns.stockActual) || 0)} {abmIns.unidad}</div></div></div>
               <button onClick={guardarInsumo} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-1" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar insumo</button>
             </div>
           </div>
