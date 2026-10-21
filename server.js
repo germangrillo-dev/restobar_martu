@@ -7,6 +7,7 @@ const fs = require("fs");
 const cors = require("cors");
 const db = require("./db");
 const backup = require("./backup");
+const { execFile } = require("child_process");
 
 const app = express();
 app.use(cors());
@@ -70,6 +71,49 @@ app.post("/api/public-url", (req, res) => {
   PUBLIC_URL = req.body.url || PUBLIC_URL;
   db.saveConfig({ publicUrl: PUBLIC_URL });
   res.json({ ok: true, url: PUBLIC_URL });
+});
+
+// --- Tailscale: estado y activación del acceso público (funnel) ---
+const PUERTO_FUNNEL = 3456;
+function tsBin() {
+  const cands = [process.env.TAILSCALE_PATH, "C:\\Program Files\\Tailscale\\tailscale.exe",
+    "C:\\Program Files (x86)\\Tailscale\\tailscale.exe", "C:\\ProgramData\\Tailscale\\tailscale.exe", "tailscale"].filter(Boolean);
+  for (const c of cands) {
+    try { if (c === "tailscale" || fs.existsSync(c)) return c; } catch {}
+  }
+  return "tailscale";
+}
+function ejecutarTs(args, timeout) {
+  return new Promise((resolve) => {
+    try {
+      execFile(tsBin(), args, { timeout: timeout || 45000, windowsHide: true, encoding: "utf8" }, (err, stdout, stderr) => {
+        const out = String(stdout || "") + String(stderr || "").trim();
+        resolve({ ok: !err, out: out.trim(), codigo: err ? (err.code != null ? err.code : 1) : 0 });
+      });
+    } catch (e) { resolve({ ok: false, out: String((e && e.message) || e), codigo: 1 }); }
+  });
+}
+app.get("/api/tailscale", async (req, res) => {
+  const st = await ejecutarTs(["serve", "status"]);
+  const ver = await ejecutarTs(["version"]);
+  res.json({ ok: true, exe: tsBin(), version: ver.out, status: st.out, activo: st.ok && /funnel|https|3456/i.test(st.out) });
+});
+app.post("/api/tailscale/funnel", async (req, res) => {
+  const on = (req.body && req.body.accion) !== "off";
+  const pasos = [];
+  if (on) {
+    pasos.push({ cmd: "tailscale serve --bg " + PUERTO_FUNNEL, ...(await ejecutarTs(["serve", "--bg", String(PUERTO_FUNNEL)])) });
+    pasos.push({ cmd: "tailscale funnel --bg " + PUERTO_FUNNEL, ...(await ejecutarTs(["funnel", "--bg", String(PUERTO_FUNNEL)])) });
+    if (!pasos[pasos.length - 1].ok) {
+      pasos.push({ cmd: "tailscale funnel --bg --set-path / " + PUERTO_FUNNEL, ...(await ejecutarTs(["funnel", "--bg", "--set-path", "/", String(PUERTO_FUNNEL)])) });
+    }
+  } else {
+    pasos.push({ cmd: "tailscale funnel reset", ...(await ejecutarTs(["funnel", "reset"])) });
+    pasos.push({ cmd: "tailscale serve reset", ...(await ejecutarTs(["serve", "reset"])) });
+  }
+  const st = await ejecutarTs(["serve", "status"]);
+  const errores = pasos.filter(p => !p.ok).map(p => p.cmd + ": " + (p.out || "").split("\n").slice(0, 3).join(" ")).join(" | ");
+  res.json({ ok: !errores, accion: on ? "on" : "off", pasos, errores, status: st.out, exe: tsBin() });
 });
 
 // --- Impresion termica por red (ESC/POS sobre TCP 9100) ---
