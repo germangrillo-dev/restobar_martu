@@ -288,7 +288,7 @@ function App() {
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
-    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes } : undefined;
+    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes, mesas: cfg.mesas } : undefined;
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
     const payload = { caja: cajaVal, historialCierres, mesas: mesasLimpias, orden, config: configLiviano, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos };
     if (cajaIniciadaRef.current) { payload.cajaIniciada = true; payload.deliveries = deliveriesVal || []; }
@@ -386,8 +386,19 @@ function App() {
   const productosCat = productos.filter((p) => p.cat === cat);
   const waLink = (tel, msg) => { let n = (tel || "").replace(/[^0-9]/g, ""); if (!n.startsWith("54")) n = "549" + n; return "whatsapp://send?phone=" + n + "&text=" + encodeURIComponent(msg); };
   const abrirWA = (tel, msg) => { window.location.href = waLink(tel, msg); };
-  const mesaTotal = (id, lineasActuales) => sumLin(mesas[id].enviado) + sumLin(lineasActuales || mesas[id].lineas) + sumLin(mesas[id].despachado || []) + sumLin(mesas[id].bebidas || []);
-  const mesaEstado = (id) => mesas[id].enviado.length ? "cocina" : (mesas[id].despachado && mesas[id].despachado.length ? "despachado" : (mesas[id].lineas.length || (mesas[id].bebidas && mesas[id].bebidas.length) ? "abierta" : "libre"));
+  const listaMesas = useMemo(() => (Array.isArray(config.mesas) && config.mesas.length ? config.mesas : MESAS), [config.mesas]);
+  const keyListaMesas = JSON.stringify(listaMesas);
+  React.useEffect(() => {
+    setMesas((prev) => {
+      const faltan = listaMesas.filter((m) => !prev[m.id]);
+      if (!faltan.length) return prev;
+      const next = { ...prev };
+      faltan.forEach((m) => { next[m.id] = { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }; });
+      return next;
+    });
+  }, [keyListaMesas]);
+  const mesaTotal = (id, lineasActuales) => { const m = mesas[id] || {}; return sumLin(m.enviado || []) + sumLin(lineasActuales || m.lineas || []) + sumLin(m.despachado || []) + sumLin(m.bebidas || []); };
+  const mesaEstado = (id) => { const m = mesas[id] || { lineas: [], enviado: [], despachado: [], bebidas: [] }; return (m.enviado || []).length ? "cocina" : ((m.despachado || []).length ? "despachado" : ((m.lineas || []).length || (m.bebidas || []).length ? "abierta" : "libre")); };
   const costoReceta = (rec) => rec.reduce((a, [iid, c]) => a + (costos[iid] || 0) * c, 0);
   const unidadDe = (iid) => insumoById[iid] ? insumoById[iid].unidad : "";
   const nombreIns = (iid) => insumoById[iid] ? insumoById[iid].nombre : "(borrado)";
@@ -880,6 +891,11 @@ function App() {
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { impresoras: config.impresoras } }) })
       .then(() => setToast({ tipo: "ok", texto: "Impresoras guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
   };
+  const guardarMesasCfg = (arr) => {
+    setConfig((c) => ({ ...c, mesas: arr }));
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { mesas: arr } }) })
+      .then(() => setToast({ tipo: "ok", texto: arr.length + " mesas guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
+  };
   const elegirUSB = async (k) => {
     try { const ref = await ESCPOS.elegir(); setImp(k, { ...ref, ip: "", puerto: 9100 }); setToast({ tipo: "ok", texto: "Asignada: " + ref.nombre }); }
     catch (e) { setToast({ tipo: "error", texto: e.message }); }
@@ -1027,7 +1043,7 @@ function App() {
             </div>
             <button onClick={() => { if (syncRef.current) syncRef.current(); setToast({ tipo: "ok", texto: "Datos actualizados." }); }} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Actualizar datos"><RefreshCw size={15} /></button>
             {!esModoAdmin && <button onClick={() => window.open("/qr", "_blank")} className="flex items-center gap-1 px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><QrCode size={15} /></button>}
-            {!esModoAdmin && <button onClick={() => setShowCocinaPopup(!showCocinaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold" style={{ background: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber + "33" : C.raised, border: "1px solid " + ((deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.border), color: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.muted }}><Flame size={20} />{(deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length) > 0 && <span className="absolute -top-2 -right-2 flex items-center justify-center rounded-full text-xs font-bold animate-pulse" style={{ background: C.red, color: "#fff", width: 22, height: 22, fontSize: 12 }}>{deliveries.filter(d => (d.estado || "cocina") === "cocina").length + MESAS.filter(m => mesaEstado(m.id) === "cocina").length}</span>}</button>}
+            {!esModoAdmin && <button onClick={() => setShowCocinaPopup(!showCocinaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold" style={{ background: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + listaMesas.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber + "33" : C.raised, border: "1px solid " + ((deliveries.filter(d => (d.estado || "cocina") === "cocina").length + listaMesas.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.border), color: (deliveries.filter(d => (d.estado || "cocina") === "cocina").length + listaMesas.filter(m => mesaEstado(m.id) === "cocina").length) > 0 ? C.amber : C.muted }}><Flame size={20} />{(deliveries.filter(d => (d.estado || "cocina") === "cocina").length + listaMesas.filter(m => mesaEstado(m.id) === "cocina").length) > 0 && <span className="absolute -top-2 -right-2 flex items-center justify-center rounded-full text-xs font-bold animate-pulse" style={{ background: C.red, color: "#fff", width: 22, height: 22, fontSize: 12 }}>{deliveries.filter(d => (d.estado || "cocina") === "cocina").length + listaMesas.filter(m => mesaEstado(m.id) === "cocina").length}</span>}</button>}
             {!esModoAdmin && <button onClick={() => setShowWaPopup(!showWaPopup)} className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: waPedidos.length > 0 ? "#25D36622" : C.raised, border: "1px solid " + (waPedidos.length > 0 ? "#25D366" : C.border), color: waPedidos.length > 0 ? "#25D366" : C.muted }}><Smartphone size={20} />{waPedidos.length > 0 && <span className="absolute -top-2 -right-2 flex items-center justify-center rounded-full text-xs font-bold animate-pulse" style={{ background: "#25D366", color: "#fff", width: 22, height: 22, fontSize: 12 }}>{waPedidos.length}</span>}</button>}
             {!esModoAdmin && <button onClick={() => { setWhatsappModal("config"); setPedidoRaw(WA_NUMERO); }} className="flex items-center px-2 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }} title="Configurar número WhatsApp"><Pencil size={13} /></button>}
             <button onClick={logout} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><LogOut size={15} /></button>
@@ -1048,13 +1064,13 @@ function App() {
                 <button onClick={() => setSalonVista("salon")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "salon" ? C.amber : "transparent", color: salonVista === "salon" ? "#241a0c" : C.muted }}><LayoutGrid size={15} /> Salón</button>
                 <button onClick={() => setSalonVista("delivery")} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold" style={{ background: salonVista === "delivery" ? C.amber : "transparent", color: salonVista === "delivery" ? "#241a0c" : C.muted }}><Bike size={15} /> Delivery{deliveries.filter(d => (d.estado||"cocina")!=="entregado").length ? " (" + deliveries.filter(d => (d.estado||"cocina")!=="entregado").length + ")" : ""}</button>
               </div>
-              {!esVisor && <div className="flex gap-2"><button onClick={() => { const qrBase = config.qrUrl || publicUrl || window.location.origin; const win = window.open("", "_blank"); let html = "<html><head><style>body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:20px;justify-content:center} .qr{text-align:center;border:1px solid #ddd;border-radius:12px;padding:16px;page-break-inside:avoid} .qr img{width:200px;height:200px} .qr p{margin:6px 0 0;font-size:12px;color:#555} h1{width:100%;text-align:center}</style></head><body><h1>QR Mesas</h1>"; MESAS.forEach(m => { html += "<div class='qr'><img src='/api/qr?size=300&data=" + encodeURIComponent(qrBase + "/menu-mesa.html?mesa=" + m.id) + "'/><p>Mesa " + m.id + "</p><p style='font-size:10px;color:#999;word-break:break-all'>" + qrBase + "/menu-mesa.html?mesa=" + m.id + "</p></div>"; }); html += "</body></html>"; win.document.write(html); win.print(); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}><Printer size={16} /> Imprimir QR</button>
+              {!esVisor && <div className="flex gap-2"><button onClick={() => { const qrBase = config.qrUrl || publicUrl || window.location.origin; const win = window.open("", "_blank"); let html = "<html><head><style>body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:20px;justify-content:center} .qr{text-align:center;border:1px solid #ddd;border-radius:12px;padding:16px;page-break-inside:avoid} .qr img{width:200px;height:200px} .qr p{margin:6px 0 0;font-size:12px;color:#555} h1{width:100%;text-align:center}</style></head><body><h1>QR Mesas</h1>"; listaMesas.forEach(m => { html += "<div class='qr'><img src='/api/qr?size=300&data=" + encodeURIComponent(qrBase + "/menu-mesa.html?mesa=" + m.id) + "'/><p>Mesa " + m.id + "</p><p style='font-size:10px;color:#999;word-break:break-all'>" + qrBase + "/menu-mesa.html?mesa=" + m.id + "</p></div>"; }); html += "</body></html>"; win.document.write(html); win.print(); }} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}><Printer size={16} /> Imprimir QR</button>
               <button onClick={abrirDelivery} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo delivery</button></div>}
             </div>
 
 
             {salonVista === "salon" ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">{MESAS.map((m) => { const e = mesaEstado(m.id); const totalMesa = (orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id); return (<div key={m.id} className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: C.raised, border: "1.5px solid " + colorEstado(e), minHeight: 92, cursor: esVisor ? "default" : "pointer" }} onClick={() => !esVisor && abrirMesa(m.id)}><div style={{ fontWeight: 800, fontSize: 18 }}>Mesa {m.id}</div><div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 12 }}><Users size={12} /> {m.asientos}</div>{e === "libre" ? <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Libre</div> : <div style={{ color: e === "cocina" ? C.amber : C.blue, fontSize: 12, fontWeight: 700, marginTop: 4 }}>{pesos(totalMesa)}</div>}{!esVisor && <button onClick={(e) => { e.stopPropagation(); setQrMesa(m.id); }} className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><QrCode size={12} /> QR</button>}</div>); })}</div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">{listaMesas.map((m) => { const e = mesaEstado(m.id); const totalMesa = (orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id); return (<div key={m.id} className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: C.raised, border: "1.5px solid " + colorEstado(e), minHeight: 92, cursor: esVisor ? "default" : "pointer" }} onClick={() => !esVisor && abrirMesa(m.id)}><div style={{ fontWeight: 800, fontSize: 18 }}>Mesa {m.id}</div><div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 12 }}><Users size={12} /> {m.asientos}</div>{e === "libre" ? <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Libre</div> : <div style={{ color: e === "cocina" ? C.amber : C.blue, fontSize: 12, fontWeight: 700, marginTop: 4 }}>{pesos(totalMesa)}</div>}{!esVisor && <button onClick={(e) => { e.stopPropagation(); setQrMesa(m.id); }} className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><QrCode size={12} /> QR</button>}</div>); })}</div>
             ) : (
               <div>
                 {waPedidos.length > 0 && (
@@ -1234,8 +1250,8 @@ function App() {
               {/* Mesas activas */}
               <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><Users size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Mesas</h3></div>
-                  {MESAS.filter((m) => mesaEstado(m.id) !== "libre").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Todas las mesas libres</p> : (
-                  <div className="grid grid-cols-2 gap-2">{MESAS.filter((m) => mesaEstado(m.id) !== "libre").map((m) => {
+                  {listaMesas.filter((m) => mesaEstado(m.id) !== "libre").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Todas las mesas libres</p> : (
+                  <div className="grid grid-cols-2 gap-2">{listaMesas.filter((m) => mesaEstado(m.id) !== "libre").map((m) => {
                     const e = mesaEstado(m.id);
                     return (
                       <div key={m.id} className="relative rounded-lg p-3 text-center w-full" style={{ background: C.base, border: "1px solid " + colorEstado(e), cursor: esVisor ? "default" : "pointer" }} onClick={() => { if (!esVisor) { setTab("pedido"); abrirMesa(m.id); } }}>
@@ -1438,6 +1454,10 @@ function App() {
               <button onClick={() => setConfigModal("clientes")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                 <User size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Clientes</span>
+              </button>
+              <button onClick={() => setConfigModal("mesas")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
+                <LayoutGrid size={24} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Mesas</span>
               </button>
               <button onClick={() => setConfigModal("backup")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                 <Database size={24} />
@@ -1674,6 +1694,39 @@ function App() {
               </div>
             )}
 
+            {configModal === "mesas" && (
+              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 style={{ fontWeight: 700, fontSize: 16 }}>Mesas del salón</h3>
+                    <button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Cantidad de mesas y asientos de cada una. Vale para el salón, el mapa de estado, la cocina, el QR de mesa y el menú del cliente.</div>
+                  <div className="flex flex-col gap-2 mb-4">
+                    {listaMesas.map((m) => {
+                      const x = mesas[m.id];
+                      const ocupada = !!x && ((x.lineas || []).length > 0 || (x.enviado || []).length > 0 || (x.despachado || []).length > 0 || (x.bebidas || []).length > 0);
+                      const puedeQuitar = !ocupada && listaMesas.length > 1;
+                      return (
+                        <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, minWidth: 68 }}>Mesa {m.id}</span>
+                          <label style={{ fontSize: 11, color: C.muted }}>Asientos</label>
+                          <input type="number" min="1" max="30" value={m.asientos || 4} onChange={(e) => { const n = Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 1)); guardarMesasCfg(listaMesas.map((it) => it.id === m.id ? { ...it, asientos: n } : it)); }} style={{ width: 66, padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.border, background: C.raised, color: C.text, fontSize: 13 }} />
+                          <div style={{ flex: 1 }} />
+                          <span style={{ fontSize: 11, color: ocupada ? C.amber : C.muted }}>{ocupada ? "con pedidos" : "libre"}</span>
+                          <button disabled={!puedeQuitar} onClick={() => { if (!puedeQuitar) { if (ocupada) setToast({ tipo: "error", texto: "La mesa tiene pedidos: vaciala antes de quitarla." }); return; } if (!window.confirm("¿Quitar la mesa " + m.id + "?")) return; guardarMesasCfg(listaMesas.filter((it) => it.id !== m.id)); }} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: puedeQuitar ? C.red + "22" : C.raised2, color: puedeQuitar ? C.red : C.muted, border: "1px solid " + (puedeQuitar ? C.red : C.border), cursor: puedeQuitar ? "pointer" : "not-allowed" }}><Trash2 size={13} /> Quitar</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { const usados = listaMesas.map((it) => it.id); let id = 1; while (usados.includes(id)) id++; guardarMesasCfg([...listaMesas, { id, asientos: 4 }].sort((a, b) => a.id - b.id)); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><Plus size={15} /> Agregar mesa</button>
+                    <button onClick={() => guardarMesasCfg(listaMesas)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={15} /> Guardar ({listaMesas.length})</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {configModal === "backup" && (
               <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
@@ -1856,8 +1909,8 @@ function App() {
                     setCajaIniciada(false);
                     salirSinCaja();
                     setDeliveries((d) => d.filter(x => x.estado === "entregado"));
-                    setMesas((ms) => Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }])));
-                    const mesasVacias = Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }]));
+                    setMesas((ms) => Object.fromEntries(listaMesas.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }])));
+                    const mesasVacias = Object.fromEntries(listaMesas.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }]));
                     postMesas(mesasVacias);
                     postDeliveries([]);
                     const payload = { caja: cierreCompleto, cajaIniciada: false, historialCierres: nuevoHistorial, mesas: mesasVacias, deliveries: [], config: { nombreLocal: config.nombreLocal, logo: config.logo } };
@@ -2264,7 +2317,7 @@ function App() {
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}><Flame size={16} style={{ marginRight: 6 }} />Cocina</h3><button onClick={() => setShowCocinaPopup(false)} style={{ color: C.muted }}><X size={18} /></button></div>
             {(() => {
               const enCocina = [];
-              for (const m of MESAS) {
+              for (const m of listaMesas) {
                 if (mesas[m.id].enviado.length > 0) enCocina.push({ tipo: "mesa", id: m.id, label: "Mesa " + m.id, items: mesas[m.id].enviado, total: sumLin(mesas[m.id].enviado) });
               }
               for (const d of deliveries) {
