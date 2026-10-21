@@ -359,42 +359,19 @@ function App() {
   const [facturaXNum, setFacturaXNum] = useState(() => cargar("facturaXNum", 1));
   const [showConfig, setShowConfig] = useState(false);
   const [config, setConfig] = useState(() => cargar("config", { nombreLocal: "", logo: "", destinoComanda: "default", destinoFacturacion: "default", nombresDestinos: {}, enviarBebidas: false, githubToken: "", clientes: [], qrUrl: "http://192.168.1.230:3456", visorPin: "2468", impresoras: {} }));
-  // ─── MODO DEMO: entra al sistema sin abrir caja y no guarda nada ───
-  const [modoDemo, setModoDemoState] = useState(() => { try { return sessionStorage.getItem("martu_demo") === "1"; } catch { return false; } });
-  const demoRef = React.useRef(modoDemo);
-  demoRef.current = modoDemo;
-  const setModoDemo = (v) => { setModoDemoState(v); try { if (v) sessionStorage.setItem("martu_demo", "1"); else sessionStorage.removeItem("martu_demo"); } catch {} };
-  const salirDemo = () => { setModoDemo(false); window.location.reload(); };
-  React.useEffect(() => {
-    const DEMO_MSJ = "MODO DEMO: no se guardó nada";
-    const origFetch = window.fetch.bind(window);
-    window.fetch = function (input, init) {
-      if (demoRef.current) {
-        try {
-          const url = typeof input === "string" ? input : ((input && input.url) || "");
-          const method = String((init && init.method) || (typeof input === "object" && input && input.method) || "GET").toUpperCase();
-          const esEscritura = ["POST", "PUT", "PATCH", "DELETE"].indexOf(method) !== -1;
-          const imprime = url.indexOf("/api/imprimir") !== -1;
-          if (esEscritura && !imprime && url.indexOf("/api/") !== -1) {
-            return Promise.resolve(new Response(JSON.stringify({ ok: false, demo: true, texto: DEMO_MSJ, error: DEMO_MSJ, mensaje: DEMO_MSJ }), { status: 200, headers: { "Content-Type": "application/json" } }));
-          }
-        } catch {}
-      }
-      return origFetch(input, init);
-    };
-    const origBeacon = navigator.sendBeacon ? navigator.sendBeacon.bind(navigator) : null;
-    if (origBeacon) navigator.sendBeacon = function (url, data) { if (demoRef.current && String(url).indexOf("/api/") !== -1) return true; return origBeacon(url, data); };
-    const origLS = localStorage.setItem.bind(localStorage);
-    localStorage.setItem = function (k, v) { if (demoRef.current && (String(k).indexOf("elmo_") === 0 || String(k).indexOf("martu_") === 0)) return; return origLS(k, v); };
-    return () => { window.fetch = origFetch; if (origBeacon) navigator.sendBeacon = origBeacon; localStorage.setItem = origLS; };
-  }, []);
+  // ─── Ingresar al sistema SIN abrir caja (no genera arqueo, todo lo demás se guarda) ───
+  const [ingresoSinCaja, setIngresoSinCaja] = useState(() => { try { return sessionStorage.getItem("martu_sincaja") === "1"; } catch { return false; } });
+  const entrarSinCaja = () => { setIngresoSinCaja(true); try { sessionStorage.setItem("martu_sincaja", "1"); } catch {} setToast({ tipo: "ok", texto: "Entraste al sistema sin abrir caja." }); };
+  const salirSinCaja = () => { setIngresoSinCaja(false); try { sessionStorage.removeItem("martu_sincaja"); } catch {} };
 
   const cajaIniciadaRef = React.useRef(cajaIniciada);
   cajaIniciadaRef.current = cajaIniciada;
   React.useEffect(() => {
     const handler = () => {
       try {
-        const payload = JSON.stringify({ caja: cajaRef2.current, mesas: mesasRef.current, deliveries: deliveriesRef.current, cajaIniciada: cajaIniciadaRef.current });
+        const p = { caja: cajaRef2.current, mesas: mesasRef.current, deliveries: deliveriesRef.current };
+        if (cajaIniciadaRef.current) p.cajaIniciada = true;
+        const payload = JSON.stringify(p);
         const blob = new Blob([payload], { type: "application/json" });
         navigator.sendBeacon && navigator.sendBeacon(serverUrl + "/api/caja", blob);
       } catch {}
@@ -418,7 +395,7 @@ function App() {
   const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
-  const cajaAbierta = cajaIniciada || modoDemo;
+  const cajaAbierta = cajaIniciada || ingresoSinCaja;
   const activeTab = cajaAbierta ? tab : "caja";
 
   const abrirMesa = (id) => {
@@ -1060,8 +1037,8 @@ function App() {
         <nav className="flex gap-1 mb-3 p-1 rounded-xl overflow-x-auto" style={{ background: C.raised, width: "fit-content", maxWidth: "100%" }}>
           {tabs.map((t) => { const on = tab === t.id; return (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === "pedido") setVista("mapa"); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.amber : "transparent", color: on ? "#241a0c" : C.muted }}><t.icon size={16} /> {t.label}</button>); })}
         </nav>
-        {modoDemo && <div className="flex items-center justify-between gap-3 mb-4 px-4 py-3 rounded-xl text-sm font-bold flex-wrap" style={{ background: C.red + "22", color: C.red, border: "1px solid " + C.red }}><span className="flex items-center gap-2"><Eye size={16} /> MODO DEMO — el sistema está en prueba, los datos NO se guardan</span><button onClick={() => { if (window.confirm("¿Salir del modo demo? Se descarta todo lo hecho en la demostración.")) salirDemo(); }} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: C.red, color: "#fff" }}>Salir del modo demo</button></div>}
-        {!cajaAbierta && !modoDemo && <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: C.amber + "22", color: C.amber, border: "1px solid " + C.amber }}><AlertTriangle size={16} /> Tenés que abrir la caja para empezar a operar</div>}
+        {ingresoSinCaja && !cajaIniciada && <div className="flex items-center justify-between gap-3 mb-4 px-4 py-3 rounded-xl text-sm font-bold flex-wrap" style={{ background: C.blue + "22", color: C.blue, border: "1px solid " + C.blue }}><span className="flex items-center gap-2"><Eye size={16} /> Entraste SIN CAJA abierta — no hay arqueo de turno</span><button onClick={() => salirSinCaja()} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: C.amber, color: "#241a0c" }}>Abrir caja ahora</button></div>}
+        {!cajaAbierta && <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: C.amber + "22", color: C.amber, border: "1px solid " + C.amber }}><AlertTriangle size={16} /> Tenés que abrir la caja para empezar a operar</div>}
 
         {/* VENDER mapa (salón + delivery) */}
         {activeTab === "pedido" && vista === "mapa" && (
@@ -1748,7 +1725,7 @@ function App() {
               </div>
             </div>
 
-            {cajaIniciada === false && !modoDemo ? (
+            {cajaIniciada === false && !ingresoSinCaja ? (
               /* Apertura form */
               esVisor ? (
                 <div className="max-w-md mx-auto rounded-xl p-6 text-center" style={{ background: C.raised, border: "1px solid " + C.border }}>
@@ -1757,7 +1734,8 @@ function App() {
                 </div>
               ) : (
               <div className="max-w-md mx-auto rounded-xl p-6" style={{ background: C.raised, border: "1px solid " + C.border }}>
-                <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Abrir caja</h3>
+                <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Entrar al sistema</h3>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>{(esAdmin || esGerente) ? "Abrí la caja para operar con arqueo, o ingresá sin abrir caja." : "Abrí la caja para comenzar a operar."}</div>
                 <div className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
                   <div><label style={lbl}>Turno</label>
                     <select style={inputStyle} value={caja.turno} onChange={(e) => { cajaDirtyUntilRef.current = Date.now() + 30000; setCaja((c) => ({ ...c, turno: e.target.value })); }} onFocus={() => { cajaDirtyUntilRef.current = Date.now() + 30000; }}>
@@ -1772,10 +1750,10 @@ function App() {
                   <div style={{ marginTop: 8 }}>
                     <button type="button" id="btn-abrir-caja" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); if (!caja.turno) { setToast({ tipo: "error", texto: "Seleccioná el turno." }); return; } if (!caja.usuario.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del usuario." }); return; } if (caja.apertura === null || caja.apertura === undefined || isNaN(caja.apertura)) { setToast({ tipo: "error", texto: "Poné el efectivo inicial (puede ser 0)." }); return; } if (!window.confirm("¿Abrir caja con " + dinero(caja.apertura) + "?")) return; const turno = caja.turno; const apertura = caja.apertura; const usuario = caja.usuario; const nuevaCaja = { fecha: hoy(), apertura, movimientos: [], cierre: null, saldoFinal: null, turno, usuario, arqueo: {} }; setCaja(nuevaCaja); setCajaIniciada(true); cajaDirtyUntilRef.current = Date.now() + 5000; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja, cajaIniciada: true, config: { nombreLocal: config.nombreLocal, logo: config.logo } }) }).then(() => setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno })).catch(() => setToast({ tipo: "ok", texto: "Caja abierta — Turno " + turno + " (sin sync)" })); }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Abrir caja</button>
                   </div>
-                  <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid " + C.border }}>
-                    <button type="button" id="btn-demo" onClick={(e) => { e.stopPropagation(); setModoDemo(true); setToast({ tipo: "ok", texto: "Modo demo activado — nada se guarda." }); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: "transparent", border: "1px solid " + C.blue, color: C.blue }}><Eye size={15} /> Ver el sistema (modo demo)</button>
-                    <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Para mostrar o explicar el funcionamiento sin abrir caja. No registra ventas ni modifica datos.</div>
-                  </div>
+                  {(esAdmin || esGerente) && <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid " + C.border }}>
+                    <button type="button" id="btn-sin-caja" onClick={(e) => { e.stopPropagation(); entrarSinCaja(); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: "transparent", border: "1px solid " + C.blue, color: C.blue }}><Eye size={15} /> Ingresar al sistema</button>
+                    <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Entra sin abrir caja. Se guarda todo (carta, productos, pedidos), pero sin arqueo de turno. Podés abrir la caja cuando quieras.</div>
+                  </div>}
                 </div>
               </div>
             )) : (
@@ -1876,6 +1854,7 @@ function App() {
                     const cajaLimpia = { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
                     setCaja(cajaLimpia);
                     setCajaIniciada(false);
+                    salirSinCaja();
                     setDeliveries((d) => d.filter(x => x.estado === "entregado"));
                     setMesas((ms) => Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [] }])));
                     const mesasVacias = Object.fromEntries(MESAS.map((m) => [m.id, { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }]));
