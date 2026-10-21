@@ -343,6 +343,7 @@ function App() {
   const [egresoMonto, setEgresoMonto] = useState("");
   const [tailscaleEstado, setTailscaleEstado] = useState("");
   const [tailscaleTrabajando, setTailscaleTrabajando] = useState(false);
+  const [margenPor, setMargenPor] = useState({});
   const [editEgresoId, setEditEgresoId] = useState(null);
   const [caja, setCaja] = useState(() => { try { const saved = localStorage.getItem("martu_caja"); if (saved) { const parsed = JSON.parse(saved); if (parsed && parsed.movimientos) return parsed; } } catch {} return { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} }; });
   const cajaRef2 = React.useRef(caja);
@@ -627,6 +628,14 @@ function App() {
     setAbmProd(null); setToast({ tipo: "ok", texto: "Producto guardado." });
   };
   const borrarProducto = (id) => { setProductos((ps) => { const nps = ps.filter((p) => p.id !== id); syncProductosAlServer(nps); return nps; }); setAbmProd(null); setToast({ tipo: "ok", texto: "Producto eliminado." }); };
+  const precioPorMargen = (costo, mg) => { const m = numDec(mg); if (!isFinite(m) || !(costo > 0)) return null; const bruto = costo * (1 + m / 100); if (!isFinite(bruto) || bruto <= 0) return null; return bruto >= 1000 ? Math.round(bruto / 50) * 50 : Math.max(1, Math.round(bruto)); };
+  const prodsDelInsumo = (iid) => productos.filter(p => (p.receta || []).some(([x]) => x === iid)).sort((a, b) => ((a.cat === "Bebidas" ? 0 : 1) - (b.cat === "Bebidas" ? 0 : 1)));
+  const margenActual = (p, costo) => { const v = margenPor[p.id]; if (v != null && v !== "") return v; return (costo > 0 && p.precio > 0) ? String(Math.max(0, Math.round((p.precio / costo - 1) * 100))) : ""; };
+  const aplicarPrecio = (pid, nuevo) => {
+    const pr = productos.find(p => p.id === pid);
+    setProductos((ps) => { const nps = ps.map(p => p.id === pid ? { ...p, precio: nuevo } : p); syncProductosAlServer(nps); return nps; });
+    setToast({ tipo: "ok", texto: "Precio de " + (pr ? pr.nombre + ": " + pesos(pr.precio) + " → " : "") + pesos(nuevo) + "." });
+  };
 
   // ABM Proveedores
   const guardarProveedor = () => {
@@ -1361,7 +1370,7 @@ function App() {
 <tbody>
 {fac.items.map((it) => { const c = calcItem(it); return (
 <tr key={it.lid} style={{ borderTop: "1px solid " + C.border }}>
-<td style={{ padding: "4px 8px" }}><select style={{ ...miniInput, width: "100%", fontSize: 12, background: C.base, color: C.text, border: "1px solid " + C.border, borderRadius: 4, colorScheme: "dark" }} value={it.codigo} onChange={(e) => setFacItem(it.lid, "codigo", e.target.value)}><option value="">Artículo…</option>{articulosProv.map((ar) => <option key={ar.codigo} value={ar.codigo}>{ar.desc}</option>)}</select>{c.a && <div style={{ fontSize: 10, marginTop: 2, color: (c.ingreso > 0 && c.sub > 0) ? C.amber : C.muted }}>→ {numExacto(c.ingreso)} {unidadDe(c.a.insumo)}{c.ingreso > 0 && c.sub > 0 ? " · " + dinero(c.sub / c.ingreso) + "/" + unidadDe(c.a.insumo) : ""}</div>}</td>
+<td style={{ padding: "4px 8px" }}><select style={{ ...miniInput, width: "100%", fontSize: 12, background: C.base, color: C.text, border: "1px solid " + C.border, borderRadius: 4, colorScheme: "dark" }} value={it.codigo} onChange={(e) => setFacItem(it.lid, "codigo", e.target.value)}><option value="">Artículo…</option>{articulosProv.map((ar) => <option key={ar.codigo} value={ar.codigo}>{ar.desc}</option>)}</select>{c.a && <div style={{ fontSize: 10, marginTop: 2, color: (c.ingreso > 0 && c.sub > 0) ? C.amber : C.muted }}>→ {numExacto(c.ingreso)} {unidadDe(c.a.insumo)}{c.ingreso > 0 && c.sub > 0 ? " · " + dinero(c.sub / c.ingreso) + "/" + unidadDe(c.a.insumo) : ""}</div>}{c.a && (() => { const usados = prodsDelInsumo(c.a.insumo); const vis = usados.slice(0, 3); return (<>{vis.map((p) => { const costo = costoReceta(p.receta); const mg = margenActual(p, costo); const nuevo = precioPorMargen(costo, mg); const cambio = nuevo != null && Number(nuevo) !== Number(p.precio); return (<div key={p.id} style={{ fontSize: 10, marginTop: 4, padding: "3px 5px", background: C.base, border: "1px solid " + C.border, borderRadius: 4, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><span style={{ color: C.amber, fontWeight: 700 }}>{p.nombre}</span><span style={{ color: C.muted }}>hoy {pesos(p.precio)} · costo {pesos(costo)}</span><input value={mg} onChange={(e) => setMargenPor((m) => ({ ...m, [p.id]: e.target.value }))} style={{ width: 44, textAlign: "right", fontSize: 10, padding: "1px 3px", background: C.raised2, border: "1px solid " + C.border, borderRadius: 3, color: C.text }} /><span style={{ color: C.muted }}>% ganancia</span>{nuevo != null && <span style={{ color: cambio ? C.green : C.muted, fontWeight: 700 }}>→ {pesos(nuevo)}</span>}{cambio && <button onClick={() => aplicarPrecio(p.id, nuevo)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: C.green, color: "#0f2417", border: "none", cursor: "pointer" }}>Poner precio</button>}</div>); })}{usados.length > 3 && <div style={{ fontSize: 10, marginTop: 3, color: C.muted }}>+{usados.length - 3} productos más usan este insumo</div>}</>); })()}</td>
 <td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.cantidad} onChange={(e) => setFacItem(it.lid, "cantidad", e.target.value)} /></td>
 <td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.unitario} onChange={(e) => setFacItem(it.lid, "unitario", e.target.value)} /></td>
 <td style={{ padding: "4px 8px" }}><input style={{ ...miniInput, width: "100%", textAlign: "right", fontSize: 12 }} type="text" inputMode="decimal" placeholder="0" value={it.descuento} onChange={(e) => setFacItem(it.lid, "descuento", e.target.value)} /></td>
@@ -1374,7 +1383,7 @@ function App() {
 </table>
 </div>
 <button onClick={addFacItem} className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={15} /> Agregar artículo</button>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Dcto.: escribí <b style={{ color: C.amber }}>722</b> para descontar $722, o <b style={{ color: C.amber }}>7%</b> para descontar el 7% de esa fila. Se aceptan comas decimales.</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Dcto.: escribí <b style={{ color: C.amber }}>722</b> para descontar $722, o <b style={{ color: C.amber }}>7%</b> para descontar el 7% de esa fila. Se aceptan comas decimales. Debajo de cada artículo se ve el <b style={{ color: C.amber }}>precio actual al público</b> de los productos que usan ese insumo, con su costo de receta: cambiá el <b>% de ganancia</b> y tocá <b>Poner precio</b> si querés actualizarlo.</div>
               <div className="mt-4 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}><div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Neto</span><span>{dinero(tot.neto)}</span></div>{tot.internos > 0 && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Impuestos internos</span><span>{dinero(tot.internos)}</span></div>}{esA && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>IVA 21%</span><span>{dinero(tot.iva)}</span></div>}<div className="flex justify-between items-baseline"><span style={{ fontWeight: 700 }}>Total</span><span style={{ fontWeight: 800, fontSize: 20, color: C.amber }}>{dinero(tot.total)}</span></div></div>
               <button onClick={cargarFactura} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-3" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Cargar y sumar al stock</button>
             </div>
