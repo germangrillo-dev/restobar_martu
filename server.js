@@ -337,6 +337,19 @@ app.get("/api/visor", (req, res) => {
   }
 });
 
+// --- Deliveries: el estado nunca retrocede (una pestaña vieja no puede reabrir un pedido entregado) ---
+const RANK_DELIVERY = { cocina: 0, despachado: 1, entregado: 2 };
+function mergeDeliveries(actual, entrante) {
+  const prev = new Map((actual || []).map((d) => [d.id, d]));
+  return (entrante || []).map((d) => {
+    const p = prev.get(d.id);
+    if (!p) return d;
+    const rp = RANK_DELIVERY[p.estado] != null ? RANK_DELIVERY[p.estado] : 0;
+    const rn = RANK_DELIVERY[d.estado] != null ? RANK_DELIVERY[d.estado] : 0;
+    return rn < rp ? { ...d, estado: p.estado } : d;
+  });
+}
+
 // --- API: Caja ---
 app.get("/api/caja", (req, res) => {
   const caja = db.getCaja();
@@ -404,7 +417,7 @@ app.post("/api/caja", (req, res) => {
     // Deliveries
     if (deliveries !== undefined && deliveries !== null) {
       const filtered = Array.isArray(deliveries) ? deliveries : [];
-      db.saveDeliveries(filtered);
+      db.saveDeliveries(mergeDeliveries(db.getDeliveries(), filtered));
     }
 
     // Config
@@ -460,8 +473,22 @@ app.get("/api/deliveries", (req, res) => {
 app.post("/api/deliveries", (req, res) => {
   const deliveries = req.body;
   if (!Array.isArray(deliveries)) return res.status(400).json({ error: "invalid" });
-  db.saveDeliveries(deliveries);
+  db.saveDeliveries(mergeDeliveries(db.getDeliveries(), deliveries));
   res.json({ ok: true });
+});
+
+// --- API: Borrar un movimiento de caja (ej: cobro duplicado) ---
+app.post("/api/caja/mov/delete", (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    if (!id || typeof id !== "string") return res.status(400).json({ error: "id" });
+    const ok = db.deleteMovimiento(id);
+    console.log("[MOV DELETE]", id, ok ? "borrado" : "no existia");
+    res.json({ ok, borrado: ok });
+  } catch (e) {
+    console.error("[MOV DELETE] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // --- API: Facturas de compra ---

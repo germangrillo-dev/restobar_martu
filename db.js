@@ -57,6 +57,11 @@ function initDB() {
       afip_tipo TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS movimientos_borrados (
+      id TEXT PRIMARY KEY,
+      ts INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS mesas (
       id INTEGER PRIMARY KEY,
       estado TEXT DEFAULT '{"lineas":[],"enviado":[],"despachado":[],"bebidas":[]}'
@@ -259,7 +264,12 @@ function createCaja(sesion) {
   return result.lastInsertRowid;
 }
 
+function movimientoBorrado(id) {
+  return !!getDB().prepare("SELECT 1 FROM movimientos_borrados WHERE id = ?").get(id);
+}
+
 function addMovimiento(sesionId, mov) {
+  if (!mov || !mov.id || movimientoBorrado(mov.id)) return;
   getDB().prepare(
     "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
@@ -267,6 +277,14 @@ function addMovimiento(sesionId, mov) {
     mov.hora || "", mov.ref || "", mov.usuario || "", mov.comprobante || "",
     mov.cae || "", mov.caeVto || "", mov.afipCbte || null, mov.afipTipo || ""
   );
+}
+
+function deleteMovimiento(id) {
+  if (!id) return false;
+  const d = getDB();
+  const r = d.prepare("DELETE FROM movimientos WHERE id = ?").run(id);
+  d.prepare("INSERT OR IGNORE INTO movimientos_borrados (id, ts) VALUES (?, ?)").run(id, Date.now());
+  return r.changes > 0;
 }
 
 function updateSesionArqueo(sesionId, arqueo) {
@@ -528,7 +546,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, closeCaja, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, addMovimiento, deleteMovimiento, closeCaja, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries,

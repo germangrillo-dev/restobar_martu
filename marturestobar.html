@@ -114,6 +114,17 @@ const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", min
 const uid = () => Math.random().toString(36).slice(2, 9);
 const USUARIOS_DEFAULT = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
 const lineaVacia = () => ({ lid: uid(), codigo: "", cantidad: "", unitario: "", descuento: "", internos: "" });
+const RANK_DELIVERY = { cocina: 0, despachado: 1, entregado: 2 };
+const unirDeliveries = (local, servidor) => {
+  const loc = new Map((local || []).map((d) => [d.id, d]));
+  return (servidor || []).map((s) => {
+    const l = loc.get(s.id);
+    if (!l) return s;
+    const rl = RANK_DELIVERY[l.estado] != null ? RANK_DELIVERY[l.estado] : 0;
+    const rs = RANK_DELIVERY[s.estado] != null ? RANK_DELIVERY[s.estado] : 0;
+    return rl > rs ? { ...s, estado: l.estado } : s;
+  });
+};
 const provVacio = () => ({ nombre: "", cuit: "", condicion: CONDICIONES[0], rubro: "", direccion: "", localidad: "", telefono: "", email: "" });
 let WA_NUMERO = (() => { try { return localStorage.getItem("elmo_wa_numero") || "5491155551234"; } catch { return "5491155551234"; } })();
 
@@ -559,14 +570,20 @@ function App() {
     setDeliveries(nds);
     postDeliveries(nds);
     if (nuevoEstado === "entregado") {
-      const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
-      setFacturaXNum((n) => n + 1);
-      const mov = { id: uid(), tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp };
-      if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
-      const nuevaCaja = { ...caja, movimientos: [...caja.movimientos, mov] };
-      setCaja(nuevaCaja);
-      setToast({ tipo: "ok", texto: "Pedido entregado." + (afipResult ? " CAE: " + afipResult.cae : "") });
-      postAlServer(nuevaCaja, null, null);
+      const movId = "dlv-" + found.id;
+      const movimientos = (caja && caja.movimientos) || [];
+      if (movimientos.some((m) => m.id === movId)) {
+        setToast({ tipo: "error", texto: "Ese delivery ya estaba cobrado: no se repetirá la venta en caja." });
+      } else {
+        const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
+        setFacturaXNum((n) => n + 1);
+        const mov = { id: movId, tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp };
+        if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
+        const nuevaCaja = { ...caja, movimientos: [...movimientos, mov] };
+        setCaja(nuevaCaja);
+        setToast({ tipo: "ok", texto: "Pedido entregado." + (afipResult ? " CAE: " + afipResult.cae : "") });
+        postAlServer(nuevaCaja, null, null);
+      }
     } else {
       setToast({ tipo: "ok", texto: "Pedido despachado." });
     }
@@ -610,7 +627,7 @@ function App() {
 
   // ABM Productos
   const nuevoProducto = () => setAbmProd({ nombre: "", cat: categorias[0], precio: "", receta: [{ rid: uid(), insumoId: "", cantidad: "" }] });
-  const editarProducto = (p) => setAbmProd({ id: p.id, nombre: p.nombre, cat: p.cat, precio: p.precio, receta: p.receta.map(([iid, c]) => ({ rid: uid(), insumoId: iid, cantidad: c })) });
+  const editarProducto = (p) => { if (p.cat && !categorias.includes(p.cat)) setCategorias((cs) => cs.includes(p.cat) ? cs : [...cs, p.cat]); setAbmProd({ id: p.id, nombre: p.nombre, cat: p.cat, precio: p.precio, receta: p.receta.map(([iid, c]) => ({ rid: uid(), insumoId: iid, cantidad: c })) }); };
   const setProdF = (k, v) => setAbmProd((p) => ({ ...p, [k]: v }));
   const setIng = (rid, k, v) => setAbmProd((p) => ({ ...p, receta: p.receta.map((r) => r.rid === rid ? { ...r, [k]: v } : r) }));
   const addIng = () => setAbmProd((p) => ({ ...p, receta: [...p.receta, { rid: uid(), insumoId: "", cantidad: "" }] }));
@@ -731,8 +748,18 @@ function App() {
               });
             } else if (data.cajaIniciada === false) {
               setCaja((prev) => ({ fecha: hoy(), apertura: 0, movimientos: prev?.movimientos || [], cierre: null, saldoFinal: null, turno: "", usuario: prev?.usuario || data.caja?.usuario || "", arqueo: prev?.arqueo || {} }));
-            } if (data.mesas && typeof data.mesas === "object") { setMesas((prev) => { const merged = { ...prev }; for (const [id, sm] of Object.entries(data.mesas)) { const local = merged[id]; const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0); const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0); if (localHasItems && !serverHasItems) continue; merged[id] = sm; } return merged; }); } if (data.deliveries && Array.isArray(data.deliveries)) setDeliveries(data.deliveries); if (data.historialCierres && Array.isArray(data.historialCierres) && data.historialCierres.length > 0) setHistorialCierres(data.historialCierres); if (data.insumos && Array.isArray(data.insumos)) setInsumos(data.insumos); if (data.stock && typeof data.stock === "object") setStock(data.stock); if (data.costos && typeof data.costos === "object") setCostos(data.costos); if (data.productos && Array.isArray(data.productos)) setProductos(data.productos); if (data.proveedores && Array.isArray(data.proveedores)) setProveedores(data.proveedores); if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios); if (typeof data.facturaXNum === "number") setFacturaXNum(data.facturaXNum);         if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.publicUrl) setPublicUrl(data.config.publicUrl); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias(data.config.categorias); } }).catch(() => {}); fetch(serverUrl + "/api/facturas").then(r => r.json()).then(f => { if (Array.isArray(f)) setFacturas(f); }).catch(() => {}); fetch(serverUrl + "/api/version").then(r => r.json()).then(v => { if (v && v.sha) setVersionSistema(v); }).catch(() => {}); }, []);
+            } if (data.mesas && typeof data.mesas === "object") { setMesas((prev) => { const merged = { ...prev }; for (const [id, sm] of Object.entries(data.mesas)) { const local = merged[id]; const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0); const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0); if (localHasItems && !serverHasItems) continue; merged[id] = sm; } return merged; }); } if (data.deliveries && Array.isArray(data.deliveries)) setDeliveries((prev) => unirDeliveries(prev, data.deliveries)); if (data.historialCierres && Array.isArray(data.historialCierres) && data.historialCierres.length > 0) setHistorialCierres(data.historialCierres); if (data.insumos && Array.isArray(data.insumos)) setInsumos(data.insumos); if (data.stock && typeof data.stock === "object") setStock(data.stock); if (data.costos && typeof data.costos === "object") setCostos(data.costos); if (data.productos && Array.isArray(data.productos)) setProductos(data.productos); if (data.proveedores && Array.isArray(data.proveedores)) setProveedores(data.proveedores); if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios); if (typeof data.facturaXNum === "number") setFacturaXNum(data.facturaXNum);         if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.publicUrl) setPublicUrl(data.config.publicUrl); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias(data.config.categorias); } }).catch(() => {}); fetch(serverUrl + "/api/facturas").then(r => r.json()).then(f => { if (Array.isArray(f)) setFacturas(f); }).catch(() => {}); fetch(serverUrl + "/api/version").then(r => r.json()).then(v => { if (v && v.sha) setVersionSistema(v); }).catch(() => {}); }, []);
   React.useEffect(() => { configRef.current = config; }, [config]);
+  // Si hay una categoría en uso que no está guardada en config (ej: POSTRES), la persistimos en el servidor
+  React.useEffect(() => {
+    const guardadas = Array.isArray(config.categorias) ? config.categorias : null;
+    if (!guardadas) return; // la config del servidor todavía no llegó: no pisar nada
+    const faltan = (categorias || []).filter((c) => c && guardadas.indexOf(c) < 0);
+    if (!faltan.length) return;
+    const next = guardadas.concat(faltan);
+    setConfig((c) => ({ ...c, categorias: next }));
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { categorias: next } }) }).catch(() => {});
+  }, [categorias, config.categorias]);
   React.useEffect(() => { const t = setTimeout(() => postAlServer(cajaRef.current, mesasRef.current, deliveriesRef.current), 1000); return () => clearTimeout(t); }, [insumos, stock, costos, productos, proveedores, mesas, deliveries, caja, historialCierres, cajaIniciada, orden, config, facturaXNum, usuarios]);
 
   // Sincronizar productos desde el servidor (precios, nombres, etc.) cada 10s
@@ -800,7 +827,7 @@ function App() {
             return serverOnly.length > 0 ? [...prev, ...serverOnly] : prev;
           });
         }
-        if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias(data.config.categorias); }
+        if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias((prev) => { const prodCats = (prodRef.current || []).map((p) => p.cat).filter(Boolean); const out = []; for (const c of [...(prev || []), ...data.config.categorias, ...prodCats]) if (c && out.indexOf(c) < 0) out.push(c); return out; }); }
         if (typeof data.facturaXNum === "number") setFacturaXNum((prev) => Math.max(prev || 1, data.facturaXNum));
         if (data.insumos && Array.isArray(data.insumos) && data.insumos.length > 0) setInsumos(data.insumos);
         if (data.stock && typeof data.stock === "object") setStock(data.stock);
@@ -828,11 +855,9 @@ function App() {
       fetch(serverUrl + "/api/deliveries").then(r => r.json()).then(serverDels => {
         if (!Array.isArray(serverDels)) return;
         setDeliveries((prev) => {
-          const changed = prev.length !== serverDels.length || prev.some((p, i) => {
-            const s = serverDels.find(d => d.id === p.id);
-            return !s || s.estado !== p.estado || s.total !== p.total;
-          });
-          return changed ? serverDels : prev;
+          const delServer = serverDels || [];
+          const merged = [...unirDeliveries(prev, delServer), ...prev.filter((p) => !delServer.some((s) => s.id === p.id))];
+          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
         });
       }).catch(() => {});
     };
@@ -2097,8 +2122,8 @@ function App() {
               <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProd.id ? "Editar producto" : "Nuevo producto"}</h3><button onClick={() => setAbmProd(null)} style={{ color: C.muted }}><X size={18} /></button></div>
               <div className="flex flex-col gap-3">
                 <div><label style={lbl}>Nombre *</label><input style={inputStyle} placeholder="Ej: Milanesa napolitana" value={abmProd.nombre} onChange={(e) => setProdF("nombre", e.target.value)} /></div>
-                <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Categoría</label><div className="flex gap-1"><select style={{ ...inputStyle, flex: 1 }} value={abmProd.cat} onChange={(e) => { setProdF("cat", e.target.value); }}>{categorias.map((c) => <option key={c} value={c}>{c}</option>)}<option value="__new__">+ Nueva…</option></select></div></div><div><label style={lbl}>Precio de venta</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmProd.precio} onChange={(e) => setProdF("precio", e.target.value)} /></div></div>
-                {abmProd.cat === "__new__" && <div className="flex gap-2 items-center"><input style={{ ...inputStyle, flex: 1 }} placeholder="Nombre de la nueva categoría" value={abmProd.nuevaCat || ""} onChange={(e) => setProdF("nuevaCat", e.target.value)} /><button onClick={() => { if (!abmProd.nuevaCat?.trim()) return; const c = abmProd.nuevaCat.trim(); if (categorias.includes(c)) { setProdF("cat", c); setProdF("nuevaCat", ""); return; } setCategorias((prev) => { const next = [...prev, c]; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { ...config, categorias: next } }) }).catch(() => {}); return next; }); setProdF("cat", c); setProdF("nuevaCat", ""); }} className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: C.amber, color: "#241a0c" }}>Agregar</button></div>}
+                <div className="grid grid-cols-2 gap-3"><div><label style={lbl}>Categoría</label><div className="flex gap-1"><select style={{ ...inputStyle, flex: 1 }} value={abmProd.cat} onChange={(e) => { setProdF("cat", e.target.value); }}>{((abmProd.cat && abmProd.cat !== "__new__" && categorias.indexOf(abmProd.cat) < 0) ? [abmProd.cat].concat(categorias) : categorias).map((c) => <option key={c} value={c}>{c}</option>)}<option value="__new__">+ Nueva…</option></select></div></div><div><label style={lbl}>Precio de venta</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={abmProd.precio} onChange={(e) => setProdF("precio", e.target.value)} /></div></div>
+                {abmProd.cat === "__new__" && <div className="flex gap-2 items-center"><input style={{ ...inputStyle, flex: 1 }} placeholder="Nombre de la nueva categoría" value={abmProd.nuevaCat || ""} onChange={(e) => setProdF("nuevaCat", e.target.value)} /><button onClick={() => { if (!abmProd.nuevaCat?.trim()) return; const c = abmProd.nuevaCat.trim(); if (categorias.includes(c)) { setProdF("cat", c); setProdF("nuevaCat", ""); return; } setCategorias((prev) => { const next = [...prev, c]; fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { categorias: next } }) }).catch(() => {}); return next; }); setProdF("cat", c); setProdF("nuevaCat", ""); }} className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: C.amber, color: "#241a0c" }}>Agregar</button></div>}
                 <div><label style={lbl}>Receta (ingredientes)</label><div className="flex flex-col gap-2">{abmProd.receta.map((r) => (<div key={r.rid} className="flex items-center gap-2"><select style={{ ...miniInput, flex: 1 }} value={r.insumoId} onChange={(e) => setIng(r.rid, "insumoId", e.target.value)}><option value="">Insumo…</option>{insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}</select><input style={{ ...miniInput, width: 70 }} type="text" inputMode="decimal" placeholder="cant" value={r.cantidad} onChange={(e) => setIng(r.rid, "cantidad", e.target.value)} /><span style={{ width: 22, color: C.muted, fontSize: 12 }}>{r.insumoId ? unidadDe(r.insumoId) : ""}</span><button onClick={() => delIng(r.rid)} className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><X size={14} /></button></div>))}</div><button onClick={addIng} className="flex items-center gap-1 mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={14} /> Agregar ingrediente</button></div>
                 <div className="flex justify-between items-baseline pt-2" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13 }}>Costo {pesos(costo)} · Ganancia sobre el costo</span><span style={{ fontWeight: 800, color: (mg != null && mg >= 0) ? C.green : C.red }}>{precio ? pesos(precio - costo) : "—"}{mg != null ? " (" + mg + "%)" : ""}</span></div>
                 <div className="flex gap-2"><button onClick={guardarProducto} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}><CheckCircle2 size={16} /> Guardar</button>{abmProd.id && <button onClick={() => borrarProducto(abmProd.id)} className="px-4 rounded-lg" style={{ background: C.base, color: C.red, border: "1px solid " + C.border }}><Trash2 size={16} /></button>}</div>
