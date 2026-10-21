@@ -148,7 +148,8 @@ app.get("/api/red", async (req, res) => {
     ]);
     const escucha = ns.texto.split(/\r?\n/).filter((l) => l.indexOf(":3456") >= 0 && /LISTENING|ESCUCHANDO/i.test(l)).map((s) => s.trim()).slice(0, 6);
     const qrIp = String(cfg.qrUrl || "").replace(/^https?:\/\//, "").split(":")[0].split("/")[0];
-    const noEncontrada = /no se encontr|not found|no element/i.test(fw.texto);
+    const noEncontrada = /no se encontr|ninguna regla coincide|not found|no element/i.test(fw.texto);
+    const regla = noEncontrada ? "no creada" : (fw.ok ? "creada" : "sin permisos para leerla");
     res.json({
       qrUrl: cfg.qrUrl || "",
       publicUrl: cfg.publicUrl || "",
@@ -156,8 +157,8 @@ app.get("/api/red", async (req, res) => {
       qrIpEsLocal: !!qrIp && ips.some((i) => i.ip === qrIp),
       ips,
       escuchando: escucha,
-      firewall: { ok: fw.ok, regla: fw.ok ? (noEncontrada ? "no creada" : "creada") : "sin permisos para leerla", texto: fw.texto.slice(0, 1200) },
-      aviso: escucha.length === 0 ? "El servidor NO esta escuchando en el puerto 3456." : (!qrIp ? "Falta la URL QR en Configuracion > Local." : "")
+      firewall: { ok: fw.ok, regla, texto: fw.texto.slice(0, 1200) },
+      aviso: (escucha.length === 0 ? "El servidor NO esta escuchando en el puerto 3456." : "") + (!qrIp ? " Falta la URL QR en Configuracion > Local." : "") + (regla !== "creada" ? " El Firewall NO deja pasar el puerto 3456: hay que crear la regla (boton de abajo, como administrador)." : "")
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
