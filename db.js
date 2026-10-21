@@ -199,6 +199,25 @@ function saveConfig(cfg) {
   tx(cfg);
 }
 
+// ─── Poner ventas y caja en cero (conserva usuarios, config y catálogo) ───
+function resetVentas() {
+  const d = getDB();
+  const vacia = JSON.stringify({ lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } });
+  const tx = d.transaction(() => {
+    d.prepare("DELETE FROM movimientos").run();
+    d.prepare("DELETE FROM caja_sesiones").run();
+    d.prepare("DELETE FROM delivery_items").run();
+    d.prepare("DELETE FROM deliveries").run();
+    d.prepare("DELETE FROM factura_items").run();
+    d.prepare("DELETE FROM facturas").run();
+    d.prepare("DELETE FROM pedidos_whatsapp").run();
+    for (const r of d.prepare("SELECT id FROM mesas").all()) d.prepare("UPDATE mesas SET estado = ? WHERE id = ?").run(vacia, r.id);
+    d.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('clientes', ?)").run("[]");
+    d.prepare("INSERT OR REPLACE INTO contadores (key, valor) VALUES ('facturaXNum', 1)").run();
+  });
+  tx();
+}
+
 // ─── Usuarios ───
 function getUsuarios() {
   return getDB().prepare("SELECT nombre, rol, clave FROM usuarios").all();
@@ -507,7 +526,7 @@ function closeDB() {
 
 module.exports = {
   initDB, getDB, closeDB, backupDB,
-  getConfig, saveConfig,
+  getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
   getCaja, createCaja, addMovimiento, closeCaja, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,

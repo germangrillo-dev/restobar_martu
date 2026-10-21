@@ -385,6 +385,19 @@ app.post("/api/caja", (req, res) => {
   }
 });
 
+// --- API: Poner ventas/caja en cero ---
+app.post("/api/reset", (req, res) => {
+  try {
+    db.resetVentas();
+    delete MENU_CACHE.html;
+    console.log("[RESET] Ventas y caja puestas en cero");
+    res.json({ ok: true, texto: "Sistema puesto en cero." });
+  } catch (e) {
+    console.error("[RESET] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // --- API: Mesas ---
 app.get("/api/mesas", (req, res) => {
   res.json(db.getMesas());
