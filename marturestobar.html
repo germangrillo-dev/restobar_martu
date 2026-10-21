@@ -344,6 +344,7 @@ function App() {
   const [historialCierres, setHistorialCierres] = useState(() => []);
   const [usuarios, setUsuarios] = useState(() => { const loaded = cargar("usuarios", USUARIOS_DEFAULT); return loaded && loaded.length > 0 ? loaded : USUARIOS_DEFAULT; });
   const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", clave: "", rol: "cajero" });
+  const [editUsuario, setEditUsuario] = useState(null);
   const [nuevoCliente, setNuevoCliente] = useState({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" });
   const [editCliente, setEditCliente] = useState(null);
   const [showHistorial, setShowHistorial] = useState(false);
@@ -895,6 +896,22 @@ function App() {
     setConfig((c) => ({ ...c, mesas: arr }));
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { mesas: arr } }) })
       .then(() => setToast({ tipo: "ok", texto: arr.length + " mesas guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
+  };
+  const guardarUsuarioEdit = () => {
+    const e = editUsuario;
+    if (!e) return;
+    const idx = usuarios.findIndex((u) => u.nombre === e._orig);
+    if (idx < 0) { setEditUsuario(null); setToast({ tipo: "error", texto: "Ese usuario ya no existe." }); return; }
+    const nombre = String(e.nombre || "").trim();
+    const clave = String(e.clave || "").trim();
+    if (!nombre) { setToast({ tipo: "error", texto: "Poné un nombre." }); return; }
+    if (!clave) { setToast({ tipo: "error", texto: "Poné la clave." }); return; }
+    if (usuarios.some((u, j) => j !== idx && u.nombre === nombre)) { setToast({ tipo: "error", texto: "Ya existe un usuario con ese nombre." }); return; }
+    const otrosAdmins = usuarios.filter((u, j) => u.rol === "admin" && j !== idx);
+    if (e.rol !== "admin" && otrosAdmins.length === 0) { setToast({ tipo: "error", texto: "Tiene que quedar al menos un admin." }); return; }
+    setUsuarios((prev) => prev.map((u, j) => (j === idx ? { nombre, rol: e.rol, clave } : u)));
+    setEditUsuario(null);
+    setToast({ tipo: "ok", texto: "Usuario actualizado. Para usar la clave nueva, cerrá sesión y volvé a entrar." });
   };
   const elegirUSB = async (k) => {
     try { const ref = await ESCPOS.elegir(); setImp(k, { ...ref, ip: "", puerto: 9100 }); setToast({ tipo: "ok", texto: "Asignada: " + ref.nombre }); }
@@ -1624,10 +1641,35 @@ function App() {
                           <div style={{ fontWeight: 600, fontSize: 13 }}>{u.nombre}</div>
                           <div style={{ fontSize: 11, color: C.muted }}>{u.rol} · Clave: {u.clave}</div>
                         </div>
-                        <button onClick={() => { if (!window.confirm("Eliminar usuario " + u.nombre + "?")) return; setUsuarios((prev) => prev.filter((_, j) => j !== i)); }} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+                        <button onClick={() => setEditUsuario({ ...u, _orig: u.nombre })} title="Editar usuario" style={{ color: C.blue, background: "none", border: "none", cursor: "pointer" }}><Pencil size={14} /></button>
+                        <button onClick={() => {
+                          if (u.nombre === usuario.nombre) { setToast({ tipo: "error", texto: "No podés eliminar tu propio usuario." }); return; }
+                          if (u.rol === "admin" && usuarios.filter((x) => x.rol === "admin").length <= 1) { setToast({ tipo: "error", texto: "Tiene que quedar al menos un admin." }); return; }
+                          if (!window.confirm("Eliminar usuario " + u.nombre + "?")) return;
+                          setUsuarios((prev) => prev.filter((_, j) => j !== i));
+                          if (editUsuario && editUsuario._orig === u.nombre) setEditUsuario(null);
+                        }} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
                       </div>
                     ))}
                   </div>
+                  {editUsuario && (
+                    <div className="rounded-lg p-3 mb-3" style={{ background: C.raised2, border: "1px solid " + C.blue }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: C.blue }}>Editar usuario: {editUsuario._orig}</div>
+                      <div className="flex flex-col gap-2">
+                        <input style={inputStyle} placeholder="Nombre" value={editUsuario.nombre} onChange={(e) => setEditUsuario({ ...editUsuario, nombre: e.target.value })} />
+                        <input style={inputStyle} type="password" placeholder="Clave" value={editUsuario.clave} onChange={(e) => setEditUsuario({ ...editUsuario, clave: e.target.value })} />
+                        <select style={inputStyle} value={editUsuario.rol} onChange={(e) => setEditUsuario({ ...editUsuario, rol: e.target.value })}>
+                          <option value="admin">Admin (acceso total)</option>
+                          <option value="cajero">Cajero (solo ventas)</option>
+                          <option value="visor">Visor (solo lectura)</option>
+                        </select>
+                        <div className="flex gap-2">
+                          <button onClick={guardarUsuarioEdit} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Guardar cambios</button>
+                          <button onClick={() => setEditUsuario(null)} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Cancelar</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="rounded-lg p-3" style={{ background: C.base }}>
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Nuevo usuario</div>
                     <div className="flex flex-col gap-2">
