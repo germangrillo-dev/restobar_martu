@@ -116,6 +116,57 @@ app.post("/api/tailscale/funnel", async (req, res) => {
   res.json({ ok: !errores, accion: on ? "on" : "off", pasos, errores, status: st.out, exe: tsBin() });
 });
 
+// --- Diagnostico de red local (QR en el celular por WiFi) ---
+const { networkInterfaces } = require("os");
+function ejecutarCmd(cmd, args) {
+  return new Promise((resolve) => {
+    try {
+      execFile(cmd, args, { timeout: 8000, windowsHide: true, encoding: "utf8" }, (err, stdout, stderr) => {
+        resolve({ ok: !err, texto: String(stdout || stderr || (err && err.message) || "").trim() });
+      });
+    } catch (e) { resolve({ ok: false, texto: e.message }); }
+  });
+}
+function esIpLan(ip) { return /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip || ""); }
+app.get("/api/red", async (req, res) => {
+  try {
+    const cfg = db.getConfig();
+    const ips = [];
+    try {
+      const nets = networkInterfaces();
+      for (const k of Object.keys(nets)) {
+        for (const a of (nets[k] || [])) {
+          const fam = a.family === "IPv4" || a.family === 4;
+          if (fam && !a.internal) ips.push({ iface: k, ip: a.address, lan: esIpLan(a.address) });
+        }
+      }
+    } catch (e) { /* sin interfaces */ }
+    ips.sort((a, b) => (b.lan ? 1 : 0) - (a.lan ? 1 : 0));
+    const [ns, fw] = await Promise.all([
+      ejecutarCmd("netstat", ["-an"]),
+      ejecutarCmd("netsh", ["advfirewall", "firewall", "show", "rule", "name=Martu Resto Bar 3456"])
+    ]);
+    const escucha = ns.texto.split(/\r?\n/).filter((l) => l.indexOf(":3456") >= 0 && /LISTENING|ESCUCHANDO/i.test(l)).map((s) => s.trim()).slice(0, 6);
+    const qrIp = String(cfg.qrUrl || "").replace(/^https?:\/\//, "").split(":")[0].split("/")[0];
+    const noEncontrada = /no se encontr|not found|no element/i.test(fw.texto);
+    res.json({
+      qrUrl: cfg.qrUrl || "",
+      publicUrl: cfg.publicUrl || "",
+      ipDelQr: qrIp,
+      qrIpEsLocal: !!qrIp && ips.some((i) => i.ip === qrIp),
+      ips,
+      escuchando: escucha,
+      firewall: { ok: fw.ok, regla: fw.ok ? (noEncontrada ? "no creada" : "creada") : "sin permisos para leerla", texto: fw.texto.slice(0, 1200) },
+      aviso: escucha.length === 0 ? "El servidor NO esta escuchando en el puerto 3456." : (!qrIp ? "Falta la URL QR en Configuracion > Local." : "")
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/red/firewall", async (req, res) => {
+  await ejecutarCmd("netsh", ["advfirewall", "firewall", "delete", "rule", "name=Martu Resto Bar 3456"]);
+  const r = await ejecutarCmd("netsh", ["advfirewall", "firewall", "add", "rule", "name=Martu Resto Bar 3456", "dir=in", "action=allow", "protocol=TCP", "localport=3456"]);
+  res.json({ ok: r.ok, texto: (r.ok ? "Regla creada/actualizada. " : "No se pudo crear la regla (hace falta administrador). ") + r.texto.slice(0, 400) });
+});
+
 // --- Impresion termica por red (ESC/POS sobre TCP 9100) ---
 const CP437 = { "á":160,"é":130,"í":161,"ó":162,"ú":163,"ñ":165,"Ñ":165,"ü":129,"Á":157,"É":147,"Í":161,"Ó":162,"Ú":163,"°":248,"º":167,"¿":191,"¡":173,"“":34,"”":34,"‘":39,"’":39,"—":45,"–":45,"…":26,"€":213,"·":250 };
 function bytesTexto(s) {
