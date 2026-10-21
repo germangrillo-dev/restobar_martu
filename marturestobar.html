@@ -592,8 +592,7 @@ function App() {
     if (abmIns.id) {
       const prev = insumos.find((x) => x.id === abmIns.id);
       if (prev) {
-        const fPrev = (prev.pesoBulto || 1) * (prev.factorCompra || 1);
-        const r = (fPrev > 0 ? f / fPrev : 1) * escUnidad(prev.unidad, abmIns.unidad);
+        const r = escUnidad(prev.unidad, abmIns.unidad);
         if (isFinite(r) && r > 0 && Math.abs(r - 1) > 1e-9) {
           if (Number(abmIns.stockActual) === Number(abmIns.stockOriginal)) saF = +(sa * r).toFixed(4);
           aviso = "Insumo guardado. Stock ajustado a la nueva conversión.";
