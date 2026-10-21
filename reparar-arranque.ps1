@@ -34,6 +34,19 @@ if (-not (Test-Path $startup)) {
     Write-Host "Acceso de Inicio OK" -ForegroundColor Yellow
 }
 
+# 2b) Quitar accesos DUPLICADOS en la carpeta de Inicio del usuario
+#     (si quedo uno ahi, arrancaba el servidor dos veces)
+$userStartup = [Environment]::GetFolderPath("Startup")
+if ($userStartup -and (Test-Path $userStartup)) {
+    $dupes = Get-ChildItem -Path $userStartup -Filter "*.lnk" -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -like "*Martu*" -or $_.Name -like "*Resto*" }
+    foreach ($d in $dupes) {
+        Remove-Item -LiteralPath $d.FullName -Force
+        Write-Host ("Eliminado acceso duplicado: " + $d.FullName) -ForegroundColor Green
+    }
+    if (-not $dupes) { Write-Host "Sin duplicados en el Inicio del usuario" -ForegroundColor Yellow }
+}
+
 # 3) Levantar el servidor ahora si no esta corriendo
 $up = (Test-NetConnection -ComputerName 127.0.0.1 -Port 3456 -WarningAction SilentlyContinue).TcpTestSucceeded
 if (-not $up) {
