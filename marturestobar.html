@@ -684,13 +684,25 @@ function App() {
     setStock((s) => { const n = { ...s }; for (const it of validos) { const c = calcItem(it); n[c.a.insumo] = +((n[c.a.insumo] || 0) + c.ingreso).toFixed(2); } return n; });
     setCostos((cs) => { const n = { ...cs }; for (const it of validos) { const c = calcItem(it); if (c.sub > 0 && c.cantB > 0) n[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } return n; });
     setFacturas((fs) => {
-      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, insumoUn: unidadDe(c.a.insumo) }; }) };
+      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
       const nfs = [nueva, ...fs];
       fetch(serverUrl + "/api/facturas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nfs) }).catch(() => {});
       return nfs;
     });
     setFac({ provId: fac.provId, tipo: fac.tipo, numero: "", fecha: hoy(), conIva: false, items: [lineaVacia()] });
     setToast({ tipo: "ok", texto: validos.length + " artículo(s) cargados. Stock y costos actualizados." });
+  };
+  const borrarFactura = (id) => {
+    const f = facturas.find((x) => x.id === id);
+    if (!f) return;
+    const revierte = (f.items || []).filter((it) => it.insumo && it.ingreso);
+    const msg = "¿Eliminar la factura de " + f.proveedor + " del " + f.fecha + "?" + (revierte.length ? "\n\nSe RESTA del stock todo lo que esta factura había sumado." : "\n\n(Factura sin insumos guardados: solo se borra el registro, el stock queda como está.)");
+    if (!window.confirm(msg)) return;
+    const nfs = facturas.filter((x) => x.id !== id);
+    setFacturas(nfs);
+    fetch(serverUrl + "/api/facturas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nfs) }).catch(() => {});
+    if (revierte.length) setStock((s) => { const n = { ...s }; for (const it of revierte) n[it.insumo] = +(((n[it.insumo] || 0) - it.ingreso)).toFixed(2); return n; });
+    setToast({ tipo: "ok", texto: "Factura eliminada." + (revierte.length ? " Stock revertido." : "") });
   };
 
   const reponer = () => { setStock(Object.fromEntries(insumos.map((i) => [i.id, i.inicial || 0]))); setToast({ tipo: "ok", texto: "Stock reiniciado." }); };
@@ -1437,9 +1449,14 @@ function App() {
             <td style={{ padding: "6px 8px", color: C.muted }}>{f.tipo}{f.numero ? " " + f.numero : ""}</td>
             <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: C.amber }}>{f.total > 0 ? dinero(f.total) : "—"}</td>
             <td style={{ padding: "6px 8px", textAlign: "center" }}>
-              <button onClick={() => setFacExpanded(facExpanded === f.id ? null : f.id)} style={{ background: C.base, color: C.amber, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                {facExpanded === f.id ? "Cerrar" : "Ver"}
-              </button>
+              <span style={{ display: "inline-flex", gap: 4 }}>
+                <button onClick={() => setFacExpanded(facExpanded === f.id ? null : f.id)} style={{ background: C.base, color: C.amber, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {facExpanded === f.id ? "Cerrar" : "Ver"}
+                </button>
+                <button title="Eliminar factura" onClick={() => borrarFactura(f.id)} style={{ background: C.base, color: C.red, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center" }}>
+                  <Trash2 size={13} />
+                </button>
+              </span>
             </td>
           </tr>
           {facExpanded === f.id && f.items && (
