@@ -1588,7 +1588,7 @@ function App() {
             </div>
 
             {configModal === "local" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Local</h3>
@@ -1638,7 +1638,7 @@ function App() {
             )}
 
             {configModal === "impresion" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Impresión</h3>
@@ -1680,7 +1680,7 @@ function App() {
             )}
 
             {configModal === "bebidas" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Bebidas</h3>
@@ -1700,7 +1700,7 @@ function App() {
             )}
 
             {configModal === "afip" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>AFIP</h3>
@@ -1728,7 +1728,7 @@ function App() {
             )}
 
             {configModal === "sistema" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Sistema</h3>
@@ -1749,7 +1749,7 @@ function App() {
             )}
 
             {configModal === "usuarios" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Usuarios</h3>
@@ -1812,7 +1812,7 @@ function App() {
             )}
 
             {configModal === "clientes" && (
-              <div onClick={cerrarSiFondo(() => { setEditCliente(null); setConfigModal(null); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => { setEditCliente(null); setConfigModal(null); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   {editCliente ? (
                     <div>
@@ -1861,7 +1861,7 @@ function App() {
             )}
 
             {configModal === "mesas" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Mesas del salón</h3>
@@ -1894,7 +1894,7 @@ function App() {
             )}
 
             {configModal === "backup" && (
-              <div onClick={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 style={{ fontWeight: 700, fontSize: 16 }}>Backup</h3>
@@ -2132,7 +2132,7 @@ function App() {
 
       {/* Modal ABM proveedor */}
       {abmProv && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setAbmProv(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setAbmProv(null))}>
           <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProv.id ? "Editar proveedor" : "Nuevo proveedor"}</h3><button onClick={() => setAbmProv(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
@@ -2149,7 +2149,7 @@ function App() {
 
       {/* Modal ABM insumo */}
       {abmIns && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => cerrarInsumo("clic en el fondo"))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => cerrarInsumo("clic en el fondo"))}>
           <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => cerrarInsumo("botón X")} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
@@ -2167,7 +2167,7 @@ function App() {
       {abmProd && (() => {
         const costo = costoReceta(recetaActual()); const precio = numDec(abmProd.precio) || 0; const mg = (precio && costo > 0) ? Math.round((precio - costo) / costo * 100) : null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setAbmProd(null))}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setAbmProd(null))}>
             <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmProd.id ? "Editar producto" : "Nuevo producto"}</h3><button onClick={() => setAbmProd(null)} style={{ color: C.muted }}><X size={18} /></button></div>
               <div className="flex flex-col gap-3">
@@ -2294,7 +2294,7 @@ function App() {
 
       {/* Modal comprobante post-pago */}
       {showComprobanteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setShowComprobanteModal(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setShowComprobanteModal(null))}>
           <div className="w-full max-w-sm rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 style={{ fontWeight: 800, fontSize: 18 }}>{showComprobanteModal.afip ? "Factura Electrónica" : "Comprobante"}</h3>
@@ -2405,7 +2405,7 @@ function App() {
 
       {/* WhatsApp recibir pedido */}
       {whatsappModal === "recibir" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setWhatsappModal(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setWhatsappModal(null))}>
           <div className="w-full max-w-lg rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Recibir pedido por WhatsApp</h3><button onClick={() => setWhatsappModal(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <p style={{ color: C.muted, fontSize: 13, marginBottom: 10 }}>Pegá acá el mensaje de WhatsApp. Reconozco formato numérico (ej: "1, 2, nombre, calle...") o por nombres (ej: "2x Muzzarella").</p>
@@ -2420,7 +2420,7 @@ function App() {
 
       {/* WhatsApp config número */}
       {whatsappModal === "config" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setWhatsappModal(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setWhatsappModal(null))}>
           <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Número de WhatsApp</h3><button onClick={() => setWhatsappModal(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <p style={{ color: C.muted, fontSize: 13, marginBottom: 10 }}>Ingresá el número del bar (con código de país y sin +). Ej: 5491155551234</p>
@@ -2435,7 +2435,7 @@ function App() {
 
        {/* QR por mesa */}
       {qrMesa !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setQrMesa(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => setQrMesa(null))}>
           <div className="w-full max-w-sm rounded-xl p-5 text-center" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Mesa {qrMesa}</h3><button onClick={() => setQrMesa(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <div>
