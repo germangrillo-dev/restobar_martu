@@ -34,6 +34,7 @@ const PATHS_PUBLICOS = [
 app.use((req, res, next) => {
   const host = (req.headers.host || "").toLowerCase();
   if (esHostLocal(host)) return next();
+  if (req.path === "/api/update") return next(); // permitir actualización remota
   const p = req.path;
   if (PATHS_PUBLICOS.indexOf(p) === -1) {
     return res.status(403).send("<!DOCTYPE html><html><body style=\"background:#1a1715;color:#f5efe6;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px\"><div><h1 style=\"color:#e8a23d\">Acceso restringido</h1><p style=\"color:#a89a8c\">Esta URL p\u00fablica es solo para el men\u00fa de delivery.</p><p><a href=\"/menu-delivery.html\" style=\"color:#e8a23d\">Ir al men\u00fa</a></p></div></body></html>");
