@@ -706,7 +706,7 @@ function App() {
     setStock((s) => { const n = { ...s }; for (const it of validos) { const c = calcItem(it); n[c.a.insumo] = +((n[c.a.insumo] || 0) + c.ingreso).toFixed(2); } return n; });
     setCostos((cs) => { const n = { ...cs }; for (const it of validos) { const c = calcItem(it); if (c.sub > 0 && c.cantB > 0) n[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } return n; });
     setFacturas((fs) => {
-      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
+      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, subtotal: c.sub, unitario: c.unit, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
       const nfs = [nueva, ...fs];
       fetch(serverUrl + "/api/facturas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nfs) }).catch(() => {});
       return nfs;
@@ -1495,9 +1495,10 @@ function App() {
             <td colSpan={5} style={{ padding: "8px 12px" }}>
               <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
                 {f.items.map((it, k) => (
-                  <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span style={{ color: C.muted }}>{numExacto(it.cantidad)} {it.bulto} · {it.desc}</span>
-                    <span style={{ color: C.green, fontWeight: 700 }}>+{numExacto(it.ingreso)} {it.insumoUn}</span>
+                    <span style={{ color: C.text, fontWeight: 600, whiteSpace: "nowrap" }}>{it.subtotal != null ? dinero(it.subtotal) : ""}</span>
+                    <span style={{ color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>+{numExacto(it.ingreso)} {it.insumoUn}</span>
                   </div>
                 ))}
               </div>
