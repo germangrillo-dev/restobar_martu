@@ -15,6 +15,15 @@ app.use(express.json({ limit: "50mb" }));
 app.use((req, res, next) => { const line = new Date().toISOString() + " " + req.method + " " + req.url; console.log("[REQ]", req.method, req.url); try { fs.appendFileSync(path.join(__dirname, "requests.log"), line + "\n"); } catch {} res.set('Cache-Control', 'no-store, no-cache, must-revalidate'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); next(); });
 
 // Acceso público (Tailscale Funnel): solo menú de delivery + visor + sus recursos
+function esHostLocal(host) {
+  const h = (host || "").toLowerCase().split(":")[0];
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "") return true;
+  if (h.startsWith("192.168.")) return true;
+  if (h.startsWith("10.")) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(h)) return true;
+  return false;
+}
+
 const PATHS_PUBLICOS = [
   "/", "/menu-delivery.html", "/visor.html",
   "/api/menu", "/api/config", "/api/pedidos/mesa", "/api/visor",
@@ -23,7 +32,7 @@ const PATHS_PUBLICOS = [
 ];
 app.use((req, res, next) => {
   const host = (req.headers.host || "").toLowerCase();
-  if (!host.endsWith(".tail9c04cc.ts.net")) return next();
+  if (esHostLocal(host)) return next();
   const p = req.path;
   if (PATHS_PUBLICOS.indexOf(p) === -1) {
     return res.status(403).send("<!DOCTYPE html><html><body style=\"background:#1a1715;color:#f5efe6;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px\"><div><h1 style=\"color:#e8a23d\">Acceso restringido</h1><p style=\"color:#a89a8c\">Esta URL p\u00fablica es solo para el men\u00fa de delivery.</p><p><a href=\"/menu-delivery.html\" style=\"color:#e8a23d\">Ir al men\u00fa</a></p></div></body></html>");
@@ -743,7 +752,7 @@ app.get("/instructivo.html", (req, res) => {
 
 app.get("/menu-delivery.html", (req, res) => { serveMenu(req, res); });
 app.get("/admin", (req, res) => { res.redirect("/marturestobar.html?mode=admin"); });
-app.get("/", (req, res) => { const esPublico = ((req.headers.host || "").toLowerCase()).endsWith(".tail9c04cc.ts.net"); res.redirect(esPublico ? "/menu-delivery.html" : "/marturestobar.html"); });
+app.get("/", (req, res) => { const esPublico = !esHostLocal(req.headers.host || ""); res.redirect(esPublico ? "/menu-delivery.html" : "/marturestobar.html"); });
 app.get("/menu-mesa.html", (req, res) => { serveMenu(req, res); });
 
 app.post("/api/pedidos/mesa", (req, res) => {
