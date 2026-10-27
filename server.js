@@ -21,6 +21,7 @@ function esHostLocal(host) {
   if (h.startsWith("192.168.")) return true;
   if (h.startsWith("10.")) return true;
   if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(h)) return true;
+  if (/^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(h)) return true; // Tailscale/CGNAT 100.64.0.0/10
   return false;
 }
 
