@@ -2128,7 +2128,7 @@ function App() {
       {/* Modal ABM insumo */}
       {abmIns && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setAbmIns(null))}>
-          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => setAbmIns(null)} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
