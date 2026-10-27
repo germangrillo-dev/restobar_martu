@@ -949,7 +949,7 @@ function App() {
 
   const inputStyle = { background: "#ffffff", border: "1px solid " + C.border, color: C.text, borderRadius: 8, padding: "8px 10px", fontSize: 14, width: "100%", outline: "none" };
   const miniInput = { ...inputStyle, padding: "6px 8px", fontSize: 13 };
-  const lbl = { color: C.muted, fontSize: 11, marginBottom: 3, display: "block" };
+  const lbl = { color: "#5a4a3a", fontSize: 11, marginBottom: 3, display: "block" };
 
   const esModoAdmin = window.location.search.includes("mode=admin");
 
@@ -2161,7 +2161,7 @@ function App() {
       {/* Modal ABM insumo */}
       {abmIns && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onMouseDown={cerrarSiFondo(() => cerrarInsumo("clic en el fondo"))}>
-          <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-xl p-5" style={{ background: "#ffffff", border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => cerrarInsumo("botón X")} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
