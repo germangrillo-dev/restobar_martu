@@ -1,6 +1,6 @@
 const express = require("express");
 const net = require("net");
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const path = require("path");
 const fs = require("fs");
@@ -922,7 +922,8 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     const chatId = num + "@c.us";
     const clientWpp = client;
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      await clientWpp.sendMessage(chatId, { caption: `Comprobante ${nombre} — ${comprobante || ""}`, filename: "comprobante.pdf", mimetype: "application/pdf", document: fs.readFileSync(pdfPath) });
+      const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
+      await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || "") });
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: true });
     } else {
