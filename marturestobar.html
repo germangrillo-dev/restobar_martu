@@ -597,6 +597,27 @@ function App() {
   // ABM Insumos
   const nuevoInsumo = () => setAbmIns({ nombre: "", unidad: "g", presentacion: "", stockActual: "", min: "", unidadCompra: "kg", factor: "1000", costoCompra: "" });
   const editarInsumo = (i) => { const f = (i.pesoBulto || 1) * (i.factorCompra || 1); const cv = costos[i.id]; setAbmIns({ id: i.id, nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, stockActual: stock[i.id], stockOriginal: stock[i.id], min: i.min, unidadCompra: i.unidadCompra || "", factor: String(f), costoCompra: cv != null ? String(+(cv * f).toFixed(4)) : "" }); };
+  // ===== DEBUG temporal: registrar por qué se cierra el modal de insumo (sacar cuando se arregle) =====
+  const abmInsPrevDebug = React.useRef(null);
+  const abmInsCerroPor = React.useRef(null);
+  const cerrarInsumo = (razon) => { abmInsCerroPor.current = razon; setAbmIns(null); };
+  React.useEffect(() => {
+    if (abmInsPrevDebug.current && !abmIns) {
+      const razon = abmInsCerroPor.current || "SIN RAZON (el estado se reseteó solo)";
+      try { localStorage.setItem("elmo_debug_modal", new Date().toLocaleTimeString("es-AR") + " · " + razon); } catch {}
+      if (razon !== "guardar") setToast({ tipo: "error", texto: "DEBUG: el modal se cerró por [" + razon + "] — avisale a German este texto." });
+    }
+    abmInsPrevDebug.current = abmIns;
+    abmInsCerroPor.current = null;
+  }, [abmIns]);
+  React.useEffect(() => {
+    const onErr = (msg) => { try { localStorage.setItem("elmo_debug_error", new Date().toLocaleTimeString("es-AR") + " · " + String(msg).slice(0, 250)); } catch {} setToast({ tipo: "error", texto: "ERROR JS: " + String(msg).slice(0, 120) }); };
+    const hErr = (e) => onErr(e && e.message ? e.message : String(e));
+    const hRej = (e) => onErr("Promise: " + ((e && e.reason && (e.reason.message || e.reason)) || "?"));
+    window.addEventListener("error", hErr);
+    window.addEventListener("unhandledrejection", hRej);
+    return () => { window.removeEventListener("error", hErr); window.removeEventListener("unhandledrejection", hRej); };
+  }, []);
   const guardarInsumo = () => {
     if (!abmIns.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del insumo." }); return; }
     const sa = numDec(abmIns.stockActual) || 0, mn = numDec(abmIns.min) || 0;
@@ -623,7 +644,7 @@ function App() {
       setCostos((c) => ({ ...c, [abmIns.id]: costoF }));
     }
     else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: saF, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: saF })); setCostos((c) => ({ ...c, [id]: costoF })); }
-    setAbmIns(null); setToast({ tipo: "ok", texto: aviso });
+    abmInsCerroPor.current = "guardar"; setAbmIns(null); setToast({ tipo: "ok", texto: aviso });
   };
   const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); setStock((s) => { const n = { ...s }; delete n[id]; return n; }); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
 
@@ -1525,6 +1546,7 @@ function App() {
             <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}><Settings size={20} style={{ marginRight: 6 }} />Configuración</h2>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Tocá un módulo para editarlo</div>
             <div style={{ fontSize: 11, color: C.amber, marginBottom: 12 }}>Versión del sistema: <b>{versionSistema.sha ? versionSistema.sha.slice(0, 7) : "local"}</b>{versionSistema.fecha ? <span style={{ color: C.muted, fontWeight: 400 }}> · actualizada {new Date(versionSistema.fecha).toLocaleString("es-AR")}</span> : <span style={{ color: C.muted, fontWeight: 400 }}> · sin registrar</span>}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>DEBUG · último cierre del modal de insumo: <b style={{ color: C.amber }}>{(() => { try { return localStorage.getItem("elmo_debug_modal") || "—"; } catch { return "—"; } })()}</b> · último error JS: <b style={{ color: C.amber }}>{(() => { try { return localStorage.getItem("elmo_debug_error") || "—"; } catch { return "—"; } })()}</b></div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
               <button onClick={() => setConfigModal("local")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
@@ -2127,9 +2149,9 @@ function App() {
 
       {/* Modal ABM insumo */}
       {abmIns && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => setAbmIns(null))}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={cerrarSiFondo(() => cerrarInsumo("clic en el fondo"))}>
           <div className="w-full max-w-md rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => setAbmIns(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div className="flex items-center justify-between mb-4"><h3 style={{ fontWeight: 800, fontSize: 18 }}>{abmIns.id ? "Editar insumo" : "Nuevo insumo"}</h3><button onClick={() => cerrarInsumo("botón X")} style={{ color: C.muted }}><X size={18} /></button></div>
             <div className="flex flex-col gap-3">
               <div><label style={lbl}>Nombre *</label><input style={inputStyle} value={abmIns.nombre} onChange={(e) => setAbmIns((p) => ({ ...p, nombre: e.target.value }))} /></div>
               <div><label style={lbl}>Presentación (cómo viene)</label><input style={inputStyle} placeholder="Ej: Sachet 3 kg, Cajón x24, Bolsa 1 kg" value={abmIns.presentacion} onChange={(e) => setAbmIns((p) => ({ ...p, presentacion: e.target.value }))} /></div>
