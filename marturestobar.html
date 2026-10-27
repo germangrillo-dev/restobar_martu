@@ -356,6 +356,7 @@ function App() {
   const [tailscaleTrabajando, setTailscaleTrabajando] = useState(false);
   const [redDatos, setRedDatos] = useState(null);
   const [redTrabajando, setRedTrabajando] = useState(false);
+  const [filtroInsumos, setFiltroInsumos] = useState("");
   const [margenPor, setMargenPor] = useState({});
   const [editEgresoId, setEditEgresoId] = useState(null);
   const [caja, setCaja] = useState(() => { try { const saved = localStorage.getItem("martu_caja"); if (saved) { const parsed = JSON.parse(saved); if (parsed && parsed.movimientos) return parsed; } } catch {} return { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} }; });
@@ -1033,19 +1034,19 @@ function App() {
     if (!t) return [];
     const l = [
       { t: "COMANDA", bold: true, grande: true },
-      { t: t.tipo === "mesa" ? "MESA " + t.mesaId : "DELIVERY", bold: true },
-      { t: (t.hora || hora()) + " hs" }
+      { t: t.tipo === "mesa" ? "MESA " + t.mesaId : "DELIVERY", bold: true, grande: true },
+      { t: (t.hora || hora()) + " hs", grande: true }
     ];
     if (t.tipo === "delivery") {
       l.push({ t: "", rayita: true });
-      l.push({ t: "Cliente: " + (t.cliente || ""), izq: true, bold: true });
-      if (t.direccion) l.push({ t: "Dir: " + t.direccion, izq: true });
-      if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true });
+      l.push({ t: "Cliente: " + (t.cliente || ""), izq: true, bold: true, grande: true });
+      if (t.direccion) l.push({ t: "Dir: " + t.direccion, izq: true, grande: true });
+      if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true, grande: true });
     }
     l.push({ t: "", rayita: true });
     (t.items || []).forEach((it) => {
-      l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true });
-      if (it.nota) l.push({ t: "  > " + it.nota, izq: true });
+      l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true, grande: true });
+      if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
     });
     l.push({ t: "", rayita: true });
     l.push({ t: "" });
@@ -1113,14 +1114,23 @@ function App() {
     if (m.clienteData && m.clienteData.cuit) l.push({ t: "CUIT: " + m.clienteData.cuit, izq: true });
     if (m.cliente) l.push({ t: "", rayita: true });
     (m.items || []).forEach((it) => {
-      l.push({ t: it.cant + "x " + it.nombre, izq: true });
-      l.push({ t: pesos((it.precio || 0) * (it.cant || 1)), der: true });
+      l.push({ t: it.cant + "x " + it.nombre + "  " + pesos((it.precio || 0) * (it.cant || 1)), izq: true });
     });
     l.push({ t: "", rayita: true });
     l.push({ t: "TOTAL", izq: true, bold: true, grande: true });
     l.push({ t: pesos(m.total || 0), der: true, bold: true, grande: true });
     if (m.metodo) { l.push({ t: "" }); l.push({ t: "Pago: " + m.metodo, izq: true }); }
-    l.push({ t: "" });
+    if (m.afip && m.afip.cae) {
+      l.push({ t: "", rayita: true });
+      l.push({ t: "CAE: " + m.afip.cae, izq: true, bold: true });
+      if (m.afip.vencimiento) l.push({ t: "Vto CAE: " + m.afip.vencimiento, izq: true });
+      l.push({ t: "Valido AFIP - Verifica en afip.gob.ar", izq: true });
+    }
+    if (!m.afip) {
+      l.push({ t: "", rayita: true });
+      l.push({ t: "Comprobante interno - Sin valor fiscal", izq: true });
+    }
+    l.push({ t: "", rayita: true });
     l.push({ t: "Gracias por su compra", grande: false });
     l.push({ t: new Date().toLocaleString("es-AR") });
     l.push({ t: "" });
@@ -1525,7 +1535,8 @@ function App() {
         {activeTab === "insumos" && (esAdmin || esGerente) && (
           <div>
             <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Insumos</h2><div className="flex gap-2"><button onClick={nuevoInsumo} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo insumo</button></div></div>
-            <div className="flex flex-col gap-1.5">{insumos.map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}{((i.pesoBulto || 1) * (i.factorCompra || 1)) > 1 ? " · 1 " + (i.unidadCompra || i.unidad) + " = " + numExacto((i.pesoBulto || 1) * (i.factorCompra || 1)) + " " + i.unidad : ""}{(costos[i.id] || 0) > 0 ? " · costo " + dinero(costos[i.id]) + "/" + i.unidad : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{numExacto(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
+            <input style={{ ...inputStyle, marginBottom: 8 }} placeholder="Buscar insumo..." value={filtroInsumos} onChange={(e) => setFiltroInsumos(e.target.value)} />
+            <div className="flex flex-col gap-1.5">{insumos.filter((i) => !filtroInsumos || (i.nombre || "").toLowerCase().includes(filtroInsumos.toLowerCase())).map((i) => { const actual = stock[i.id] || 0; const bajo = actual <= i.min; return (<div key={i.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.raised, border: "1px solid " + (bajo ? C.red : C.border) }}><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 14 }}>{i.nombre}</span>{bajo && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, border: "1px solid " + C.red, borderRadius: 6, padding: "1px 6px" }}>bajo</span>}</div><div style={{ color: C.muted, fontSize: 12 }}>{i.presentacion || "—"} · se mide en {i.unidad}{((i.pesoBulto || 1) * (i.factorCompra || 1)) > 1 ? " · 1 " + (i.unidadCompra || i.unidad) + " = " + numExacto((i.pesoBulto || 1) * (i.factorCompra || 1)) + " " + i.unidad : ""}{(costos[i.id] || 0) > 0 ? " · costo " + dinero(costos[i.id]) + "/" + i.unidad : ""}</div></div><span style={{ fontWeight: 700, fontSize: 14, color: bajo ? C.red : C.text, whiteSpace: "nowrap" }}>{numExacto(actual)} <span style={{ color: C.muted, fontWeight: 400 }}>{i.unidad}</span></span><button onClick={() => editarInsumo(i)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.muted }}><Pencil size={14} /></button><button onClick={() => borrarInsumo(i.id)} className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: C.base, color: C.red }}><Trash2 size={14} /></button></div>); })}</div>
           </div>
         )}
 
