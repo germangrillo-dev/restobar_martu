@@ -1264,7 +1264,7 @@ function App() {
                     <div key={d.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
                       <div className="flex items-start justify-between gap-2">
                         <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15 }}><Bike size={15} style={{ color: esDespachado ? C.green : C.amber }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
-                        <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
+                        <div style={{ textAlign: "right" }}><div style={{ color: C.text, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
                       </div>
                       <div className="mt-2">{esDespachado ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={11} /> En camino</span>
@@ -1332,7 +1332,7 @@ function App() {
             <button onClick={volver} className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><ArrowLeft size={15} /> Volver</button>
             <div className="flex flex-col lg:flex-row gap-5">
               <div className="flex-1">
-                <div className="flex gap-2 mb-4 overflow-x-auto pb-1">{categorias.map((c) => { const on = cat === c; return <button key={c} onClick={() => setCat(c)} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.amber : C.muted, border: "1px solid " + (on ? C.amber : C.border) }}>{c}</button>; })}</div>
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-1">{categorias.map((c) => { const on = cat === c; return <button key={c} onClick={() => setCat(c)} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.text : C.muted, border: "1px solid " + (on ? C.text : C.border) }}>{c}</button>; })}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, minHeight: 34 }}>{p.nombre}</div><div style={{ color: C.amber, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
               </div>
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
@@ -1423,7 +1423,7 @@ function App() {
                       <div key={m.id} className="relative rounded-lg p-3 text-center w-full" style={{ background: C.base, border: "1px solid " + colorEstado(e), cursor: esVisor ? "default" : "pointer" }} onClick={() => { if (!esVisor) { setTab("pedido"); abrirMesa(m.id); } }}>
                         <div style={{ fontWeight: 800, fontSize: 15 }}>Mesa {m.id}</div>
                         <div className="flex items-center justify-center gap-1 mt-1"><span style={{ width: 6, height: 6, borderRadius: "50%", background: e === "cocina" ? C.amber : e === "despachado" ? C.green : C.blue, display: "inline-block" }} /><span style={{ fontSize: 11, color: C.muted }}>{e === "cocina" ? "En cocina" : e === "despachado" ? "Despachado" : "Abierta"}</span></div>
-                        <div style={{ color: C.amber, fontWeight: 700, fontSize: 13, marginTop: 2 }}>{pesos((orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id))}</div>
+                        <div style={{ color: C.text, fontWeight: 700, fontSize: 13, marginTop: 2 }}>{pesos((orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id))}</div>
                         {!esVisor && <button onClick={(e) => { e.stopPropagation(); limpiarMesa(m.id); }} className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-xs" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }} title="Limpiar mesa">✕</button>}
                       </div>
                     );
@@ -1436,7 +1436,7 @@ function App() {
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin deliveries activos</p> : (
                   <div className="flex flex-col gap-2">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").slice(0, 3).map((d) => (
                     <div key={d.id} className="rounded-lg p-2" style={{ background: C.base, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
-                      <div className="flex items-center justify-between"><span style={{ fontSize: 13, fontWeight: 600 }}>{d.cliente}</span><span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pesos(d.total)}</span></div>
+                      <div className="flex items-center justify-between"><span style={{ fontSize: 13, fontWeight: 600 }}>{d.cliente}</span><span style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{pesos(d.total)}</span></div>
                       <div style={{ fontSize: 11, color: C.muted }}>{d.direccion} · {d.hora} hs <span style={{ color: d.estado === "despachado" ? C.green : C.amber }}>({d.estado === "despachado" ? "En camino" : "En cocina"})</span></div>
                     </div>
                   ))}{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 3 && <p style={{ color: C.muted, fontSize: 11, textAlign: "center" }}>+{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length - 3} más</p>}</div>
@@ -1519,7 +1519,7 @@ function App() {
             <td style={{ padding: "6px 8px", fontWeight: 600 }}>{f.proveedor}</td>
             <td style={{ padding: "6px 8px", color: C.muted }}>{f.fecha}</td>
             <td style={{ padding: "6px 8px", color: C.muted }}>{f.tipo}{f.numero ? " " + f.numero : ""}</td>
-            <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: C.amber }}>{f.total > 0 ? dinero(f.total) : "—"}</td>
+            <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: C.text }}>{f.total > 0 ? dinero(f.total) : "—"}</td>
             <td style={{ padding: "6px 8px", textAlign: "center" }}>
               <span style={{ display: "inline-flex", gap: 4 }}>
                 <button onClick={() => setFacExpanded(facExpanded === f.id ? null : f.id)} style={{ background: C.base, color: C.amber, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -1588,7 +1588,7 @@ function App() {
             <div className="flex items-center justify-between mb-4"><h2 style={{ fontWeight: 700, fontSize: 18 }}>Carta · productos de venta</h2><button onClick={nuevoProducto} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: C.amber, color: "#241a0c" }}><Plus size={16} /> Nuevo producto</button></div>
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid " + C.border }}>
               <div className="flex items-center gap-2 px-3 py-2" style={{ background: C.raised2, color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}><span className="flex-1">Producto</span><span style={{ width: 92 }}>Categoría</span><span style={{ width: 70, textAlign: "right" }}>Precio</span><span style={{ width: 64, textAlign: "right" }}>Costo</span><span style={{ width: 70, textAlign: "right" }}>Ganancia</span><span style={{ width: 22 }}></span></div>
-              {productos.map((p, idx) => { const costo = costoProd(p); const mg = (p.precio && costo > 0) ? Math.round((p.precio - costo) / costo * 100) : null; return (<button key={p.id} onClick={() => editarProducto(p)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ background: idx % 2 ? C.base : C.raised, borderTop: "1px solid " + C.border }}><span className="flex-1 truncate" style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span><span style={{ width: 92, color: C.muted, fontSize: 12 }}>{p.cat}</span><span style={{ width: 70, textAlign: "right", fontSize: 13, fontWeight: 700, color: C.amber }}>{pesos(p.precio)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, color: C.muted }}>{pesos(costo)}</span><span style={{ width: 70, textAlign: "right", fontSize: 12, fontWeight: 700, color: (mg != null && mg >= 0) ? C.green : C.red }}>{mg != null ? mg + "%" : "—"}</span><span style={{ width: 22, color: C.muted }}><Pencil size={13} /></span></button>); })}
+              {productos.map((p, idx) => { const costo = costoProd(p); const mg = (p.precio && costo > 0) ? Math.round((p.precio - costo) / costo * 100) : null; return (<button key={p.id} onClick={() => editarProducto(p)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ background: idx % 2 ? C.base : C.raised, borderTop: "1px solid " + C.border }}><span className="flex-1 truncate" style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span><span style={{ width: 92, color: C.muted, fontSize: 12 }}>{p.cat}</span><span style={{ width: 70, textAlign: "right", fontSize: 13, fontWeight: 700, color: C.text }}>{pesos(p.precio)}</span><span style={{ width: 64, textAlign: "right", fontSize: 12, color: C.muted }}>{pesos(costo)}</span><span style={{ width: 70, textAlign: "right", fontSize: 12, fontWeight: 700, color: (mg != null && mg >= 0) ? C.green : C.red }}>{mg != null ? mg + "%" : "—"}</span><span style={{ width: 22, color: C.muted }}><Pencil size={13} /></span></button>); })}
             </div>
           </div>
         )}
@@ -1924,7 +1924,7 @@ function App() {
                 <div onMouseDown={cerrarSiFondo(() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                   <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cuenta corriente � {cli ? cli.nombre : "Cliente"}</h3>
+                      <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cuenta corriente � {cli ? cli.nombre : "Cliente"}</h3>
                       <button onClick={() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); }} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
                     </div>
                     <div style={{ textAlign: "center", marginBottom: 12, padding: 10, borderRadius: 8, background: saldo > 0 ? "#f8d7da" : saldo < 0 ? "#d4edda" : C.base }}>
@@ -1947,8 +1947,8 @@ function App() {
                               <div style={{ fontWeight: 600 }}>{e.concepto}</div>
                               <div style={{ fontSize: 10, color: C.muted }}>{e.fecha}</div>
                             </div>
-                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "�"}</span>
-                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "�"}</span>
+                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "�"}</span>
+                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "�"}</span>
                             <span style={{ width: 90, textAlign: "right", fontWeight: 700 }}>{pesos(e.acum)}</span>
                           </div>
                         ))}
@@ -1962,7 +1962,7 @@ function App() {
                       </div>
                       <button onClick={() => {
                         const monto = numDec(ccMontoPago);
-                        if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingres� un monto v�lido." }); return; }
+                        if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingres� un monto v�lido." }); return; }
                         pagoACuenta(showCuentaCorriente.clienteId, monto, ccConcepto || "Pago a cuenta");
                         setCcMontoPago(""); setCcConcepto("");
                         setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " asentado." });
@@ -2309,10 +2309,10 @@ function App() {
             {!cobroMetodo ? (
               <>
                 <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago: <span style={{ fontSize: 11, opacity: .75 }}>· o teclá 1 al 5</span></p>
-                <div className="flex flex-col gap-2">{METODOS_PAGO.map((met, i) => (
-                  <button key={met} onClick={() => setCobroMetodo(met)} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber }} />
-                    <span style={{ flex: 1 }}>{met}</span>
+                <div className="grid grid-cols-2 gap-2">{METODOS_PAGO.map((met, i) => (
+                  <button key={met} onClick={() => setCobroMetodo(met)} className="flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12 }}>{met}</span>
                     <span style={badgeTecla}>{i + 1}</span>
                   </button>
                 ))}</div>
@@ -2375,9 +2375,13 @@ function App() {
             <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total</span><div style={{ fontWeight: 800, fontSize: 24, color: C.amber }}>{pesos(showPagoDelivery.total)}</div></div>
             {!showPagoDelivery._metodoSeleccionado && <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>}
             {!showPagoDelivery._metodoSeleccionado ? (
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {METODOS_PAGO.map((met, i) => (
-                  <button key={met} onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: met })} className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><span style={{ flex: 1 }}>{met}</span><span style={badgeTecla}>{i + 1}</span></button>
+                  <button key={met} onClick={() => setShowPagoDelivery({ ...showPagoDelivery, _metodoSeleccionado: met })} className="flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm text-left" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: met === "Efectivo" ? C.green : C.amber, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12 }}>{met}</span>
+                    <span style={badgeTecla}>{i + 1}</span>
+                  </button>
                 ))}
               </div>
             ) : showPagoDelivery._metodoSeleccionado === "Efectivo" ? (
