@@ -109,7 +109,7 @@ const escUnidad = (a, b) => (a === b ? 1 : (UNI_ESC[a + "|" + b] != null ? UNI_E
 const fDeIns = (p) => (numDec(p && p.factor) || 1);
 const ucDeIns = (p) => ((p && (p.unidadCompra || "").trim()) || (p ? p.unidad : ""));
 const autoFDeIns = (p) => escUnidad(ucDeIns(p), p ? p.unidad : "");
-const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+const hora = () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" });
   const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 const uid = () => Math.random().toString(36).slice(2, 9);
 const USUARIOS_DEFAULT = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
