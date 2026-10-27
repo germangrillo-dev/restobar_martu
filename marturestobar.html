@@ -2165,7 +2165,7 @@ function App() {
                     const totalMedios = ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0);
                     const totalArqueo = totalBilletes + totalMedios;
                     return <div className="flex justify-between rounded-lg p-2 mt-2" style={{ background: C.base, fontSize: 13 }}>
-                      <span>Total arqueo</span><span style={{ fontWeight: 800, fontSize: 15, color: C.amber }}>{dinero(totalArqueo)}</span>
+                      <span>Total arqueo</span><span style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{dinero(totalArqueo)}</span>
                     </div>;
                   })()}
 
@@ -2305,7 +2305,7 @@ function App() {
               <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cobrar Mesa {showCobroModal.id}</h3>
               <button onClick={() => setShowCobroModal(null)} style={{ color: C.muted }}><X size={18} /></button>
             </div>
-            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total a cobrar</span><div style={{ fontWeight: 800, fontSize: 28, color: C.amber }}>{pesos(showCobroModal.total)}</div></div>
+            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total a cobrar</span><div style={{ fontWeight: 800, fontSize: 28, color: C.text }}>{pesos(showCobroModal.total)}</div></div>
             {!cobroMetodo ? (
               <>
                 <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>Forma de pago: <span style={{ fontSize: 11, opacity: .75 }}>· o teclá 1 al 5</span></p>
@@ -2372,7 +2372,7 @@ function App() {
               <h3 style={{ fontWeight: 800, fontSize: 18 }}>Delivery: {showPagoDelivery.cliente}</h3>
               <button onClick={() => { setShowPagoDelivery(null); setCobroPago(""); setCobroRef(""); }} style={{ color: C.muted }}><X size={18} /></button>
             </div>
-            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total</span><div style={{ fontWeight: 800, fontSize: 24, color: C.amber }}>{pesos(showPagoDelivery.total)}</div></div>
+            <div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontSize: 13, color: C.muted }}>Total</span><div style={{ fontWeight: 800, fontSize: 24, color: C.text }}>{pesos(showPagoDelivery.total)}</div></div>
             {!showPagoDelivery._metodoSeleccionado && <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>¿Cómo pagó?</div>}
             {!showPagoDelivery._metodoSeleccionado ? (
               <div className="grid grid-cols-2 gap-2">
@@ -2646,7 +2646,7 @@ function App() {
                         <div key={oc.tipo + oc.id} className="rounded-xl p-3" style={{ background: C.raised, border: "1px solid " + C.amber }}>
                           <div className="flex items-start justify-between gap-2">
                             <div style={{ fontWeight: 700, fontSize: 14 }}>{oc.tipo === "mesa" ? <Users size={14} style={{ marginRight: 4 }} /> : <Bike size={14} style={{ marginRight: 4 }} />}{oc.label}</div>
-                            <div style={{ textAlign: "right" }}><div style={{ color: C.amber, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
+                            <div style={{ textAlign: "right" }}><div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
                           </div>
                           <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
                             <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
