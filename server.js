@@ -655,7 +655,7 @@ app.get("/marturestobar.html", (req, res) => {
   const nombre = cfg.nombreLocal || "Martu Resto Bar";
   let html = fs.readFileSync(path.join(__dirname, "marturestobar.html"), "utf-8");
   html = html.replace("<title>El Mostrador</title>", "<title>" + nombre + "</title>");
-  html = html.replace('<meta name="theme-color" content="#1a1715" />', '<meta name="theme-color" content="#1a1715" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
+  html = html.replace('<meta name="theme-color" content="#f5f0eb" />', '<meta name="theme-color" content="#f5f0eb" />\n<meta name="apple-mobile-web-app-title" content="' + nombre + '" />');
   res.set("Content-Type", "text/html");
   res.send(html);
 });

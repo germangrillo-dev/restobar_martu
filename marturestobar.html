@@ -6,7 +6,7 @@
 <title>El Mostrador</title>
 <link rel="manifest" href="/manifest-app.json" />
 <link rel="apple-touch-icon" href="/icon-192.png" />
-<meta name="theme-color" content="#1a1715" />
+<meta name="theme-color" content="#f5f0eb" />
 <script>
 (function(){
   try{
@@ -36,7 +36,7 @@
 <script src="/vendor/react.production.min.js"></script>
 <script src="/vendor/react-dom.production.min.js"></script>
 <script src="/vendor/babel.min.js"></script>
-<style>body{margin:0;background:#1a1715}</style>
+<style>body{margin:0;background:#f5f0eb}</style>
 </head>
 <body>
 <div id="root"></div>
@@ -1219,7 +1219,7 @@ function App() {
         <nav className="flex gap-1 mb-3 p-1 rounded-xl overflow-x-auto" style={{ background: C.raised, width: "fit-content", maxWidth: "100%" }}>
           {tabs.map((t) => { const on = tab === t.id; return (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === "pedido") setVista("mapa"); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.amber : "transparent", color: on ? "#241a0c" : C.muted }}><t.icon size={16} /> {t.label}</button>); })}
         </nav>
-        {ingresoSinCaja && !cajaIniciada && <div className="flex items-center justify-between gap-3 mb-4 px-4 py-3 rounded-xl text-sm font-bold flex-wrap" style={{ background: C.blue + "22", color: C.blue, border: "1px solid " + C.blue }}><span className="flex items-center gap-2"><Eye size={16} /> Entraste SIN CAJA abierta — no hay arqueo de turno</span><button onClick={() => salirSinCaja()} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: C.amber, color: "#241a0c" }}>Abrir caja ahora</button></div>}
+        {ingresoSinCaja && !cajaIniciada && <div className="flex items-center justify-between gap-3 mb-4 px-4 py-3 rounded-xl text-sm font-bold flex-wrap" style={{ background: C.red + "22", color: C.red, border: "1px solid " + C.red }}><span className="flex items-center gap-2"><Eye size={16} /> Entraste SIN CAJA abierta — no hay arqueo de turno</span><button onClick={() => salirSinCaja()} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: C.amber, color: "#241a0c" }}>Abrir caja ahora</button></div>}
         {!cajaAbierta && <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: C.amber + "22", color: C.amber, border: "1px solid " + C.amber }}><AlertTriangle size={16} /> Tenés que abrir la caja para empezar a operar</div>}
 
         {/* VENDER mapa (salón + delivery) */}
