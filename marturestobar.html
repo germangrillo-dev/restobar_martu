@@ -273,7 +273,7 @@ const parsearPedidoWhatsApp = (texto, prods) => {
     }
   } else if (!datos.cliente && items.length === 0) {
     for (const l of lineas) {
-      if (/^(?:cliente|nombre|direcci[oó]n|tel)/i.test(l)) continue;
+    if (/^(?:cliente|nombre|direccion|tel)/i.test(l)) continue;
       const notaMatch = l.match(/^(.+?)\((.+?)\)$/);
       const sinNota = notaMatch ? notaMatch[1].trim() : l;
       const nota = notaMatch ? notaMatch[2].trim() : "";
