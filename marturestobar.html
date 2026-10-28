@@ -1258,7 +1258,7 @@ function App() {
                   </div>
                 )}
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 && (
-                  <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid sm:grid-cols-2 gap-3">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
+                  <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
                     const esDespachado = d.estado === "despachado";
                     return (
                     <div key={d.id} className="rounded-lg p-2" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
@@ -1271,7 +1271,6 @@ function App() {
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#3a2a10", color: C.amber }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, display: "inline-block" }} /> En cocina</span>
                       )}</div>
-                      <div className="mt-2 pt-2 flex flex-col gap-0.5" style={{ borderTop: "1px solid " + C.border, fontSize: 11 }}>{d.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> � {it.nota}</span>}</div>))}</div>
                       <div className="flex gap-2 mt-3">{!esDespachado ? (!esVisor && <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button>) : (!esVisor && <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>)}</div>
                     </div>
                   );})}</div></div>
