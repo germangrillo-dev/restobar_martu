@@ -1,4 +1,4 @@
-const CACHE_NAME = "mostrador-v5";
+const CACHE_NAME = "mostrador-v6";
 const URLS = [];
 
 self.addEventListener("install", (e) => {

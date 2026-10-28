@@ -233,9 +233,9 @@ const parsearPedidoWhatsApp = (texto, prods) => {
   for (const l of lineas) {
     const cli = l.match(/^(?:cliente|nombre)[:\s]+(.+)/i);
     if (cli) { datos.cliente = cli[1].trim(); continue; }
-    const dir = l.match(/^(?:direcci[oó]n|direccion|domicilio)[:\s]+(.+)/i);
+    const dir = l.match(/^(?:direccion|domicilio)[:\s]+(.+)/i);
     if (dir) { datos.direccion = dir[1].trim(); continue; }
-    const tel = l.match(/^(?:tel[eé]fono|tel|telefono|celular|cel)[:\s]+(.+)/i);
+    const tel = l.match(/^(?:telefono|tel|celular|cel)[:\s]+(.+)/i);
     if (tel) { datos.telefono = tel[1].trim(); continue; }
   }
   // Si no hay formato "Clave: Valor", tratar como formato numérico "1, 2, nombre, calle..."
@@ -558,10 +558,10 @@ function App() {
   };
   const confirmarCobroCC = (id, clienteId) => {
     const total = mesaTotal(id);
-    if (!clienteId) { setToast({ tipo: "error", texto: "Eleg� un cliente para la cuenta corriente." }); return; }
+    if (!clienteId) { setToast({ tipo: "error", texto: "Elegí un cliente para la cuenta corriente." }); return; }
     const cli = (config.clientes || []).find((c) => c.id === clienteId);
     markMesaDirty(id);
-    cargoACuenta(clienteId, total, "Mesa " + id + (cli ? " � " + cli.nombre : ""));
+    cargoACuenta(clienteId, total, "Mesa " + id + (cli ? " — " + cli.nombre : ""));
     const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
     setMesas(nuevasMesas);
     postMesas(nuevasMesas);
@@ -1258,36 +1258,23 @@ function App() {
                   </div>
                 )}
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 && (
-                  <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
+                   <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
                     const esDespachado = d.estado === "despachado";
                     return (
-                    <div key={d.id} className="rounded-lg p-2" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15 }}><Bike size={15} style={{ color: esDespachado ? C.green : C.amber }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
-                        <div style={{ textAlign: "right" }}><div style={{ color: C.text, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
-                      </div>
-                      <div className="mt-2">{esDespachado ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={11} /> En camino</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#3a2a10", color: C.amber }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, display: "inline-block" }} /> En cocina</span>
-                      )}</div>
-                      <div className="flex gap-2 mt-3">{!esDespachado ? (!esVisor && <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button>) : (!esVisor && <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>)}</div>
-                    </div>
-                  );})}</div></div>
+                     <div key={d.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: C.raised, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
+                       <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 13 }}>{d.cliente}</span><span style={{ fontSize: 10, color: C.muted, marginLeft: 4 }}>{d.hora} hs</span></div></div>
+                       <span style={{ fontWeight: 700, fontSize: 13, color: C.text, whiteSpace: "nowrap" }}>{pesos(d.total)}</span>
+                       <span style={{ fontSize: 10, fontWeight: 700, color: d.estado === "despachado" ? C.green : C.amber, whiteSpace: "nowrap" }}>{d.estado === "despachado" ? "En camino" : "En cocina"}</span>
+                       {!esVisor && <button onClick={() => { if (d.estado === "despachado") setShowPagoDelivery(d); else { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. Gracias por tu compra!"); } }} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: d.estado === "despachado" ? C.green : C.amber, color: d.estado === "despachado" ? "#fff" : "#241a0c", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>{d.estado === "despachado" ? "Cobrar" : "Despachar"}</button>}
+                     </div>
+                   );})}</div></div>
                 )}
                 {deliveries.filter(d => d.estado === "entregado").length === 0 && deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? (
                   <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos de delivery en curso.</p>
                 ) : (
                   deliveries.filter(d => d.estado === "entregado").length > 0 && (
-                    <div><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.green }}>Entregados</h3><div className="grid sm:grid-cols-2 gap-3">{deliveries.filter(d => d.estado === "entregado").map((d) => (
-                      <div key={d.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.green, opacity: 0.75 }}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15, color: C.muted }}><Bike size={15} style={{ color: C.green }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
-                          <div style={{ textAlign: "right" }}><div style={{ color: C.muted, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
-                        </div>
-                        <div className="mt-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={11} /> Entregado</span></div>
-                        <div className="mt-3 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}>{d.items.map((it, k) => (<div key={k} style={{ fontSize: 13 }}><span>{it.cant}x {it.nombre}</span>{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> · {it.nota}</span>}</div>))}</div>
-                      </div>
+                     <div><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.green }}>Entregados</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">{deliveries.filter(d => d.estado === "entregado").slice(0, 6).map((d) => (
+                       <div key={d.id} className="flex items-center gap-3 px-3 py-1.5 rounded-lg" style={{ background: C.base, opacity: 0.7 }}><div className="flex-1 min-w-0"><span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>{d.hora} hs</span></div><span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>{pesos(d.total)}</span><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: "#1a2e1a", color: C.green }}><CheckCircle2 size={9} /> Entregado</span></div>
                     ))}</div></div>
                   )
                 )}
@@ -1433,12 +1420,16 @@ function App() {
               <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><Bike size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 700, fontSize: 16 }}>Delivery</h3><span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? C.amber : C.border, color: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? "#241a0c" : C.muted }}>{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length}</span></div>
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin deliveries activos</p> : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").slice(0, 3).map((d) => (
-                    <div key={d.id} className="rounded-lg p-2" style={{ background: C.base, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
-                      <div className="flex items-center justify-between"><span style={{ fontSize: 13, fontWeight: 600 }}>{d.cliente}</span><span style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{pesos(d.total)}</span></div>
-                      <div style={{ fontSize: 11, color: C.muted }}>{d.direccion} · {d.hora} hs <span style={{ color: d.estado === "despachado" ? C.green : C.amber }}>({d.estado === "despachado" ? "En camino" : "En cocina"})</span></div>
+                  <div className="flex flex-col gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").slice(0, 3).map((d) => (
+                    <div key={d.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: C.base, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 13 }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted }}>{d.direccion} · {d.hora} hs</span></div>
+                      </div>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: C.text, whiteSpace: "nowrap" }}>{pesos(d.total)}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: d.estado === "despachado" ? C.green : C.amber, whiteSpace: "nowrap" }}>{d.estado === "despachado" ? "En camino" : "En cocina"}</span>
+                      {!esVisor && <button onClick={() => { if (d.estado === "despachado") setShowPagoDelivery(d); else { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. Gracias por tu compra!"); } }} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: d.estado === "despachado" ? C.green : C.amber, color: d.estado === "despachado" ? "#fff" : "#241a0c", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>{d.estado === "despachado" ? "Cobrar" : "Despachar"}</button>}
                     </div>
-                  ))}{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 3 && <p style={{ color: C.muted, fontSize: 11, textAlign: "center" }}>+{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length - 3} más</p>}</div>
+                  ))}</div></div>
                 )}
               </div>
               {/* Últimos entregados */}
@@ -1923,7 +1914,7 @@ function App() {
                 <div onMouseDown={cerrarSiFondo(() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                   <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cuenta corriente � {cli ? cli.nombre : "Cliente"}</h3>
+                      <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cuenta corriente — {cli ? cli.nombre : "Cliente"}</h3>
                       <button onClick={() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); }} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
                     </div>
                     <div style={{ textAlign: "center", marginBottom: 12, padding: 10, borderRadius: 8, background: saldo > 0 ? "#f8d7da" : saldo < 0 ? "#d4edda" : C.base }}>
@@ -1946,8 +1937,8 @@ function App() {
                               <div style={{ fontWeight: 600 }}>{e.concepto}</div>
                               <div style={{ fontSize: 10, color: C.muted }}>{e.fecha}</div>
                             </div>
-                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "�"}</span>
-                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "�"}</span>
+                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "—"}</span>
+                            <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "—"}</span>
                             <span style={{ width: 90, textAlign: "right", fontWeight: 700 }}>{pesos(e.acum)}</span>
                           </div>
                         ))}
@@ -1961,7 +1952,7 @@ function App() {
                       </div>
                       <button onClick={() => {
                         const monto = numDec(ccMontoPago);
-                        if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingres� un monto v�lido." }); return; }
+                        if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingresá un monto válido." }); return; }
                         pagoACuenta(showCuentaCorriente.clienteId, monto, ccConcepto || "Pago a cuenta");
                         setCcMontoPago(""); setCcConcepto("");
                         setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " asentado." });
@@ -2334,10 +2325,10 @@ function App() {
             ) : cobroMetodo === "Cuenta corriente" ? (
               <div className="flex flex-col gap-3">
                 <select style={inputStyle} value={ccClienteSel} onChange={(e) => setCcClienteSel(e.target.value)}>
-                  <option value="">Eleg� cliente...</option>
+                  <option value="">Elegí cliente...</option>
                   {(config.clientes || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}{saldoCliente(c.id) !== 0 ? " (debe " + pesos(saldoCliente(c.id)) + ")" : ""}</option>)}
                 </select>
-                {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agreg� uno en Config ? Clientes.</div>}
+                {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agregá uno en Config → Clientes.</div>}
                 <button onClick={() => confirmarCobroCC(showCobroModal.id, ccClienteSel)} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Cargar a cuenta corriente</button>
               </div>
             ) : (cobroMetodo === "Transferencia" || cobroMetodo === "Tarjeta crédito" || cobroMetodo === "Tarjeta débito" || cobroMetodo === "Mercado Pago") ? (
@@ -2400,12 +2391,12 @@ function App() {
             ) : showPagoDelivery._metodoSeleccionado === "Cuenta corriente" ? (
               <div className="flex flex-col gap-3">
                 <select style={inputStyle} value={ccClienteSel} onChange={(e) => setCcClienteSel(e.target.value)}>
-                  <option value="">Eleg� cliente...</option>
+                  <option value="">Elegí cliente...</option>
                   {(config.clientes || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}{saldoCliente(c.id) !== 0 ? " (debe " + pesos(saldoCliente(c.id)) + ")" : ""}</option>)}
                 </select>
-                {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agreg� uno en Config ? Clientes.</div>}
+                {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agregá uno en Config → Clientes.</div>}
                 <button onClick={() => {
-                  if (!ccClienteSel) { setToast({ tipo: "error", texto: "Eleg� un cliente." }); return; }
+                    if (!ccClienteSel) { setToast({ tipo: "error", texto: "Elegí un cliente." }); return; }
                   const cli = (config.clientes || []).find((c) => c.id === ccClienteSel);
                   cargoACuenta(ccClienteSel, showPagoDelivery.total, "Delivery: " + showPagoDelivery.cliente);
                   // Set delivery to entregado without caja movement
@@ -2414,7 +2405,7 @@ function App() {
                   postDeliveries(nds);
                   setShowPagoDelivery(null); setCcClienteSel("");
                   setToast({ tipo: "ok", texto: "Delivery de " + showPagoDelivery.cliente + " cargado a cuenta de " + (cli ? cli.nombre : "cliente") + " ($" + showPagoDelivery.total.toLocaleString("es-AR") + ")." });
-                  if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "�Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " fue registrado a cuenta. �Gracias!");
+                  if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "\u00a1Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " fue registrado a cuenta. \u00a1Gracias!");
                 }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.amber, color: "#241a0c" }}>Cargar a cuenta corriente</button>
               </div>
             ) : (showPagoDelivery._metodoSeleccionado === "Transferencia" || showPagoDelivery._metodoSeleccionado === "Tarjeta crédito" || showPagoDelivery._metodoSeleccionado === "Tarjeta débito" || showPagoDelivery._metodoSeleccionado === "Mercado Pago") ? (
@@ -2648,7 +2639,7 @@ function App() {
                             <div style={{ textAlign: "right" }}><div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>{pesos(oc.total)}</div>{oc.tipo === "delivery" && <div style={{ color: C.muted, fontSize: 11 }}>{oc.direccion}</div>}<div style={{ color: C.muted, fontSize: 10 }}>{oc.hora}</div></div>
                           </div>
                           <div className="flex flex-col gap-0.5 mt-1" style={{ fontSize: 12, color: C.muted }}>{oc.items.map((it, k) => (
-                            <div key={k}>{it.cant}x {prodById[it.pid]?.nombre || it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
+                            <div key={k}>{it.cant}x {prodById[it.pid] ? prodById[it.pid].nombre : it.nombre}{it.nota ? <span style={{ fontStyle: "italic" }}> ({it.nota})</span> : ""}</div>
                           ))}</div>
                           {!esVisor && <div className="flex gap-2 mt-2"><button onClick={() => { if (oc.tipo === "mesa") despacharMesa(oc.id); else { entregarDelivery(oc.id); if (oc.telefono) abrirWA(oc.telefono, "¡Hola " + oc.label + "! Tu pedido de " + pesos(oc.total) + " fue despachado. ¡Gracias por tu compra!"); } setShowCocinaPopup(true); }} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button></div>}
                         </div>
