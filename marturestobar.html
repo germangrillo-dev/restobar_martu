@@ -1261,7 +1261,7 @@ function App() {
                   <div className="mb-4"><h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid sm:grid-cols-2 gap-3">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
                     const esDespachado = d.estado === "despachado";
                     return (
-                    <div key={d.id} className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
+                    <div key={d.id} className="rounded-lg p-2" style={{ background: C.raised, border: "1px solid " + (esDespachado ? C.green : C.amber) }}>
                       <div className="flex items-start justify-between gap-2">
                         <div><div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 15 }}><Bike size={15} style={{ color: esDespachado ? C.green : C.amber }} /> {d.cliente}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{d.direccion}</div>{d.telefono && <div style={{ color: C.muted, fontSize: 12 }}>{d.telefono}</div>}</div>
                         <div style={{ textAlign: "right" }}><div style={{ color: C.text, fontWeight: 800 }}>{pesos(d.total)}</div><div style={{ color: C.muted, fontSize: 12 }}>{d.hora} hs</div></div>
@@ -1271,7 +1271,7 @@ function App() {
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#3a2a10", color: C.amber }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, display: "inline-block" }} /> En cocina</span>
                       )}</div>
-                      <div className="mt-3 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}>{d.items.map((it, k) => (<div key={k} style={{ fontSize: 13 }}><span>{it.cant}x {it.nombre}</span>{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> · {it.nota}</span>}</div>))}</div>
+                      <div className="mt-2 pt-2 flex flex-col gap-0.5" style={{ borderTop: "1px solid " + C.border, fontSize: 11 }}>{d.items.map((it, k) => (<div key={k}>{it.cant}x {it.nombre}{it.nota && prodById[it.pid]?.cat !== "Bebidas" && <span style={{ color: C.muted, fontStyle: "italic" }}> � {it.nota}</span>}</div>))}</div>
                       <div className="flex gap-2 mt-3">{!esDespachado ? (!esVisor && <button onClick={() => { entregarDelivery(d.id); if (d.telefono) abrirWA(d.telefono, "¡Hola " + d.cliente + "! Tu pedido de " + pesos(d.total) + " fue despachado. ¡Gracias por tu compra!"); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.amber, color: "#241a0c" }}>Despachar</button>) : (!esVisor && <button onClick={() => setShowPagoDelivery(d)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}>Marcar entregado</button>)}</div>
                     </div>
                   );})}</div></div>
@@ -1333,7 +1333,7 @@ function App() {
             <div className="flex flex-col lg:flex-row gap-5">
               <div className="flex-1">
                 <div className="flex gap-2 mb-4 overflow-x-auto pb-1">{categorias.map((c) => { const on = cat === c; return <button key={c} onClick={() => setCat(c)} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.text : C.muted, border: "1px solid " + (on ? C.text : C.border) }}>{c}</button>; })}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, minHeight: 34 }}>{p.nombre}</div><div style={{ color: C.amber, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, minHeight: 34 }}>{p.nombre}</div><div style={{ color: C.text, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
               </div>
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <div className="ml-auto flex gap-1.5"><button id="atajo-cobrar" onClick={() => cerrarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.amber, color: "#241a0c", fontWeight: 700 }}>Cobrar <span style={{ fontSize: 10, opacity: .8 }}>(F2)</span></button><button onClick={() => limpiarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button></div>}</div>
@@ -2101,7 +2101,7 @@ function App() {
                       <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Ventas del día</span><span style={{ color: C.green, fontWeight: 700 }}>{dinero(cajaVentas)}</span></div>
                       <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos del día</span><span style={{ color: C.red, fontWeight: 700 }}>{dinero(cajaEgresos)}</span></div>
                       <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
-                      <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado en caja</span><span style={{ color: C.amber, fontWeight: 800, fontSize: 15 }}>{dinero(cajaEsperado)}</span></div>
+                      <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado en caja</span><span style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>{dinero(cajaEsperado)}</span></div>
                     </div>
                     {(deliveries.some(d => d.estado !== "entregado") || Object.values(mesas).some(m => m.lineas.length || m.enviado.length)) && (
                 <div className="rounded-lg p-3 text-xs mb-2" style={{ background: "rgba(217,84,63,.15)", border: "1px solid " + C.red, color: C.red }}>
@@ -2132,7 +2132,7 @@ function App() {
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Ventas</span><span style={{ color: C.green }}>{dinero(cajaVentas)}</span></div>
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos</span><span style={{ color: C.red }}>{dinero(cajaEgresos)}</span></div>
                     <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
-                    <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado</span><span style={{ fontWeight: 800, color: C.amber }}>{dinero(cajaEsperado)}</span></div>
+                    <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado</span><span style={{ fontWeight: 800, color: C.text }}>{dinero(cajaEsperado)}</span></div>
                   </div>
                   {(deliveries.some(d => d.estado !== "entregado") || Object.values(mesas).some(m => m.lineas.length || m.enviado.length)) && (
                     <div className="rounded-lg p-3 mb-3 text-xs" style={{ background: "rgba(217,84,63,.15)", border: "1px solid " + C.red, color: C.red }}>
