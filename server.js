@@ -955,4 +955,5 @@ app.listen(PORT, HOST, () => {
   console.log(`📡 Menú clientes:  http://localhost:${PORT}/menu-mesa.html?mesa=1`);
   console.log(`📡 Sistema:        http://localhost:${PORT}/marturestobar.html`);
   console.log(`💾 SQLite:         ${path.join(__dirname, "data", "martu.db")}`);
+  iniciarWhatsApp();
 });
