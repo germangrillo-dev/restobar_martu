@@ -2225,15 +2225,15 @@ function App() {
                   <div className="mt-3"><label style={lbl}>Cierre (efectivo contado)</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.cierre != null ? caja.cierre : ""} onChange={(e) => { const v = e.target.value === "" ? 0 : numDec(e.target.value) || 0; setCaja((c) => ({ ...c, cierre: v })); }} placeholder="Ingresar monto" /></div>
                   {caja.cierre > 0 && <div className="rounded-lg p-3 text-center mt-2" style={{ background: C.base }}><span style={{ fontSize: 13, color: C.muted }}>Diferencia: </span><span style={{ fontWeight: 800, fontSize: 18, color: Math.round((caja.cierre - cajaEsperado) * 100) / 100 >= 0 ? C.green : C.red }}>{dinero(Math.round((caja.cierre - cajaEsperado) * 100) / 100)}</span></div>}
                   <button onClick={() => {
-                    if (caja.cierre === null || caja.cierre <= 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre primero." }); return; }
+                    const cierreMonto = caja.cierre == null ? 0 : Number(caja.cierre); if (isNaN(cierreMonto) || cierreMonto < 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre (puede ser 0)." }); return; }
                     const pendientes = deliveries.filter(d => d.estado !== "entregado");
                     const mesasAbiertas = Object.entries(mesas).filter(([, m]) => m.lineas.length || m.enviado.length);
                     if (pendientes.length || mesasAbiertas.length) {
                       const lista = [...pendientes.map(d => "• Delivery: " + d.cliente), ...mesasAbiertas.map(([id]) => "• Mesa " + id)].join("\n");
                       if (!window.confirm("Hay pedidos sin entregar:\n\n" + lista + "\n\n¿Cerrar caja igual? Se limpiarán automáticamente.")) return;
                     }
-                    const diff = Math.round((caja.cierre - cajaEsperado) * 100) / 100;
-                    const cierreCompleto = { ...caja, diff, fechaCierre: hoy() + " " + hora() };
+                    const diff = Math.round((cierreMonto - cajaEsperado) * 100) / 100;
+                    const cierreCompleto = { ...caja, cierre: cierreMonto, diff, fechaCierre: hoy() + " " + hora() };
                     const nuevoHistorial = [cierreCompleto, ...historialCierres];
                     setHistorialCierres(nuevoHistorial);
                     const cajaLimpia = { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} };
