@@ -1635,6 +1635,31 @@ function App() {
                 <Database size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Backup</span>
               </button>
+               <button onClick={() => {
+                 const grupos = {};
+                 (categorias || []).forEach((c) => { grupos[c] = []; });
+                 productos.forEach((p) => { if (!grupos[p.cat]) grupos[p.cat] = []; grupos[p.cat].push(p); });
+                 const html = "<html><head><title>Menú</title><style>" +
+                   "@page{size:A4;margin:12mm} body{font-family:Arial,sans-serif;color:#111;margin:0}" +
+                   "h1{text-align:center;margin:0 0 4mm;font-size:24px}" +
+                   ".sub{text-align:center;color:#666;font-size:11px;margin-bottom:8mm}" +
+                   ".cat{font-size:16px;font-weight:700;margin:6mm 0 2mm;border-bottom:2px solid #111;padding-bottom:1mm}" +
+                   ".item{display:flex;justify-content:space-between;gap:4mm;padding:1.5mm 0;border-bottom:1px dotted #bbb;font-size:13px}" +
+                   ".name{flex:1} .price{font-weight:700;white-space:nowrap}" +
+                   "</style></head><body>" +
+                   "<h1>" + (config.nombreLocal || "Menú") + "</h1>" +
+                   "<div class=\"sub\">Precios en pesos argentinos</div>" +
+                   Object.keys(grupos).filter((c) => (grupos[c] || []).length).map((c) =>
+                     "<div class=\"cat\">" + c + "</div>" + (grupos[c] || []).map((p) => "<div class=\"item\"><span class=\"name\">" + p.nombre + "</span><span class=\"price\">" + pesos(p.precio) + "</span></div>").join("")
+                   ).join("") +
+                   "</body></html>";
+                 const w = window.open("", "_blank");
+                 w.document.write(html); w.document.close(); w.focus();
+                 setTimeout(() => { w.print(); }, 400);
+               }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
+                 <Printer size={24} />
+                 <span style={{ fontSize: 13, fontWeight: 600 }}>Menú A4</span>
+               </button>
             </div>
 
             {configModal === "local" && (
