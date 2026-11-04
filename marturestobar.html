@@ -359,6 +359,8 @@ function App() {
   const [filtroInsumos, setFiltroInsumos] = useState("");
   const [filtroProveedores, setFiltroProveedores] = useState("");
   const [filtroCarta, setFiltroCarta] = useState("");
+  const [nuevaCatCfg, setNuevaCatCfg] = useState("");
+  const [editCatCfg, setEditCatCfg] = useState({});
   const [margenPor, setMargenPor] = useState({});
   const [editEgresoId, setEditEgresoId] = useState(null);
   const [caja, setCaja] = useState(() => { try { const saved = localStorage.getItem("martu_caja"); if (saved) { const parsed = JSON.parse(saved); if (parsed && parsed.movimientos) return parsed; } } catch {} return { fecha: hoy(), apertura: 0, movimientos: [], cierre: null, saldoFinal: null, turno: "", usuario: "", arqueo: {} }; });
@@ -1631,6 +1633,10 @@ function App() {
                 <LayoutGrid size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Mesas</span>
               </button>
+               <button onClick={() => setConfigModal("categorias")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
+                 <Book size={24} />
+                 <span style={{ fontSize: 13, fontWeight: 600 }}>Categorías</span>
+               </button>
               <button onClick={() => setConfigModal("backup")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                 <Database size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Backup</span>
@@ -2023,6 +2029,31 @@ function App() {
                   <div className="flex gap-2">
                     <button onClick={() => { const usados = listaMesas.map((it) => it.id); let id = 1; while (usados.includes(id)) id++; guardarMesasCfg([...listaMesas, { id, asientos: 4 }].sort((a, b) => a.id - b.id)); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><Plus size={15} /> Agregar mesa</button>
                     <button onClick={() => guardarMesasCfg(listaMesas)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><CheckCircle2 size={15} /> Guardar ({listaMesas.length})</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {configModal === "categorias" && (
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>Categorías de la carta</h3>
+                    <button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Agregá, renombrá o eliminá categorías. Si eliminás una categoría con productos, esos productos pasan a la primera categoría disponible.</div>
+                  <div className="flex gap-2 mb-4">
+                    <input style={{ ...inputStyle, flex: 1 }} placeholder="Nueva categoría" value={nuevaCatCfg} onChange={(e) => setNuevaCatCfg(e.target.value)} />
+                    <button onClick={() => { const c = (nuevaCatCfg || "").trim(); if (!c) return; if (categorias.includes(c)) { setToast({ tipo: "error", texto: "Ya existe." }); return; } const next = [...categorias, c]; setCategorias(next); fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { categorias: next } }) }).catch(() => {}); setNuevaCatCfg(""); setToast({ tipo: "ok", texto: "Categoría agregada." }); }} className="px-4 py-2 rounded-lg font-bold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Agregar</button>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {categorias.map((c) => (
+                      <div key={c} className="flex items-center gap-2 p-3 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                        <input style={{ ...inputStyle, flex: 1 }} value={editCatCfg[c] !== undefined ? editCatCfg[c] : c} onChange={(e) => setEditCatCfg((prev) => ({ ...prev, [c]: e.target.value }))} />
+                        <button onClick={() => { const nuevo = (editCatCfg[c] !== undefined ? editCatCfg[c] : c).trim(); if (!nuevo || nuevo === c) { setEditCatCfg((prev) => { const n = { ...prev }; delete n[c]; return n; }); return; } if (categorias.includes(nuevo)) { setToast({ tipo: "error", texto: "Ya existe esa categoría." }); return; } const next = categorias.map((x) => x === c ? nuevo : x); setCategorias(next); setProductos((prev) => prev.map((p) => p.cat === c ? { ...p, cat: nuevo } : p)); fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { categorias: next } }) }).catch(() => {}); setEditCatCfg((prev) => { const n = { ...prev }; delete n[c]; return n; }); setToast({ tipo: "ok", texto: "Categoría renombrada." }); }} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar</button>
+                        <button onClick={() => { if (!window.confirm("¿Eliminar la categoría \"" + c + "\"?")) return; const restantes = categorias.filter((x) => x !== c); if (restantes.length === 0) { setToast({ tipo: "error", texto: "Debe quedar al menos una categoría." }); return; } const fallback = restantes[0]; setCategorias(restantes); setProductos((prev) => prev.map((p) => p.cat === c ? { ...p, cat: fallback } : p)); fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { categorias: restantes } }) }).catch(() => {}); setToast({ tipo: "ok", texto: "Categoría eliminada." }); }} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: C.base, color: C.red, border: "1px solid " + C.border }}>Eliminar</button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
