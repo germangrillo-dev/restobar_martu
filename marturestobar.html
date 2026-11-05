@@ -380,11 +380,14 @@ function App() {
   const [editCliente, setEditCliente] = useState(null);
   const [showHistorial, setShowHistorial] = useState(false);
   const [editCierreSel, setEditCierreSel] = useState(null);
+  const editCierreSelRef = React.useRef(null);
+  React.useEffect(() => { editCierreSelRef.current = editCierreSel; }, [editCierreSel]);
   const [editCierreClave, setEditCierreClave] = useState("");
   const [editCierreMonto, setEditCierreMonto] = useState("");
   const [showCierreModal, setShowCierreModal] = useState(false);
   const [editandoCierreId, setEditandoCierreId] = useState(null);
   const [cajaAntesEdicion, setCajaAntesEdicion] = useState(null);
+  const editandoCierreRef = React.useRef(false);
   const [showCobroModal, setShowCobroModal] = useState(false);
 
   const [cobroMetodo, setCobroMetodo] = useState(null);
@@ -916,7 +919,8 @@ function App() {
   React.useEffect(() => {
     if (!usuario) return;
     const syncFromServer = () => {
-      if (editandoCierreId) return;
+      if (editCierreSelRef.current) return;
+      if (editandoCierreRef.current) return;
       fetch(serverUrl + "/api/caja").then(r => r.json()).then(data => {
         initialSyncDoneRef.current = true;
         if (Date.now() < cajaDirtyUntilRef.current) return;
