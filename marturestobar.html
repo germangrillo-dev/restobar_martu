@@ -441,7 +441,7 @@ function App() {
   const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaVentasEfectivo = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
-  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentasEfectivo - cajaEgresos) * 100) / 100;
+  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
   const cajaAbierta = cajaIniciada || ingresoSinCaja;
   const activeTab = cajaAbierta ? tab : "caja";
 
@@ -2321,7 +2321,7 @@ function App() {
                      const totalBilletes = [20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0);
                      const totalMedios = ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0);
                      const totalArqueo = totalBilletes + totalMedios;
-                     const ventas = (caja.movimientos || []).filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0);
+                     const ventas = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
                      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
                      const diff = Math.round(((caja.cierre || 0) - ((caja.apertura || 0) + ventas - egresos)) * 100) / 100;
                      const l = [
