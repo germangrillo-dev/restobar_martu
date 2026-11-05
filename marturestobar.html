@@ -464,6 +464,7 @@ function App() {
         else nb = [...bev, { lid: uid(), pid, cant: 1, nota: "" }];
         const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: nb } };
         postMesas(nm);
+        setToast({ tipo: "ok", texto: "Bebida guardada en la mesa." });
         return nm;
       });
       return;
