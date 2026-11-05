@@ -930,7 +930,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     else if (num) chatId = num + "@c.us";
     if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
+      const media = new MessageMedia("image/png", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX5YAAAAASUVORK5CYII=", "test.png");
       await clientWpp.sendMessage(chatId, "Enviando comprobante...");
       await clientWpp.sendMessage(chatId, media);
       try { fs.unlinkSync(pdfPath); } catch {}
