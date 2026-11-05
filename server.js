@@ -930,11 +930,16 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     else if (num) chatId = num + "@c.us";
     if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      const media = new MessageMedia("image/png", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX5YAAAAASUVORK5CYII=", "test.png");
-      await clientWpp.sendMessage(chatId, "Enviando comprobante...");
-      await clientWpp.sendMessage(chatId, media, { sendMediaAsDocument: true, sendSeen: false });
-      try { fs.unlinkSync(pdfPath); } catch {}
-      res.json({ ok: true });
+      const pdfUrl = (cfg.publicUrl || PUBLIC_URL || "http://localhost:3456") + "/tmp_comprobante.pdf";
+      const clientWpp = client;
+      if (clientWpp && clientWpp.info && clientWpp.info.wid) {
+        await clientWpp.sendMessage(chatId, `Comprobante ${nombre} - ${comprobante || ""}\nTotal: $${(total || 0).toLocaleString("es-AR")}\nDescargá tu PDF: ${pdfUrl}`);
+        try { /* keep pdf for download */ } catch {}
+        res.json({ ok: true });
+      } else {
+        try { fs.unlinkSync(pdfPath); } catch {}
+        res.json({ ok: false, error: "WhatsApp no conectado" });
+      }
     } else {
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: false, error: "WhatsApp no conectado" });
@@ -952,6 +957,14 @@ process.on("unhandledRejection", (err) => {
 process.on("exit", () => {
   backup.detenerBackups();
   db.closeDB();
+});
+
+app.get("/tmp_comprobante.pdf", (req, res) => {
+  const p = path.join(__dirname, "tmp_comprobante.pdf");
+  if (!fs.existsSync(p)) return res.status(404).send("No PDF");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=comprobante.pdf");
+  res.sendFile(p);
 });
 
 const PORT = 3456;
