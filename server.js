@@ -1019,6 +1019,15 @@ app.post("/api/caja/sesion/editar", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+app.get("/api/db/download", (req, res) => {
+  if (!esHostLocal(req.headers.host || "")) return res.status(403).send("Forbidden");
+  const p = path.join(__dirname, "data", "martu.db");
+  if (!fs.existsSync(p)) return res.status(404).send("No DB");
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", "attachment; filename=martu.db");
+  res.sendFile(p);
+});
+
 const PORT = 3456;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {
