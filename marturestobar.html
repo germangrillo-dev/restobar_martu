@@ -946,9 +946,9 @@ function App() {
       fetch(serverUrl + "/api/deliveries").then(r => r.json()).then(serverDels => {
         if (!Array.isArray(serverDels)) return;
         setDeliveries((prev) => {
-          const delServer = (serverDels || []).filter((d) => d.fecha === hoy());
+          const delServer = (serverDels || []).map((d) => d && !d.fecha ? { ...d, fecha: hoy() } : d).filter((d) => d.fecha === hoy());
           const merged = [...unirDeliveries(prev, delServer), ...prev.filter((p) => !delServer.some((s) => s.id === p.id))];
-          const onlyToday = merged.filter((d) => d.fecha === hoy());
+          const onlyToday = merged.map((d) => d && !d.fecha ? { ...d, fecha: hoy() } : d).filter((d) => d.fecha === hoy());
           return JSON.stringify(onlyToday) === JSON.stringify(prev) ? prev : onlyToday;
         });
       }).catch(() => {});
