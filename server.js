@@ -932,7 +932,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
       await clientWpp.sendMessage(chatId, "Enviando comprobante...");
-      await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || ""), sendMediaAsDocument: true });
+      await clientWpp.sendMessage(chatId, media);
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: true });
     } else {
