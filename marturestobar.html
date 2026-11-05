@@ -553,7 +553,8 @@ function App() {
     const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
     setFacturaXNum((n) => n + 1);
     const clienteMesa = mesas[id]?.datos?.cliente || "";
-    const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + (clienteMesa ? " — " + clienteMesa : ""), monto: total, metodo, ref, hora: hora(), comprobante: numComp };
+    const itemsCobro = [...(mesas[id]?.enviado || []), ...(mesas[id]?.lineas || []), ...(mesas[id]?.despachado || []), ...(mesas[id]?.bebidas || [])].map((l) => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 }));
+    const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + (clienteMesa ? " — " + clienteMesa : ""), monto: total, metodo, ref, hora: hora(), comprobante: numComp, items: itemsCobro };
     if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
     const nuevaCaja = { ...caja, movimientos: [...caja.movimientos, mov] };
     const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
@@ -608,7 +609,7 @@ function App() {
       } else {
         const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
         setFacturaXNum((n) => n + 1);
-        const mov = { id: movId, tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp };
+        const mov = { id: movId, tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp, items: (found.items || []).map((it) => ({ nombre: it.nombre || "Item", cant: it.cant || 1, precio: it.precio || 0 })) };
         if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
         const nuevaCaja = { ...caja, movimientos: [...movimientos, mov] };
         setCaja(nuevaCaja);
@@ -1332,7 +1333,7 @@ function App() {
                   <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Mesa")).slice().reverse().map((m) => (
                     <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
                       <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.comprobante ? " · " + m.comprobante : ""}</div></div>
-                      <span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span>
+                      <div className="flex items-center gap-2"><span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span><button onClick={async () => { const comp = { id: m.id, total: m.monto, cliente: "", clienteData: {}, metodo: m.metodo, afip: m.cae ? { cae: m.cae, vencimiento: m.caeVto, cbteNro: m.afipCbte } : null, items: m.items || [] }; await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}><Printer size={13} /></button></div>
                     </div>
                   ))}{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Mesa")).length === 0 && <p style={{ color: C.muted, fontSize: 12 }}>Sin ventas de mesas</p>}</div>
                 </div>
@@ -1341,7 +1342,7 @@ function App() {
                   <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Delivery")).slice().reverse().map((m) => (
                     <div key={m.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.base }}>
                       <div><div style={{ fontSize: 13, fontWeight: 600 }}>{m.concepto.replace("Delivery: ", "")}</div><div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.metodo}{m.comprobante ? " · " + m.comprobante : ""}</div></div>
-                      <span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span>
+                      <div className="flex items-center gap-2"><span style={{ fontWeight: 700, color: C.green, fontSize: 13 }}>+{dinero(m.monto)}</span><button onClick={async () => { const comp = { id: m.id, total: m.monto, cliente: "", clienteData: {}, metodo: m.metodo, afip: m.cae ? { cae: m.cae, vencimiento: m.caeVto, cbteNro: m.afipCbte } : null, items: m.items || [] }; await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}><Printer size={13} /></button></div>
                     </div>
                   ))}{cajaMovs.filter(m => m.tipo === "venta" && m.concepto.startsWith("Delivery")).length === 0 && <p style={{ color: C.muted, fontSize: 12 }}>Sin ventas de delivery</p>}</div>
                 </div>
