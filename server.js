@@ -922,8 +922,14 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     fs.writeFileSync(pdfPath, pdfBuffer);
     let num = telefono.replace(/[^0-9]/g, "");
     if (!num.startsWith("54")) num = "549" + num;
-    const chatId = num + "@c.us";
     const clientWpp = client;
+    let chatId = num + "@c.us";
+    if (clientWpp && clientWpp.info && clientWpp.info.wid) {
+      try {
+        const numberId = await clientWpp.getNumberId(num);
+        if (numberId && numberId._serialized) chatId = numberId._serialized;
+      } catch (e) { console.error("[WA comprobante] getNumberId:", e.message); }
+    }
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
       await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || "") });
