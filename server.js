@@ -48,12 +48,15 @@ app.use((req, res, next) => {
 db.initDB();
 console.log("✅ Base de datos SQLite inicializada");
 
-// Cerrar cajas viejas que quedaron activas por error
+// Cerrar cajas viejas que quedaron activas por error (más de 1 día de antigüedad)
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
+const ayer = new Date();
+ayer.setDate(ayer.getDate() - 1);
+const ayerStr = ayer.toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
 try {
-  const oldOpen = db.getDB().prepare("SELECT id FROM caja_sesiones WHERE activa = 1 AND fecha != ?").all(today);
+  const oldOpen = db.getDB().prepare("SELECT id FROM caja_sesiones WHERE activa = 1 AND fecha < ?").all(ayerStr);
   if (oldOpen.length > 0) {
-    db.getDB().prepare("UPDATE caja_sesiones SET activa = 0 WHERE activa = 1 AND fecha != ?").run(today);
+    db.getDB().prepare("UPDATE caja_sesiones SET activa = 0 WHERE activa = 1 AND fecha < ?").run(ayerStr);
     console.log(`🔄 Cerradas ${oldOpen.length} caja(s) vieja(s) que quedaron abiertas`);
   }
 } catch (e) { console.warn("Error cerrando cajas viejas:", e.message); }
@@ -986,6 +989,18 @@ app.get("/api/caja/sesiones", (req, res) => {
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Recuperar movimientos de una sesión cerrada reciente si la caja activa está vacía
+try {
+  const activa = db.getCaja();
+  if (activa && (!activa.movimientos || activa.movimientos.length === 0)) {
+    const ultimaCerrada = db.getDB().prepare("SELECT id FROM caja_sesiones WHERE activa = 0 AND (SELECT COUNT(*) FROM movimientos WHERE sesion_id = caja_sesiones.id) > 0 ORDER BY id DESC LIMIT 1").get();
+    if (ultimaCerrada) {
+      db.getDB().prepare("UPDATE movimientos SET sesion_id = ? WHERE sesion_id = ?").run(activa.id, ultimaCerrada.id);
+      console.log("Recovered movements from session " + ultimaCerrada.id + " to active session " + activa.id);
+    }
+  }
+} catch (e) { console.error("Recovery error:", e.message); }
 
 const PORT = 3456;
 const HOST = "0.0.0.0";
