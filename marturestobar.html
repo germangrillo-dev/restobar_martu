@@ -328,7 +328,7 @@ function App() {
   const [fac, setFac] = useState({ provId: "", tipo: TIPOS_FAC[0], numero: "", fecha: hoy(), conIva: false, items: [lineaVacia()] });
   const [facExpanded, setFacExpanded] = useState(null);
   const [mesas, setMesas] = useState(() => { const def = { lineas: [], enviado: [], despachado: [], bebidas: [] }; try { const saved = localStorage.getItem("elmo_mesas"); if (saved) { const parsed = JSON.parse(saved); if (parsed && typeof parsed === "object") return parsed; } } catch {} return Object.fromEntries(MESAS.map((m) => [m.id, { ...def }])); });
-  const [deliveries, setDeliveries] = useState(() => { try { const saved = localStorage.getItem("elmo_deliveries"); if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed; } } catch {} return []; });
+  const [deliveries, setDeliveries] = useState(() => { try { const saved = localStorage.getItem("elmo_deliveries"); if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed.filter((d) => d.fecha === hoy()); } } catch {} return []; });
   const [vista, setVista] = useState("mapa");
   const [salonVista, setSalonVista] = useState("salon");
   const [orden, setOrden] = useState(() => cargar("orden", null));
@@ -492,7 +492,7 @@ function App() {
     const total = sumLin(orden.lineas);
     const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
     if (orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
-    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); setSalonVista("delivery"); setVista("mapa"); }
+    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), fecha: hoy(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); setSalonVista("delivery"); setVista("mapa"); }
     mandarComanda(comanda);
   };
   const cerrarMesa = (id) => {
@@ -569,11 +569,11 @@ function App() {
     // Registrar la venta en caja para que quede asentada en el cierre
     const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + " — Cuenta corriente" + (cli ? " (" + cli.nombre + ")" : ""), monto: total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
     const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), mov] };
-    setCaja(nuevaCaja);
-    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja }) }).catch(() => {});
     const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
+    setCaja(nuevaCaja);
     setMesas(nuevasMesas);
     postMesas(nuevasMesas);
+    postAlServer(nuevaCaja, nuevasMesas, null);
     setOrden(null); setVista("mapa"); setShowCobroModal(null);
     setCobroMetodo(null); setCcClienteSel("");
     setToast({ tipo: "ok", texto: "Mesa " + id + " cargada a cuenta de " + (cli ? cli.nombre : "cliente") + " ($" + total.toLocaleString("es-AR") + ")." });
@@ -941,9 +941,10 @@ function App() {
       fetch(serverUrl + "/api/deliveries").then(r => r.json()).then(serverDels => {
         if (!Array.isArray(serverDels)) return;
         setDeliveries((prev) => {
-          const delServer = serverDels || [];
+          const delServer = (serverDels || []).filter((d) => d.fecha === hoy());
           const merged = [...unirDeliveries(prev, delServer), ...prev.filter((p) => !delServer.some((s) => s.id === p.id))];
-          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
+          const onlyToday = merged.filter((d) => d.fecha === hoy());
+          return JSON.stringify(onlyToday) === JSON.stringify(prev) ? prev : onlyToday;
         });
       }).catch(() => {});
     };
@@ -983,7 +984,7 @@ function App() {
         setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
         const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota }));
         const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
-        const newDel = { id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems, estado: "cocina" };
+        const newDel = { id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), fecha: hoy(), total, items: totalItems, estado: "cocina" };
         setDeliveries((d) => { const nds = [newDel, ...d]; postDeliveries(nds); return nds; });
         mandarComanda({ tipo: "delivery", mesaId: null, cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), total, items: totalItems });
         setOrden(null);
@@ -1267,7 +1268,7 @@ function App() {
                   </div>
                 )}
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 && (
-                   <div className="mb-4"><h3 style={{ fontWeight: 800, fontSize: 14, color: "#000000", marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").map((d) => {
+                   <div className="mb-4"><h3 style={{ fontWeight: 800, fontSize: 14, color: "#000000", marginBottom: 8, color: C.amber }}>En proceso</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").sort((a, b) => (a.hora || "").localeCompare(b.hora || "")).map((d) => {
                     const esDespachado = d.estado === "despachado";
                     return (
                      <div key={d.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: C.raised, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
@@ -1282,7 +1283,7 @@ function App() {
                   <p style={{ color: C.muted, fontSize: 14 }}>No hay pedidos de delivery en curso.</p>
                 ) : (
                   deliveries.filter(d => d.estado === "entregado").length > 0 && (
-                     <div><h3 style={{ fontWeight: 800, fontSize: 14, color: "#000000", marginBottom: 8, color: C.green }}>Entregados</h3><div className="flex flex-col gap-1 max-h-48 overflow-y-auto">{deliveries.filter(d => d.estado === "entregado").slice(0, 6).map((d) => (
+                     <div><h3 style={{ fontWeight: 800, fontSize: 14, color: "#000000", marginBottom: 8, color: C.green }}>Entregados</h3><div className="flex flex-col gap-1 max-h-48 overflow-y-auto">{deliveries.filter(d => d.estado === "entregado").sort((a, b) => (a.hora || "").localeCompare(b.hora || "")).slice(0, 6).map((d) => (
                        <div key={d.id} className="flex items-center gap-3 px-3 py-1.5 rounded-lg" style={{ background: C.base, opacity: 0.7 }}><div className="flex-1 min-w-0"><span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted, marginLeft: 8, fontWeight: 700 }}>{d.hora} hs</span></div><span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>{pesos(d.total)}</span><span style={{ fontSize: 11, color: "#2e7d32", fontWeight: 700, whiteSpace: "nowrap" }}>Entregado</span></div>
                     ))}</div></div>
                   )
@@ -1429,7 +1430,7 @@ function App() {
               <div className="rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><Bike size={18} style={{ color: C.amber }} /><h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>Delivery</h3><span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? C.amber : C.border, color: deliveries.filter(d => (d.estado || "cocina") !== "entregado").length > 0 ? "#241a0c" : C.muted }}>{deliveries.filter(d => (d.estado || "cocina") !== "entregado").length}</span></div>
                 {deliveries.filter(d => (d.estado || "cocina") !== "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sin deliveries activos</p> : (
-                  <div className="flex flex-col gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").slice(0, 3).map((d) => (
+                  <div className="flex flex-col gap-1.5">{deliveries.filter(d => (d.estado || "cocina") !== "entregado").sort((a, b) => (a.hora || "").localeCompare(b.hora || "")).slice(0, 3).map((d) => (
                     <div key={d.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: C.base, borderLeft: "3px solid " + (d.estado === "despachado" ? C.green : C.amber) }}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2"><span style={{ fontWeight: 600, fontSize: 13 }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted }}>{d.direccion} · {d.hora} hs</span></div>
@@ -1445,7 +1446,7 @@ function App() {
               <div className="rounded-xl p-4 sm:col-span-2 xl:col-span-3" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><CheckCircle2 size={18} style={{ color: C.green }} /><h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>Últimos entregados</h3></div>
                 {deliveries.filter(d => d.estado === "entregado").length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Ninguno aún</p> : (
-                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">{deliveries.filter(d => d.estado === "entregado").slice(0, 20).map((d) => (
+                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">{deliveries.filter(d => d.estado === "entregado").sort((a, b) => (a.hora || "").localeCompare(b.hora || "")).slice(0, 20).map((d) => (
                     <div key={d.id} className="flex items-center gap-3 px-3 py-1.5 rounded-lg" style={{ background: C.base, opacity: 0.7 }}>
                       <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{d.cliente}</span><span style={{ fontSize: 11, color: C.muted, marginLeft: 4, fontWeight: 700 }}>{d.hora} hs</span></div></div>
                       <span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>{pesos(d.total)}</span>
@@ -2473,12 +2474,11 @@ function App() {
                   // Registrar la venta en caja (Cuenta corriente) para el cierre
                   const movCC = { id: uid(), tipo: "venta", concepto: "Delivery: " + showPagoDelivery.cliente + " — Cuenta corriente", monto: showPagoDelivery.total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
                   const nuevaCajaCC = { ...caja, movimientos: [...(caja.movimientos || []), movCC] };
-                  setCaja(nuevaCajaCC);
-                  fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCajaCC }) }).catch(() => {});
-                  // Set delivery to entregado without caja movement
                   const nds = deliveriesRef.current.map((x) => x.id === showPagoDelivery.id ? { ...x, estado: "entregado" } : x);
+                  setCaja(nuevaCajaCC);
                   setDeliveries(nds);
                   postDeliveries(nds);
+                  postAlServer(nuevaCajaCC, mesas, nds);
                   setShowPagoDelivery(null); setCcClienteSel("");
                   setToast({ tipo: "ok", texto: "Delivery de " + showPagoDelivery.cliente + " cargado a cuenta de " + (cli ? cli.nombre : "cliente") + " ($" + showPagoDelivery.total.toLocaleString("es-AR") + ")." });
                   if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "\u00a1Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " fue registrado a cuenta. \u00a1Gracias!");
