@@ -369,8 +369,12 @@ function iniciarWhatsApp() {
         const resumen = res.items.map(i => `${i.cant}x ${i.nombre}${i.nota ? " (" + i.nota + ")" : ""}`).join("\n");
         await msg.reply(`✅ Pedido recibido:\n${resumen}\n\n🌐 Seguí tu pedido: ${PUBLIC_URL}/menu-mesa.html\n📋 Sale en comanda. Gracias ${pedido.nombre}!`);
         console.log(`✅ Pedido registrado de ${pedido.nombre}: ${resumen}`);
+        return;
       }
     }
+    // Si no se pudo interpretar como pedido, enviar el menú
+    await msg.reply(`¡Hola ${nombre}! 👋\n\n${MENU_TEXTO()}`);
+    console.log(`✅ Menú enviado a ${nombre}`);
   });
 
   client.initialize().catch(err => {
