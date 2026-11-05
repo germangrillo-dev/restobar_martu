@@ -474,7 +474,7 @@ function App() {
   const setNota = (lid, v) => setOrden((o) => ({ ...o, lineas: o.lineas.map((l) => l.lid === lid ? { ...l, nota: v } : l) }));
   const setD = (k, v) => setOrden((o) => ({ ...o, datos: { ...o.datos, [k]: v } }));
 
-  const enviar = () => {
+   const enviar = async () => {
     if (!cajaAbierta) { setToast({ tipo: "error", texto: "Abrí la caja antes de enviar pedidos." }); return; }
     if (!orden || orden.lineas.length === 0) return;
     if (orden.tipo === "delivery" && (!orden.datos.cliente.trim() || !orden.datos.direccion.trim())) { setToast({ tipo: "error", texto: "Para delivery cargá nombre del cliente y dirección." }); return; }
@@ -493,7 +493,8 @@ function App() {
     const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
     if (orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
     else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), fecha: hoy(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); setSalonVista("delivery"); setVista("mapa"); }
-    mandarComanda(comanda);
+    const okComanda = await mandarComanda(comanda);
+    if (okComanda && orden.tipo === "delivery") { await imprimirTicket("comanda", lineasDelivery(comanda)); setToast({ tipo: "ok", texto: "Comandas enviadas: cocina + delivery." }); }
   };
   const cerrarMesa = (id) => {
     markMesaDirty(id);    const datosActuales = (orden && orden.tipo === "mesa" && orden.mesaId === id) ? orden.datos : {};
@@ -1103,6 +1104,28 @@ function App() {
     l.push({ t: "" });
     return l;
   };
+   const lineasDelivery = (t) => {
+     if (!t) return [];
+     const l = [
+       { t: "DELIVERY", bold: true, grande: true },
+       { t: (t.hora || hora()) + " hs", grande: true },
+       { t: "", rayita: true },
+       { t: "Cliente: " + (t.cliente || ""), izq: true, bold: true, grande: true },
+     ];
+     if (t.direccion) l.push({ t: "Dir: " + t.direccion, izq: true, grande: true });
+     if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true, grande: true });
+     if (t.cuit) l.push({ t: "CUIT: " + t.cuit, izq: true, grande: true });
+     l.push({ t: "", rayita: true });
+     (t.items || []).forEach((it) => {
+       l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true, grande: true });
+       if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
+     });
+     l.push({ t: "", rayita: true });
+     l.push({ t: "Total: " + pesos(t.total), bold: true, grande: true });
+     l.push({ t: "" });
+     return l;
+   };
+
   const mandarComanda = async (tk) => {
     const ok = await imprimirTicket("comanda", lineasComanda(tk));
     if (ok) setToast({ tipo: "ok", texto: "Comanda enviada a cocina." });
