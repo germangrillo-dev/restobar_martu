@@ -931,7 +931,8 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       const media = await MessageMedia.fromUrl("https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf");
-      await clientWpp.sendMessage(chatId, media, { sendMediaAsDocument: true });
+      const chat = await clientWpp.getChatById(chatId);
+      await chat.sendMessage(media, { sendMediaAsDocument: true });
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: true });
     } else {
