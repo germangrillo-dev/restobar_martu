@@ -372,9 +372,7 @@ function iniciarWhatsApp() {
         return;
       }
     }
-    // Si no se pudo interpretar como pedido, enviar el menú
-    await msg.reply(`¡Hola ${nombre}! 👋\n\n${MENU_TEXTO()}`);
-    console.log(`✅ Menú enviado a ${nombre}`);
+    // No enviar el menú automáticamente en cada mensaje para evitar spam; solo en saludos (ya manejado arriba)
   });
 
   client.initialize().catch(err => {
