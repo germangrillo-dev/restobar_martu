@@ -917,7 +917,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     </body></html>`;
     const browser = await require("puppeteer").launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 10000 });
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" } });
     await browser.close();
     const pdfPath = path.join(__dirname, "tmp_comprobante.pdf");
