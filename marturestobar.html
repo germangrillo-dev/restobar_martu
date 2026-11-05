@@ -447,7 +447,7 @@ function App() {
   const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaVentasEfectivo = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
-  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentasEfectivo - cajaEgresos) * 100) / 100;
+  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
   const cajaAbierta = cajaIniciada || ingresoSinCaja;
   const activeTab = cajaAbierta ? tab : "caja";
 
@@ -598,7 +598,7 @@ function App() {
      const cierreMonto = caja.cierre == null ? 0 : Number(caja.cierre);
      if (isNaN(cierreMonto) || cierreMonto < 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre (puede ser 0)." }); return; }
                       const ventasTotales = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
-                      const ventasEfectivo = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0);
+                      const ventasParaEsperado = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
      const diff = Math.round((cierreMonto - ((caja.apertura || 0) + ventas - egresos)) * 100) / 100;
      try {
@@ -2332,7 +2332,7 @@ function App() {
                      const totalArqueo = totalBilletes + totalMedios;
                      const ventas = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
                      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
-                      const diff = Math.round(((caja.cierre || 0) - ((caja.apertura || 0) + ventasEfectivo - egresos)) * 100) / 100;
+                      const diff = Math.round(((caja.cierre || 0) - ((caja.apertura || 0) + ventasParaEsperado - egresos)) * 100) / 100;
                      const l = [
                        { t: "CIERRE DE CAJA", bold: true, grande: true },
                        { t: (caja.fecha || "") + " " + (caja.turno || ""), grande: true },
