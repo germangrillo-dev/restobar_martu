@@ -928,8 +928,10 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       try {
         const contact = await clientWpp.getContactById(num + "@c.us");
-        if (contact && contact.id && contact.id._serialized) chatId = contact.id._serialized;
-        numberIdInfo = contact ? (contact.id || contact) : null;
+        let serialized = null;
+        try { serialized = contact && contact.id ? contact.id._serialized : null; } catch (e) { serialized = null; }
+        if (serialized) chatId = serialized;
+        numberIdInfo = contact ? { number: contact.number, id: serialized || String(contact.id || "") } : null;
       } catch (e) { console.error("[WA comprobante] getContactById:", e.message); numberIdInfo = { error: e.message }; }
     }
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
