@@ -1010,6 +1010,15 @@ app.post("/api/caja/sesion/delete", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+app.post("/api/caja/sesion/editar", (req, res) => {
+  try {
+    const { id, cierre, diff } = req.body || {};
+    if (!id) return res.status(400).json({ ok: false, error: "Sin id" });
+    db.getDB().prepare("UPDATE caja_sesiones SET cierre = ?, diff = ? WHERE id = ? AND activa = 0").run(cierre || 0, diff || 0, id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 const PORT = 3456;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {
