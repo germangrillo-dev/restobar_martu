@@ -861,8 +861,8 @@ app.post("/api/afip/token", (req, res) => {
 app.post("/api/whatsapp/comprobante", async (req, res) => {
   try {
     const cfg = getConfig();
-    const { telefono, items, total, metodo, comprobante, afip: afipData, cliente, clienteData, localName } = req.body;
-    if (!telefono) return res.status(400).json({ ok: false, error: "Sin teléfono" });
+    const { telefono, items, total, metodo, comprobante, afip: afipData, cliente, clienteData, localName, remitente } = req.body;
+    if (!telefono && !remitente) return res.status(400).json({ ok: false, error: "Sin teléfono" });
     const nombre = cfg.nombreLocal || localName || "El Mostrador";
     const dir = cfg.direccion || "YPF El Cruce / Ruta Nac 157 y 64";
     const cuit = cfg.cuit || "27-21341447-5";
@@ -920,21 +920,15 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     await browser.close();
     const pdfPath = path.join(__dirname, "tmp_comprobante.pdf");
     fs.writeFileSync(pdfPath, pdfBuffer);
-    let num = telefono.replace(/[^0-9]/g, "");
-    if (!num.startsWith("54")) num = "549" + num;
+    let num = (telefono || "").replace(/[^0-9]/g, "");
+    if (num && !num.startsWith("54")) num = "549" + num;
     const clientWpp = client;
-    let chatId = num + "@c.us";
-    let numberIdInfo = null;
+    let chatId = null;
+    if (remitente && remitente.includes("@")) chatId = remitente;
+    else if (num) chatId = num + "@c.us";
+    if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      try {
-        const lidInfo = await clientWpp.getContactLidAndPhone([num + "@c.us"]);
-        const lid = Array.isArray(lidInfo) && lidInfo[0] ? lidInfo[0].lid : null;
-        if (lid) chatId = lid;
-      } catch (e) { console.error("[WA comprobante] getContactLidAndPhone:", e.message); }
-    }
-    if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
-      await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || "") });
+      await clientWpp.sendMessage(chatId, "TEST");
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: true });
     } else {
