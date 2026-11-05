@@ -591,7 +591,8 @@ function App() {
    const guardarCierreEditado = async () => {
      const cierreMonto = caja.cierre == null ? 0 : Number(caja.cierre);
      if (isNaN(cierreMonto) || cierreMonto < 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre (puede ser 0)." }); return; }
-     const ventas = (caja.movimientos || []).filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0);
+                      const ventasTotales = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
+                      const ventasEfectivo = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0);
      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
      const diff = Math.round((cierreMonto - ((caja.apertura || 0) + ventas - egresos)) * 100) / 100;
      try {
@@ -2323,14 +2324,14 @@ function App() {
                      const totalArqueo = totalBilletes + totalMedios;
                      const ventas = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
                      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
-                     const diff = Math.round(((caja.cierre || 0) - ((caja.apertura || 0) + ventas - egresos)) * 100) / 100;
+                      const diff = Math.round(((caja.cierre || 0) - ((caja.apertura || 0) + ventasEfectivo - egresos)) * 100) / 100;
                      const l = [
                        { t: "CIERRE DE CAJA", bold: true, grande: true },
                        { t: (caja.fecha || "") + " " + (caja.turno || ""), grande: true },
                        { t: "Usuario: " + (caja.usuario || ""), izq: true },
                        { t: "", rayita: true },
                        { t: "Apertura: " + dinero(caja.apertura), izq: true },
-                       { t: "Ventas: " + dinero(ventas), izq: true },
+                       { t: "Ventas: " + dinero(ventasTotales), izq: true },
                        { t: "Egresos: " + dinero(egresos), izq: true },
                        { t: "Esperado: " + dinero((caja.apertura || 0) + ventas - egresos), izq: true, bold: true },
                        { t: "Cierre: " + dinero(caja.cierre || 0), izq: true },
