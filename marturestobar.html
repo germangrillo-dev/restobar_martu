@@ -447,7 +447,7 @@ function App() {
   const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaVentasEfectivo = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
-  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
+  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentasEfectivo - cajaEgresos) * 100) / 100;
   const cajaAbierta = cajaIniciada || ingresoSinCaja;
   const activeTab = cajaAbierta ? tab : "caja";
 
