@@ -348,7 +348,10 @@ function iniciarWhatsApp() {
     const texto = msg.body.trim().toLowerCase();
     const contacto = await msg.getContact();
     const nombre = contacto.pushname || contacto.name || "Cliente";
-    const telefono = remitente.split("@")[0];
+    // Evitar guardar LID (números largos sin @c.us) como teléfono
+    let telefono = "";
+    if (remitente.endsWith("@c.us")) telefono = remitente.split("@")[0];
+    else if (contacto.number && /^\d{8,13}$/.test(contacto.number)) telefono = contacto.number;
     console.log(`📩 Mensaje de ${nombre} (${telefono}): ${msg.body}`);
     const saludos = ["hola", "buenas", "buen dia", "buena tarde", "buena noche", "hello", "hi", "menu", "menú", "comer", "pedir"];
     if (saludos.some(s => texto.includes(s)) && texto.length < 30) {
