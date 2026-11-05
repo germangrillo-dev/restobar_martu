@@ -561,6 +561,7 @@ function App() {
     setMesas(nuevasMesas);
     postMesas(nuevasMesas);
     setOrden(null); setVista("mapa"); setShowCobroModal(null);
+    setShowComprobanteModal({ id, total, cliente: mesas[id]?.datos?.cliente || "", clienteData: mesas[id]?.datos, metodo, afip: afipResult, items: [...(mesas[id]?.enviado || []), ...(mesas[id]?.lineas || []), ...(mesas[id]?.despachado || []), ...(mesas[id]?.bebidas || [])].map((l) => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) });
     setToast({ tipo: "ok", texto: "Mesa " + id + " cobrada ($" + total.toLocaleString("es-AR") + " " + metodo + ")" + (afipResult ? " · CAE: " + afipResult.cae : "") + "." });
     postMesas(nuevasMesas);
     postAlServer(nuevaCaja, nuevasMesas, null);
