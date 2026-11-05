@@ -927,10 +927,10 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     let numberIdInfo = null;
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       try {
-        const numberId = await clientWpp.getNumberId(num);
-        numberIdInfo = numberId;
-        if (numberId && numberId._serialized) chatId = numberId._serialized;
-      } catch (e) { console.error("[WA comprobante] getNumberId:", e.message); numberIdInfo = { error: e.message }; }
+        const contact = await clientWpp.getContactById(num + "@c.us");
+        if (contact && contact.id && contact.id._serialized) chatId = contact.id._serialized;
+        numberIdInfo = contact ? (contact.id || contact) : null;
+      } catch (e) { console.error("[WA comprobante] getContactById:", e.message); numberIdInfo = { error: e.message }; }
     }
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
