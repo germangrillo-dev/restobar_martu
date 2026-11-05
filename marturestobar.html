@@ -434,7 +434,7 @@ function App() {
   const unidadDe = (iid) => insumoById[iid] ? insumoById[iid].unidad : "";
   const nombreIns = (iid) => insumoById[iid] ? insumoById[iid].nombre : "(borrado)";
   const cajaMovs = (caja && caja.movimientos) ? caja.movimientos : [];
-  const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta").reduce((a, m) => a + m.monto, 0) * 100) / 100;
+  const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
   const cajaAbierta = cajaIniciada || ingresoSinCaja;
@@ -566,6 +566,11 @@ function App() {
     const cli = (config.clientes || []).find((c) => c.id === clienteId);
     markMesaDirty(id);
     cargoACuenta(clienteId, total, "Mesa " + id + (cli ? " — " + cli.nombre : ""));
+    // Registrar la venta en caja para que quede asentada en el cierre
+    const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + " — Cuenta corriente" + (cli ? " (" + cli.nombre + ")" : ""), monto: total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
+    const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), mov] };
+    setCaja(nuevaCaja);
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja }) }).catch(() => {});
     const nuevasMesas = { ...mesas, [id]: { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
     setMesas(nuevasMesas);
     postMesas(nuevasMesas);
@@ -2392,6 +2397,7 @@ function App() {
                   {(config.clientes || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}{saldoCliente(c.id) !== 0 ? " (debe " + pesos(saldoCliente(c.id)) + ")" : ""}</option>)}
                 </select>
                 {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agregá uno en Config → Clientes.</div>}
+                 <button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>+ Agregar cliente</button>
                 <button onClick={() => confirmarCobroCC(showCobroModal.id, ccClienteSel)} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Cargar a cuenta corriente</button>
               </div>
             ) : (cobroMetodo === "Transferencia" || cobroMetodo === "Tarjeta crédito" || cobroMetodo === "Tarjeta débito" || cobroMetodo === "Mercado Pago") ? (
@@ -2459,10 +2465,16 @@ function App() {
                   {(config.clientes || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}{saldoCliente(c.id) !== 0 ? " (debe " + pesos(saldoCliente(c.id)) + ")" : ""}</option>)}
                 </select>
                 {(config.clientes || []).length === 0 && <div style={{ fontSize: 12, color: C.muted }}>No hay clientes cargados. Agregá uno en Config → Clientes.</div>}
+                 <button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>+ Agregar cliente</button>
                 <button onClick={() => {
                     if (!ccClienteSel) { setToast({ tipo: "error", texto: "Elegí un cliente." }); return; }
                   const cli = (config.clientes || []).find((c) => c.id === ccClienteSel);
                   cargoACuenta(ccClienteSel, showPagoDelivery.total, "Delivery: " + showPagoDelivery.cliente);
+                  // Registrar la venta en caja (Cuenta corriente) para el cierre
+                  const movCC = { id: uid(), tipo: "venta", concepto: "Delivery: " + showPagoDelivery.cliente + " — Cuenta corriente", monto: showPagoDelivery.total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
+                  const nuevaCajaCC = { ...caja, movimientos: [...(caja.movimientos || []), movCC] };
+                  setCaja(nuevaCajaCC);
+                  fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCajaCC }) }).catch(() => {});
                   // Set delivery to entregado without caja movement
                   const nds = deliveriesRef.current.map((x) => x.id === showPagoDelivery.id ? { ...x, estado: "entregado" } : x);
                   setDeliveries(nds);
@@ -2598,7 +2610,7 @@ function App() {
               <input style={inputStyle} placeholder="Dirección" value={nuevoCliente.direccion} onChange={(e) => setNuevoCliente({ ...nuevoCliente, direccion: e.target.value })} />
               <input style={inputStyle} placeholder="Teléfono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({ ...nuevoCliente, telefono: e.target.value })} />
               <input style={inputStyle} placeholder="Email" value={nuevoCliente.email} onChange={(e) => setNuevoCliente({ ...nuevoCliente, email: e.target.value })} />
-              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const nuevo = { id: uid(), nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
+              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const nuevo = { id: uid(), nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setCcClienteSel(nuevo.id); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
               <button onClick={() => setShowNuevoClienteModal(false)} className="w-full py-2 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Cancelar</button>
             </div>
           </div>
