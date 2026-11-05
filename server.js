@@ -29,7 +29,8 @@ const PATHS_PUBLICOS = [
   "/", "/menu-delivery.html", "/visor.html",
   "/api/menu", "/api/config", "/api/pedidos/mesa", "/api/visor",
   "/app-icon.png", "/icon-192.png", "/icon-512.png", "/icon-192.svg", "/icon-512.svg",
-  "/manifest.json", "/service-worker.js", "/favicon.ico"
+  "/manifest.json", "/service-worker.js", "/favicon.ico",
+  "/tmp_comprobante.pdf"
 ];
 app.use((req, res, next) => {
   const host = (req.headers.host || "").toLowerCase();
