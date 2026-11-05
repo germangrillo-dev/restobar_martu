@@ -1002,6 +1002,14 @@ try {
   }
 } catch (e) { console.error("Recovery error:", e.message); }
 
+app.post("/api/caja/sesion/delete", (req, res) => {
+  try {
+    const { id } = req.body || {};
+    const ok = db.deleteCajaSession(id);
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 const PORT = 3456;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {

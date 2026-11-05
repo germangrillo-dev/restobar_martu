@@ -297,11 +297,21 @@ function closeCaja(sesionId, cierre, arqueo, diff) {
   ).run(cierre, JSON.stringify(arqueo || {}), diff, new Date().toLocaleString("es-AR"), sesionId);
 }
 
+function deleteCajaSession(id) {
+  if (!id) return false;
+  const d = getDB();
+  const movs = d.prepare("SELECT COUNT(*) AS c FROM movimientos WHERE sesion_id = ?").get(id);
+  if (movs && movs.c > 0) return false;
+  const r = d.prepare("DELETE FROM caja_sesiones WHERE id = ? AND activa = 0").run(id);
+  return r.changes > 0;
+}
+
 function getHistorialCierres() {
   const sesiones = getDB().prepare("SELECT * FROM caja_sesiones WHERE activa = 0 ORDER BY id DESC").all();
   return sesiones.map(s => {
     const movs = getDB().prepare("SELECT * FROM movimientos WHERE sesion_id = ?").all(s.id);
     return {
+      id: s.id,
       fecha: s.fecha,
       apertura: s.apertura,
       movimientos: movs.map(m => ({
@@ -546,7 +556,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, deleteMovimiento, closeCaja, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, addMovimiento, deleteMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries,
