@@ -921,7 +921,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     const browser = await require("puppeteer").launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 10000 });
-    const pdfBuffer = await page.pdf({ printBackground: true, preferCSSPageSize: true, margin: { top: "4mm", bottom: "4mm", left: "4mm", right: "4mm" } });
+    const pdfBuffer = await page.pdf({ width: "80mm", height: "200mm", printBackground: true, margin: { top: "4mm", bottom: "4mm", left: "4mm", right: "4mm" } });
     await browser.close();
     const carpetaComp = path.join(__dirname, "comprobantes");
     if (!fs.existsSync(carpetaComp)) fs.mkdirSync(carpetaComp, { recursive: true });
@@ -973,6 +973,18 @@ app.get("/comprobantes/:file", (req, res) => {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", "attachment; filename=" + path.basename(p));
   res.sendFile(p);
+});
+
+app.get("/api/caja/sesiones", (req, res) => {
+  try {
+    const dbx = db.getDB();
+    const sesiones = dbx.prepare("SELECT * FROM caja_sesiones ORDER BY id DESC").all();
+    const out = sesiones.map(s => {
+      const movs = dbx.prepare("SELECT * FROM movimientos WHERE sesion_id = ?").all(s.id);
+      return { id: s.id, fecha: s.fecha, turno: s.turno, usuario: s.usuario, activa: s.activa, apertura: s.apertura, cierre: s.cierre, diff: s.diff, movimientos: movs.length, totalVentas: movs.filter(m => m.tipo === "venta").reduce((a,m)=>a+m.monto,0) };
+    });
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = 3456;
