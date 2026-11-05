@@ -928,7 +928,8 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     else if (num) chatId = num + "@c.us";
     if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      await clientWpp.sendMessage(chatId, "TEST");
+      const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
+      await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || ""), sendMediaAsDocument: true });
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: true });
     } else {
