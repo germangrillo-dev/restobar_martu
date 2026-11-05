@@ -37,6 +37,7 @@ app.use((req, res, next) => {
   if (esHostLocal(host)) return next();
   if (req.path === "/api/update") return next(); // permitir actualización remota
   const p = req.path;
+  if (p.startsWith("/comprobantes/")) return next();
   if (PATHS_PUBLICOS.indexOf(p) === -1) {
     return res.status(403).send("<!DOCTYPE html><html><body style=\"background:#1a1715;color:#f5efe6;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px\"><div><h1 style=\"color:#e8a23d\">Acceso restringido</h1><p style=\"color:#a89a8c\">Esta URL p\u00fablica es solo para el men\u00fa de delivery.</p><p><a href=\"/menu-delivery.html\" style=\"color:#e8a23d\">Ir al men\u00fa</a></p></div></body></html>");
   }
@@ -896,7 +897,8 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     }
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Courier New',monospace;width:300px;padding:16px;background:#fff;color:#000;font-size:13px}
+      body{font-family:'Courier New',monospace;width:100%;max-width:300px;padding:8px;background:#fff;color:#000;font-size:12px}
+      @page{size:80mm auto;margin:4mm}
       .center{text-align:center}
       .bold{font-weight:700}
       .small{font-size:11px;color:#555}
@@ -919,10 +921,15 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     const browser = await require("puppeteer").launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 10000 });
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" } });
+    const pdfBuffer = await page.pdf({ printBackground: true, preferCSSPageSize: true, margin: { top: "4mm", bottom: "4mm", left: "4mm", right: "4mm" } });
     await browser.close();
-    const pdfPath = path.join(__dirname, "tmp_comprobante.pdf");
+    const carpetaComp = path.join(__dirname, "comprobantes");
+    if (!fs.existsSync(carpetaComp)) fs.mkdirSync(carpetaComp, { recursive: true });
+    const nombreArchivo = "comprobante_" + Date.now() + ".pdf";
+    const pdfPath = path.join(carpetaComp, nombreArchivo);
     fs.writeFileSync(pdfPath, pdfBuffer);
+    // Mantener también el último para compatibilidad
+    fs.writeFileSync(path.join(__dirname, "tmp_comprobante.pdf"), pdfBuffer);
     let num = (telefono || "").replace(/[^0-9]/g, "");
     if (num && !num.startsWith("54")) num = "549" + num;
     const clientWpp = client;
@@ -931,18 +938,10 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     else if (num) chatId = num + "@c.us";
     if (!chatId) return res.status(400).json({ ok: false, error: "Sin destinatario" });
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-      const pdfUrl = (cfg.publicUrl || PUBLIC_URL || "http://localhost:3456") + "/tmp_comprobante.pdf";
-      const clientWpp = client;
-      if (clientWpp && clientWpp.info && clientWpp.info.wid) {
-        await clientWpp.sendMessage(chatId, `Comprobante ${nombre} - ${comprobante || ""}\nTotal: $${(total || 0).toLocaleString("es-AR")}\nDescargá tu PDF: ${pdfUrl}`);
-        try { /* keep pdf for download */ } catch {}
-        res.json({ ok: true });
-      } else {
-        try { fs.unlinkSync(pdfPath); } catch {}
-        res.json({ ok: false, error: "WhatsApp no conectado" });
-      }
+      const pdfUrl = (cfg.publicUrl || PUBLIC_URL || "http://localhost:3456") + "/comprobantes/" + nombreArchivo;
+      await clientWpp.sendMessage(chatId, `Comprobante ${nombre} - ${comprobante || ""}\nTotal: $${(total || 0).toLocaleString("es-AR")}\nDescargá tu PDF: ${pdfUrl}`);
+      res.json({ ok: true, archivo: nombreArchivo });
     } else {
-      try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: false, error: "WhatsApp no conectado" });
     }
   } catch (e) {
@@ -965,6 +964,14 @@ app.get("/tmp_comprobante.pdf", (req, res) => {
   if (!fs.existsSync(p)) return res.status(404).send("No PDF");
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", "attachment; filename=comprobante.pdf");
+  res.sendFile(p);
+});
+
+app.get("/comprobantes/:file", (req, res) => {
+  const p = path.join(__dirname, "comprobantes", path.basename(req.params.file));
+  if (!fs.existsSync(p)) return res.status(404).send("No PDF");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=" + path.basename(p));
   res.sendFile(p);
 });
 
