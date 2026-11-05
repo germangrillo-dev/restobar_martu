@@ -927,18 +927,22 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     let numberIdInfo = null;
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       try {
-        const contact = await clientWpp.getContactById(num + "@c.us");
-        let serialized = null;
-        try { serialized = contact && contact.id ? contact.id._serialized : null; } catch (e) { serialized = null; }
+        const serialized = await clientWpp.pupPage.evaluate(async (number) => {
+          try {
+            const wid = window.require('WAWebWidFactory').createWid(number);
+            const result = await window.require('WAWebQueryExistsJob').queryWidExists(wid);
+            if (!result || !result.wid) return null;
+            return result.wid._serialized || String(result.wid);
+          } catch (e) { return null; }
+        }, num + "@c.us");
         if (serialized) chatId = serialized;
-        numberIdInfo = contact ? { number: contact.number, id: serialized || String(contact.id || "") } : null;
-      } catch (e) { console.error("[WA comprobante] getContactById:", e.message); numberIdInfo = { error: e.message }; }
+      } catch (e) { console.error("[WA comprobante] resolveId:", e.message); }
     }
     if (clientWpp && clientWpp.info && clientWpp.info.wid) {
       const media = new MessageMedia("application/pdf", fs.readFileSync(pdfPath).toString("base64"), "comprobante.pdf");
       await clientWpp.sendMessage(chatId, media, { caption: "Comprobante " + nombre + " - " + (comprobante || "") });
       try { fs.unlinkSync(pdfPath); } catch {}
-      res.json({ ok: true, debug: { num, chatId, numberIdInfo } });
+      res.json({ ok: true });
     } else {
       try { fs.unlinkSync(pdfPath); } catch {}
       res.json({ ok: false, error: "WhatsApp no conectado" });
