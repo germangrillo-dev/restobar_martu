@@ -943,7 +943,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     }
   } catch (e) {
     console.error("[WA comprobante]", e.message);
-    res.json({ ok: false, error: e.message });
+    res.json({ ok: false, error: e.message, debug: { num, chatId, numberIdInfo } });
   }
 });
 
