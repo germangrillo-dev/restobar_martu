@@ -2250,6 +2250,12 @@ function App() {
                       <span style={{ fontSize: 12, color: C.muted, minWidth: 70, textAlign: "right" }}>{dinero(caja.arqueo?.[medio] || 0)}</span>
                     </div>
                   ))}
+                   <button onClick={() => {
+                     const porMedio = { "Transferencia": 0, "Mercado Pago": 0, "Tarjetas": 0 };
+                     (caja.movimientos || []).forEach((m) => { if (m.tipo !== "venta") return; const key = String(m.metodo || "").startsWith("Tarjeta") ? "Tarjetas" : m.metodo; if (porMedio[key] !== undefined) porMedio[key] += (m.monto || 0); });
+                     setCaja((c) => ({ ...c, arqueo: { ...(c.arqueo || {}), "Transferencia": porMedio["Transferencia"], "Mercado Pago": porMedio["Mercado Pago"], "Tarjetas": porMedio["Tarjetas"] } }));
+                     setToast({ tipo: "ok", texto: "Medios de pago cargados automáticamente." });
+                   }} className="w-full py-2 rounded-lg text-xs font-semibold mt-1" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Cargar transferencias/medios automáticamente</button>
                   {(() => {
                     const totalBilletes = [20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0);
                     const totalMedios = ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0);
