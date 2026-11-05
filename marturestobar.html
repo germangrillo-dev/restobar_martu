@@ -2139,7 +2139,7 @@ function App() {
               <h2 style={{ fontWeight: 900, fontSize: 18, color: "#000000" }}><DollarSign size={20} style={{ marginRight: 6 }} />Caja del día</h2>
               <div className="flex items-center gap-2">
                 {esAdmin && historialCierres.length > 0 && <button onClick={() => setShowHistorial(true)} className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}>Historial</button>}
-                 {localStorage.getItem("elmo_ultimoComprobante") && <button onClick={() => { try { setShowComprobanteModal(JSON.parse(localStorage.getItem("elmo_ultimoComprobante"))); } catch {} }} className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}><Printer size={13} /> Reimprimir último</button>}
+                 <button onClick={() => { try { const s = localStorage.getItem("elmo_ultimoComprobante"); if (s) setShowComprobanteModal(JSON.parse(s)); else setToast({ tipo: "error", texto: "No hay un comprobante reciente para reimprimir." }); } catch { setToast({ tipo: "error", texto: "No se pudo leer el comprobante guardado." }); } }} className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs" style={{ background: C.base, color: C.muted, border: "1px solid " + C.border }}><Printer size={13} /> Reimprimir último</button>
                 <span style={{ color: C.muted, fontSize: 13 }}>{caja.fecha}{caja.turno ? " · " + caja.turno : ""}</span>
               </div>
             </div>
