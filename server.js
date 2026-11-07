@@ -621,10 +621,10 @@ app.post("/api/backups/crear", async (req, res) => {
   const result = await backup.crearBackup("manual");
   res.json(result);
 });
-app.post("/api/backups/restaurar", (req, res) => {
+app.post("/api/backups/restaurar", async (req, res) => {
   const { nombre } = req.body;
   if (!nombre) return res.status(400).json({ ok: false, error: "Sin nombre" });
-  const result = backup.restaurarBackup(nombre);
+  const result = await backup.restaurarBackup(nombre);
   if (result.ok) {
     res.json({ ok: true, texto: "Restaurado. Reiniciando..." });
     setTimeout(() => {
@@ -1019,13 +1019,23 @@ app.post("/api/caja/sesion/editar", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-app.get("/api/db/download", (req, res) => {
+app.get("/api/db/download", async (req, res) => {
   if (!esHostLocal(req.headers.host || "")) return res.status(403).send("Forbidden");
-  const p = path.join(__dirname, "data", "martu.db");
-  if (!fs.existsSync(p)) return res.status(404).send("No DB");
-  res.setHeader("Content-Type", "application/octet-stream");
-  res.setHeader("Content-Disposition", "attachment; filename=martu.db");
-  res.sendFile(p);
+  try {
+    const tmpPath = path.join(__dirname, "data", "martu_download.db");
+    await db.backupDB(tmpPath);
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", "attachment; filename=martu.db");
+    res.sendFile(tmpPath, () => { try { fs.unlinkSync(tmpPath); } catch {} });
+  } catch (e) {
+    console.error("[DB DOWNLOAD] backup error:", e.message);
+    try { db.getDB().pragma("wal_checkpoint(TRUNCATE)"); } catch {}
+    const p = path.join(__dirname, "data", "martu.db");
+    if (!fs.existsSync(p)) return res.status(404).send("No DB");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", "attachment; filename=martu.db");
+    res.sendFile(p);
+  }
 });
 
 const PORT = 3456;

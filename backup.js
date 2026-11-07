@@ -71,13 +71,13 @@ function listarBackups() {
     });
 }
 
-function restaurarBackup(nombre) {
+async function restaurarBackup(nombre) {
   const src = path.join(BACKUP_DIR, nombre);
   if (!fs.existsSync(src)) return { ok: false, error: "Archivo no encontrado" };
   const dbPath = path.join(__dirname, "data", "martu.db");
   try {
     // Backup del actual antes de restaurar
-    crearBackup("pre-restauración");
+    await crearBackup("pre-restauración");
     db.closeDB();
     fs.copyFileSync(src, dbPath);
     console.log(`[BACKUP] Restaurado: ${nombre}`);

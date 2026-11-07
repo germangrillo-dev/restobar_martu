@@ -549,7 +549,7 @@ async function backupDB(destPath) {
 
 // ─── Close ───
 function closeDB() {
-  if (db) db.close();
+  if (db) { try { db.close(); } catch (e) {} db = null; }
 }
 
 module.exports = {
