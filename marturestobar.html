@@ -447,8 +447,9 @@ function App() {
   const cajaMovs = (caja && caja.movimientos) ? caja.movimientos : [];
   const cajaVentas = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaVentasEfectivo = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo === "Efectivo").reduce((a, m) => a + m.monto, 0) * 100) / 100;
+   const cajaVentasTransferencia = Math.round(cajaMovs.filter(m => m.tipo === "venta" && m.metodo === "Transferencia").reduce((a, m) => a + m.monto, 0) * 100) / 100;
   const cajaEgresos = Math.round(cajaMovs.filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0) * 100) / 100;
-  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentas - cajaEgresos) * 100) / 100;
+  const cajaEsperado = Math.round(((caja ? caja.apertura : 0) + cajaVentasEfectivo + cajaVentasTransferencia - cajaEgresos) * 100) / 100;
   const cajaAbierta = cajaIniciada || ingresoSinCaja;
   const activeTab = cajaAbierta ? tab : "caja";
 
@@ -598,8 +599,8 @@ function App() {
    const guardarCierreEditado = async () => {
      const cierreMonto = caja.cierre == null ? 0 : Number(caja.cierre);
      if (isNaN(cierreMonto) || cierreMonto < 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre (puede ser 0)." }); return; }
-                      const ventasTotales = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
-                      const ventasParaEsperado = (caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
+                      const ventasTotales = (editCierreSel.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
+                      const egresos_edit = (editCierreSel.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
      const egresos = (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
       const ventas = (editCierreSel.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0);
       const diff = Math.round((cierreMonto - ((editCierreSel.apertura || 0) + ventas - egresos)) * 100) / 100;
@@ -1400,7 +1401,7 @@ function App() {
               <div className="flex-1">
                 <input style={{ ...inputStyle, marginBottom: 8 }} placeholder="Buscar producto..." value={filtroPedido} onChange={(e) => setFiltroPedido(e.target.value)} />
 <div className="flex flex-wrap gap-2 mb-4">{categorias.map((c) => { const on = cat === c; return <button key={c} onClick={() => setCat(c)} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.text : C.muted, border: "1px solid " + (on ? C.text : C.border) }}>{c}</button>; })}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}>{p.imagen && <div style={{ width: "100%", height: 80, overflow: "hidden", borderRadius: 8, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", background: C.base }}><img src={p.imagen} alt={p.nombre} style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>}<div style={{ fontWeight: 800, fontSize: 14, color: "#000000", lineHeight: 1.2, minHeight: 34, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{p.nombre}</div><div style={{ color: C.text, fontWeight: 800, marginTop: 6 }}>{pesos(p.precio)}</div></button>))}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ display: "flex", gap: 8, alignItems: "center" }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 800, fontSize: 13, color: "#000000", lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{p.nombre}</div><div style={{ color: C.text, fontWeight: 800, fontSize: 13, marginTop: 2 }}>{pesos(p.precio)}</div></div>{p.imagen && <div style={{ width: 50, height: 50, flexShrink: 0, overflow: "hidden", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: C.base }}><img src={p.imagen} alt={p.nombre} style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>}</div></button>))}</div>
               </div>
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
                 <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <div className="ml-auto flex gap-1.5"><button id="atajo-cobrar" onClick={() => cerrarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: "#a0785a", color: "#fff", fontWeight: 700, fontWeight: 700 }}>Cobrar <span style={{ fontSize: 10, opacity: .8 }}>(F2)</span></button><button onClick={() => limpiarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button></div>}</div>
@@ -2301,15 +2302,19 @@ function App() {
                     const totalBilletes = [20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0);
                     const totalMedios = ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0);
                     const totalArqueo = totalBilletes + totalMedios;
-                    return <div className="flex justify-between rounded-lg p-2 mt-2" style={{ background: C.base, fontSize: 13 }}>
-                      <span>Total arqueo</span><span style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{dinero(totalArqueo)}</span>
-                    </div>;
+                    return null;
                   })()}
 
-                  <div className="mt-3"><label style={lbl}>Cierre (efectivo contado)</label><input style={inputStyle} type="text" inputMode="decimal" value={caja.cierre != null ? caja.cierre : ""} onChange={(e) => { const v = e.target.value === "" ? 0 : numDec(e.target.value) || 0; setCaja((c) => ({ ...c, cierre: v })); }} placeholder="Ingresar monto" /></div>
+                  <div className="mt-3 flex flex-col gap-1 rounded-lg p-3" style={{ background: C.base, fontSize: 13 }}>
+  <div className="flex justify-between"><span>Total billetes (efectivo)</span><span style={{ fontWeight: 800, color: C.text }}>{dinero([20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0))}</span></div>
+  <div className="flex justify-between"><span>Total medios electrónicos</span><span style={{ fontWeight: 800, color: C.text }}>{dinero(["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0))}</span></div>
+  <div className="flex justify-between"><span>Cuenta corriente (no suma)</span><span style={{ fontWeight: 800, color: C.muted }}>{dinero((caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo === "Cuenta corriente").reduce((a, m) => a + m.monto, 0))}</span></div>
+  <div className="flex justify-between"><span>Egresos</span><span style={{ fontWeight: 800, color: C.red }}>{dinero((caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0))}</span></div>
+  <div className="flex justify-between" style={{ borderTop: "1px solid " + C.border, paddingTop: 4, marginTop: 2 }}><span style={{ fontWeight: 700 }}>Total caja (ventas sin CC - egresos)</span><span style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{dinero((caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + m.monto, 0) - (caja.movimientos || []).filter(m => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0))}</span></div>
+</div>
                   {caja.cierre > 0 && <div className="rounded-lg p-3 text-center mt-2" style={{ background: C.base }}><span style={{ fontSize: 13, color: C.muted }}>Diferencia: </span><span style={{ fontWeight: 800, fontSize: 18, color: Math.round((caja.cierre - cajaEsperado) * 100) / 100 >= 0 ? C.green : C.red }}>{dinero(Math.round((caja.cierre - cajaEsperado) * 100) / 100)}</span></div>}
                    <button onClick={() => { if (editandoCierreId) { guardarCierreEditado(); return; }
-                    const cierreMonto = numDec(editCierreMonto); if (isNaN(cierreMonto) || cierreMonto < 0) { setToast({ tipo: "error", texto: "Ingresá el monto de cierre (puede ser 0)." }); return; }
+                    const totalArqueoCierre = [20000, 10000, 2000, 1000, 500, 200, 100].reduce((a, b) => a + b * (caja.arqueo?.[b] || 0), 0) + ["Transferencia", "Mercado Pago", "Tarjetas"].reduce((a, m) => a + (caja.arqueo?.[m] || 0), 0); const cierreMonto = totalArqueoCierre;
                     const pendientes = deliveries.filter(d => d.estado !== "entregado");
                     const mesasAbiertas = Object.entries(mesas).filter(([, m]) => m.lineas.length || m.enviado.length);
                     if (pendientes.length || mesasAbiertas.length) {
@@ -2350,6 +2355,7 @@ function App() {
                        { t: "", rayita: true },
                        { t: "Apertura: " + dinero(caja.apertura), izq: true },
                        { t: "Ventas: " + dinero(ventasTotales), izq: true },
+{ t: "Ventas CC: " + dinero((caja.movimientos || []).filter(m => m.tipo === "venta" && m.metodo === "Cuenta corriente").reduce((a, m) => a + m.monto, 0)), izq: true },
                        { t: "Egresos: " + dinero(egresos), izq: true },
                        { t: "Esperado: " + dinero((caja.apertura || 0) + ventas - egresos), izq: true, bold: true },
                        { t: "Cierre: " + dinero(caja.cierre || 0), izq: true },
