@@ -175,6 +175,7 @@ function initDB() {
 
   // Migration: add cuit column to deliveries if missing
   try { getDB().exec("ALTER TABLE deliveries ADD COLUMN cuit TEXT DEFAULT ''"); } catch {}
+try { getDB().exec("ALTER TABLE productos ADD COLUMN imagen TEXT DEFAULT ''"); } catch {}
 
   return db;
 }
@@ -396,16 +397,17 @@ function saveDeliveries(deliveries) {
 function getProductos() {
   return getDB().prepare("SELECT * FROM productos ORDER BY ref").all().map(p => ({
     id: p.id, ref: p.ref, cat: p.cat, nombre: p.nombre, precio: p.precio,
-    receta: JSON.parse(p.receta || "[]")
+    receta: JSON.parse(p.receta || "[]"),
+    imagen: p.imagen || ""
   }));
 }
 
 function saveProductos(productos) {
   const del = getDB().prepare("DELETE FROM productos");
-  const ins = getDB().prepare("INSERT OR REPLACE INTO productos (id, ref, cat, nombre, precio, receta) VALUES (?, ?, ?, ?, ?, ?)");
+  const ins = getDB().prepare("INSERT OR REPLACE INTO productos (id, ref, cat, nombre, precio, receta, imagen) VALUES (?, ?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
     del.run();
-    for (const p of list) ins.run(p.id, p.ref || null, p.cat || "", p.nombre || "", p.precio || 0, JSON.stringify(p.receta || []));
+    for (const p of list) ins.run(p.id, p.ref || null, p.cat || "", p.nombre || "", p.precio || 0, JSON.stringify(p.receta || []), p.imagen || "");
   });
   tx(productos);
 }
