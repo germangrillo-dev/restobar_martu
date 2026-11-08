@@ -437,12 +437,14 @@ app.get("/api/caja", (req, res) => {
   const usuarios = db.getUsuarios();
   const facturaXNum = db.getFacturaXNum();
   const cajaIniciada = !!caja;
-  res.json({ caja, cajaIniciada, historialCierres, mesas, deliveries, config: cfg, insumos, stock, costos, proveedores, usuarios, facturaXNum, productos: PRODUCTOS });
+  let movimientosBorrados = [];
+  try { movimientosBorrados = db.getMovimientosBorrados(); } catch {}
+  res.json({ caja, cajaIniciada, historialCierres, mesas, deliveries, config: cfg, insumos, stock, costos, proveedores, usuarios, facturaXNum, productos: PRODUCTOS, movimientosBorrados });
 });
 
 app.post("/api/caja", (req, res) => {
   try {
-    const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos } = req.body;
+    const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos, abrirCaja } = req.body;
     console.log("[POST /api/caja] cajaIniciada:", cajaIniciada, "fecha:", caja?.fecha, "turno:", caja?.turno, "movimientos:", caja?.movimientos?.length || 0);
 
     // Caja
@@ -458,16 +460,24 @@ app.post("/api/caja", (req, res) => {
         // ABRIENDO o SINCRONIZANDO caja activa
         let serverCaja = db.getCaja();
         if (!serverCaja) {
-          // No hay sesión activa → crear una SOLO si el cliente dice que inició caja
-          const sesionId = db.createCaja(caja);
-          console.log("[POST /api/caja] Nueva sesión:", sesionId);
-          serverCaja = { id: sesionId };
+          if (abrirCaja === true) {
+            // Apertura real desde el boton "Abrir caja": nueva sesion + se limpian los deliveries del turno anterior
+            const sesionId = db.createCaja(caja);
+            console.log("[POST /api/caja] Nueva sesión:", sesionId);
+            serverCaja = { id: sesionId };
+            try { const n = db.archivarDeliveries(); console.log("[POST /api/caja] Apertura: " + n + " deliveries archivados"); } catch (e) { console.error("[POST /api/caja] Error archivando deliveries:", e.message); }
+          } else {
+            // Un dispositivo con datos viejos (caja ya cerrada) sigue sincronizando: no se abre una caja fantasma
+            console.log("[POST /api/caja] Sync ignorado: no hay caja abierta y no es una apertura");
+          }
         }
-        if (caja.movimientos) {
-          for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
-          console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", serverCaja.id);
+        if (serverCaja) {
+          if (caja.movimientos) {
+            for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
+            console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", serverCaja.id);
+          }
+          if (caja.arqueo) db.updateSesionArqueo(serverCaja.id, caja.arqueo);
         }
-        if (caja.arqueo) db.updateSesionArqueo(serverCaja.id, caja.arqueo);
       }
       // Si cajaIniciada es undefined/ null → no hacer nada (evita crear sesiones por mistake)
     }
@@ -546,8 +556,27 @@ app.get("/api/deliveries", (req, res) => {
 app.post("/api/deliveries", (req, res) => {
   const deliveries = req.body;
   if (!Array.isArray(deliveries)) return res.status(400).json({ error: "invalid" });
-  db.saveDeliveries(mergeDeliveries(db.getDeliveries(), deliveries));
+  const borrados = new Set(db.getDeliveriesBorrados());
+  const filtered = deliveries.filter((d) => !borrados.has(d.id));
+  db.saveDeliveries(mergeDeliveries(db.getDeliveries(), filtered));
   res.json({ ok: true });
+});
+
+// --- API: Cancelar (borrar) un delivery ---
+app.post("/api/deliveries/delete", (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    if (!id || typeof id !== "string") return res.status(400).json({ error: "id" });
+    const ok = db.deleteDelivery(id);
+    console.log("[DELIVERY DELETE]", id, ok ? "borrado" : "no existia");
+    res.json({ ok: true, borrado: ok });
+  } catch (e) {
+    console.error("[DELIVERY DELETE] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+app.get("/api/deliveries/borrados", (req, res) => {
+  try { res.json(db.getDeliveriesBorrados()); } catch (e) { res.json([]); }
 });
 
 // --- API: Borrar un movimiento de caja (ej: cobro duplicado) ---

@@ -175,6 +175,10 @@ function initDB() {
 
   // Migration: add cuit column to deliveries if missing
   try { getDB().exec("ALTER TABLE deliveries ADD COLUMN cuit TEXT DEFAULT ''"); } catch {}
+  // Deliveries cancelados: se recuerdan para que ningun dispositivo los vuelva a subir
+  try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_borrados (id TEXT PRIMARY KEY, ts INTEGER)"); } catch {}
+  // Deliveries de cajas anteriores: se guardan aca al abrir una caja nueva (no se pierden)
+  try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_archivo (id TEXT PRIMARY KEY, datos TEXT, archivado_ts INTEGER)"); } catch {}
 try { getDB().exec("ALTER TABLE productos ADD COLUMN imagen TEXT DEFAULT ''"); } catch {}
 
   return db;
@@ -265,12 +269,19 @@ function createCaja(sesion) {
   return result.lastInsertRowid;
 }
 
+function getMovimientosBorrados() {
+  return getDB().prepare("SELECT id FROM movimientos_borrados").all().map(r => r.id);
+}
+
 function movimientoBorrado(id) {
   return !!getDB().prepare("SELECT 1 FROM movimientos_borrados WHERE id = ?").get(id);
 }
 
 function addMovimiento(sesionId, mov) {
   if (!mov || !mov.id || movimientoBorrado(mov.id)) return;
+  // Si el movimiento ya pertenece a otra caja (anterior), no se mueve a la caja actual
+  const existente = getDB().prepare("SELECT sesion_id FROM movimientos WHERE id = ?").get(mov.id);
+  if (existente && existente.sesion_id != sesionId) return;
   getDB().prepare(
     "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
@@ -367,8 +378,39 @@ function saveMesa(id, estado) {
 }
 
 // ─── Deliveries ───
+function getDeliveriesBorrados() {
+  return getDB().prepare("SELECT id FROM deliveries_borrados").all().map(r => r.id);
+}
+
+function deleteDelivery(id) {
+  if (!id) return false;
+  const d = getDB();
+  d.prepare("DELETE FROM delivery_items WHERE delivery_id = ?").run(id);
+  const r = d.prepare("DELETE FROM deliveries WHERE id = ?").run(id);
+  d.prepare("INSERT OR IGNORE INTO deliveries_borrados (id, ts) VALUES (?, ?)").run(id, Date.now());
+  return r.changes > 0;
+}
+
+// Al abrir una caja nueva: guarda los deliveries actuales en deliveries_archivo,
+// los marca como borrados (para que ningun dispositivo los vuelva a subir) y limpia la lista.
+function archivarDeliveries() {
+  const d = getDB();
+  const actuales = getDeliveries();
+  const insArch = d.prepare("INSERT OR REPLACE INTO deliveries_archivo (id, datos, archivado_ts) VALUES (?, ?, ?)");
+  const insBorr = d.prepare("INSERT OR IGNORE INTO deliveries_borrados (id, ts) VALUES (?, ?)");
+  const tx = d.transaction(() => {
+    const ts = Date.now();
+    for (const del of actuales) { insArch.run(del.id, JSON.stringify(del), ts); insBorr.run(del.id, ts); }
+    d.prepare("DELETE FROM delivery_items").run();
+    d.prepare("DELETE FROM deliveries").run();
+  });
+  tx();
+  return actuales.length;
+}
+
 function getDeliveries() {
-  const dels = getDB().prepare("SELECT * FROM deliveries ORDER BY rowid DESC").all();
+  const borrados = new Set(getDeliveriesBorrados());
+  const dels = getDB().prepare("SELECT * FROM deliveries ORDER BY rowid DESC").all().filter(d => !borrados.has(d.id));
   return dels.map(d => {
     const items = getDB().prepare("SELECT * FROM delivery_items WHERE delivery_id = ?").all(d.id);
     return {
@@ -384,7 +426,11 @@ function saveDeliveries(deliveries) {
   const delItemsByDel = getDB().prepare("DELETE FROM delivery_items WHERE delivery_id = ?");
   const insItem = getDB().prepare("INSERT INTO delivery_items (delivery_id, pid, nombre, cant, precio, nota) VALUES (?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
-    for (const d of list) {
+    // No se borran los que faltan en la lista: un dispositivo con datos viejos borraria deliveries nuevos.
+    // Para cancelar un delivery se usa deleteDelivery(id).
+    const borrados = new Set(getDeliveriesBorrados());
+    for (const d of (list || [])) {
+      if (!d || !d.id || borrados.has(d.id)) continue;
       upsertDel.run(d.id, d.cliente || "", d.direccion || "", d.telefono || "", d.cuit || "", d.hora || "", d.total || 0, d.estado || "cocina");
       delItemsByDel.run(d.id);
       for (const it of (d.items || [])) insItem.run(d.id, it.pid || "", it.nombre || "", it.cant || 0, it.precio || 0, it.nota || "");
@@ -558,10 +604,10 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, deleteMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, addMovimiento, deleteMovimiento, getMovimientosBorrados, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
-  getDeliveries, saveDeliveries,
+  getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,
   getProductos, saveProductos,
   getInsumos, saveInsumos,
   getStock, saveStock, updateStock,
