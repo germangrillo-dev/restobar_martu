@@ -181,6 +181,10 @@ function initDB() {
   try { getDB().exec("ALTER TABLE movimientos_borrados ADD COLUMN detalle TEXT DEFAULT ''"); } catch {}
   // Cambios de medio de pago: version del movimiento + historial de cambios
   try { getDB().exec("ALTER TABLE movimientos ADD COLUMN editado_ts INTEGER DEFAULT 0"); } catch {}
+  // Facturas de compra: guardar tambien insumo, subtotal y unitario de cada item
+  try { getDB().exec("ALTER TABLE factura_items ADD COLUMN insumo TEXT DEFAULT ''"); } catch {}
+  try { getDB().exec("ALTER TABLE factura_items ADD COLUMN subtotal REAL DEFAULT 0"); } catch {}
+  try { getDB().exec("ALTER TABLE factura_items ADD COLUMN unitario REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE movimientos ADD COLUMN cambios TEXT DEFAULT ''"); } catch {}
   // Deliveries de cajas anteriores: se guardan aca al abrir una caja nueva (no se pierden)
   try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_archivo (id TEXT PRIMARY KEY, datos TEXT, archivado_ts INTEGER)"); } catch {}
@@ -579,6 +583,27 @@ function getCostos() {
   return c;
 }
 
+// Agregar / borrar una factura sin reescribir todas (evita que una pantalla vieja borre facturas nuevas)
+function agregarFactura(f) {
+  const d = getDB();
+  d.transaction(() => {
+    d.prepare("DELETE FROM factura_items WHERE factura_id = ?").run(f.id);
+    d.prepare("INSERT OR REPLACE INTO facturas (id, proveedor, tipo, numero, fecha, total) VALUES (?, ?, ?, ?, ?, ?)").run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0);
+    const insI = d.prepare("INSERT INTO factura_items (factura_id, desc, bulto, cantidad, ingreso, insumo_un, insumo, subtotal, unitario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const i of (f.items || [])) insI.run(f.id, i.desc || "", i.bulto || "", i.cantidad || 0, i.ingreso || 0, i.insumoUn || "", i.insumo || "", i.subtotal || 0, i.unitario || 0);
+  })();
+}
+function borrarFactura(id) {
+  const d = getDB();
+  d.transaction(() => { d.prepare("DELETE FROM factura_items WHERE factura_id = ?").run(id); d.prepare("DELETE FROM facturas WHERE id = ?").run(id); })();
+}
+// Costos: fijar solo los que cambian
+function ajustarCostos(fijar) {
+  const ins = getDB().prepare("INSERT OR REPLACE INTO costos (insumo_id, costo) VALUES (?, ?)");
+  getDB().transaction(() => { for (const [id, v] of Object.entries(fijar || {})) ins.run(id, Number(v) || 0); })();
+  return getCostos();
+}
+
 function saveCostos(costos) {
   const del = getDB().prepare("DELETE FROM costos");
   const ins = getDB().prepare("INSERT OR REPLACE INTO costos (insumo_id, costo) VALUES (?, ?)");
@@ -612,7 +637,7 @@ function getFacturas() {
     return {
       id: f.id, proveedor: f.proveedor, tipo: f.tipo, numero: f.numero,
       fecha: f.fecha, total: f.total,
-      items: items.map(i => ({ desc: i.desc, bulto: i.bulto, cantidad: i.cantidad, ingreso: i.ingreso, insumoUn: i.insumo_un }))
+      items: items.map(i => ({ desc: i.desc, bulto: i.bulto, cantidad: i.cantidad, ingreso: i.ingreso, insumoUn: i.insumo_un, insumo: i.insumo || undefined, subtotal: i.subtotal || 0, unitario: i.unitario || 0 }))
     };
   });
 }
@@ -621,12 +646,12 @@ function saveFacturas(facturas) {
   const delF = getDB().prepare("DELETE FROM facturas");
   const delI = getDB().prepare("DELETE FROM factura_items");
   const insF = getDB().prepare("INSERT INTO facturas (id, proveedor, tipo, numero, fecha, total) VALUES (?, ?, ?, ?, ?, ?)");
-  const insI = getDB().prepare("INSERT INTO factura_items (factura_id, desc, bulto, cantidad, ingreso, insumo_un) VALUES (?, ?, ?, ?, ?, ?)");
+  const insI = getDB().prepare("INSERT INTO factura_items (factura_id, desc, bulto, cantidad, ingreso, insumo_un, insumo, subtotal, unitario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
     delF.run(); delI.run();
     for (const f of list) {
       insF.run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0);
-      for (const i of (f.items || [])) insI.run(f.id, i.desc || "", i.bulto || "", i.cantidad || 0, i.ingreso || 0, i.insumoUn || "");
+      for (const i of (f.items || [])) insI.run(f.id, i.desc || "", i.bulto || "", i.cantidad || 0, i.ingreso || 0, i.insumoUn || "", i.insumo || "", i.subtotal || 0, i.unitario || 0);
     }
   });
   tx(facturas);
@@ -672,7 +697,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, ajustarStock, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,

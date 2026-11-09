@@ -664,6 +664,18 @@ app.post("/api/caja/mov/delete", (req, res) => {
 app.get("/api/facturas", (req, res) => {
   res.json(db.getFacturas());
 });
+app.post("/api/facturas/agregar", (req, res) => {
+  try { const f = req.body; if (!f || !f.id) return res.status(400).json({ ok: false }); db.agregarFactura(f); res.json({ ok: true }); }
+  catch (e) { console.error("[FACTURA] ERROR:", e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post("/api/facturas/borrar", (req, res) => {
+  try { const { id } = req.body || {}; if (!id) return res.status(400).json({ ok: false }); db.borrarFactura(id); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post("/api/costos/ajuste", (req, res) => {
+  try { const costos = db.ajustarCostos((req.body || {}).fijar || {}); res.json({ ok: true, costos }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.post("/api/facturas", (req, res) => {
   const facturas = req.body;
   if (!Array.isArray(facturas)) return res.status(400).json({ error: "invalid" });
