@@ -496,7 +496,16 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   }, []);
 
   const insumoById = useMemo(() => Object.fromEntries(insumos.map((i) => [i.id, i])), [insumos]);
-  const prodById = useMemo(() => Object.fromEntries(productos.map((p) => [p.id, p])), [productos]);
+  // Productos especiales (fuera de carta): viven en la linea del pedido (nombre y precio propios)
+  const especialesMap = useMemo(() => {
+    const mp = {};
+    const reg = (l) => { if (l && l.especial && l.pid) mp[l.pid] = { id: l.pid, nombre: l.nombre || "Especial", precio: Number(l.precio) || 0, cat: l.cat || "Especiales", receta: [], especial: true }; };
+    Object.values(mesas || {}).forEach((m) => ["lineas", "enviado", "despachado", "bebidas"].forEach((k) => ((m && m[k]) || []).forEach(reg)));
+    ((orden && orden.lineas) || []).forEach(reg);
+    (deliveries || []).forEach((d) => ((d && d.items) || []).forEach(reg));
+    return mp;
+  }, [mesas, orden, deliveries]);
+  const prodById = useMemo(() => ({ ...Object.fromEntries(productos.map((p) => [p.id, p])), ...especialesMap }), [productos, especialesMap]);
   const sumLin = (ls) => ls.reduce((a, l) => a + ((prodById[l.pid] ? prodById[l.pid].precio : l.precio || 0) * l.cant), 0);
   // Los buscadores de Insumos, Proveedores y Carta se limpian al cambiar de pestania
   React.useEffect(() => { setFiltroInsumos(""); setFiltroProveedores(""); setFiltroCarta(""); }, [tab]);
@@ -696,6 +705,20 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     }
     setOrden((o) => { const i = o.lineas.findIndex((l) => l.pid === pid && !l.nota); let nl; if (i >= 0) { nl = [...o.lineas]; nl[i] = { ...nl[i], cant: nl[i].cant + 1 }; } else nl = [...o.lineas, { lid: uid(), pid, cant: 1, nota: "" }]; return { ...o, lineas: nl }; });
   };
+  const agregarEspecial = (esp) => {
+    const nombre = String(esp.nombre || "").trim(); const precio = numDec(esp.precio) || 0; const cnt = Math.max(1, parseInt(esp.cant) || 1);
+    if (!nombre) { setToast({ tipo: "error", texto: "Escribí el nombre del producto especial." }); return false; }
+    if (precio <= 0) { setToast({ tipo: "error", texto: "Poné el precio del producto especial." }); return false; }
+    const linea = { lid: uid(), pid: "esp-" + uid(), cant: cnt, nota: String(esp.nota || "").trim(), especial: true, nombre, precio, cat: esp.bebida ? "Bebidas" : "Especiales" };
+    if (orden.tipo === "mesa" && esp.bebida) {
+      markMesaDirty(orden.mesaId);
+      setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: [...(ms[orden.mesaId].bebidas || []), linea] } }; postMesas(nm); return nm; });
+    } else {
+      setOrden((o) => ({ ...o, lineas: [...o.lineas, linea] }));
+    }
+    setToast({ tipo: "ok", texto: "Agregado: " + cnt + "x " + nombre + " (" + pesos(precio * cnt) + ")." });
+    return true;
+  };
   const cant = (lid, d) => setOrden((o) => ({ ...o, lineas: o.lineas.map((l) => l.lid === lid ? { ...l, cant: l.cant + d } : l).filter((l) => l.cant > 0) }));
   const setNota = (lid, v) => setOrden((o) => ({ ...o, lineas: o.lineas.map((l) => l.lid === lid ? { ...l, nota: v } : l) }));
   const setD = (k, v) => setOrden((o) => ({ ...o, datos: { ...o.datos, [k]: v } }));
@@ -885,6 +908,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [showPagoDelivery, setShowPagoDelivery] = useState(null);
    const [showAddItemDelivery, setShowAddItemDelivery] = useState(null);
    const [verDelivery, setVerDelivery] = useState(null);
+   const [showEspecial, setShowEspecial] = useState(null);
    const [addItemProd, setAddItemProd] = useState("");
    const [addItemCant, setAddItemCant] = useState(1);
   const [showCuentaCorriente, setShowCuentaCorriente] = useState(null); // { clienteId, modo: "ver"|"pagar" }
@@ -1709,9 +1733,12 @@ const cancelarDelivery = (d) => {
             <button onClick={volver} className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.muted }}><ArrowLeft size={15} /> Volver</button>
             <div className="flex flex-col lg:flex-row gap-5">
               <div className="flex-1">
-                <div style={{ position: "relative", marginBottom: 8 }}>
+                <div className="flex gap-2" style={{ marginBottom: 8 }}>
+                <div style={{ position: "relative", flex: 1 }}>
                   <input style={{ ...inputStyle, paddingRight: 34 }} placeholder="Buscar producto..." value={filtroPedido} onChange={(e) => setFiltroPedido(e.target.value)} />
                   {filtroPedido && <button onClick={() => setFiltroPedido("")} title="Limpiar búsqueda" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: C.muted, background: "transparent", border: "none", cursor: "pointer" }}><X size={16} /></button>}
+                </div>
+                {!esVisor && <button onClick={() => setShowEspecial({ nombre: "", precio: "", cant: "1", nota: "", bebida: false })} title="Agregar algo que no está en la carta o un costo extra" className="px-3 rounded-lg text-sm font-bold whitespace-nowrap" style={{ background: "#a0785a", color: "#fff", border: "none" }}>+ Especial</button>}
                 </div>
 <div className="flex flex-wrap gap-2 mb-4">{categorias.map((c) => { const on = !filtroPedido && cat === c; return <button key={c} onClick={() => { setCat(c); setFiltroPedido(""); }} className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap" style={{ background: on ? C.raised2 : "transparent", color: on ? C.text : C.muted, border: "1px solid " + (on ? C.text : C.border) }}>{c}</button>; })}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ display: "flex", gap: 8, alignItems: "center" }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 800, fontSize: 13, color: "#000000", lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{p.nombre}</div><div style={{ color: C.text, fontWeight: 800, fontSize: 13, marginTop: 2 }}>{pesos(p.precio)}</div></div>{p.imagen && <div style={{ width: 50, height: 50, flexShrink: 0, overflow: "hidden", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: C.base }}><img src={p.imagen} alt={p.nombre} style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>}</div></button>))}</div>
@@ -1768,7 +1795,7 @@ const cancelarDelivery = (d) => {
                   </div>
                 )}
                 <div className="flex items-center justify-between mb-2"><span style={{ fontWeight: 800, fontSize: 14, color: "#000000" }}>{orden.tipo === "mesa" ? "Ronda actual" : "Pedido"}</span>{!esVisor && orden.lineas.length > 0 && <button onClick={() => setOrden((o) => ({ ...o, lineas: [] }))} style={{ color: C.muted }}><Trash2 size={16} /></button>}</div>
-                {orden.lineas.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>Elegí productos para agregar.</p>) : (<div className="flex flex-col gap-3">{orden.lineas.map((l) => (<div key={l.lid} className="rounded-lg p-2" style={{ background: C.base }}><div className="flex items-center justify-between gap-2"><div style={{ fontSize: 13, fontWeight: 600 }} className="flex-1">{prodById[l.pid] ? prodById[l.pid].nombre : "—"}</div><div className="flex items-center gap-1">{!esVisor && <button onClick={() => cant(l.lid, -1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Minus size={14} /></button>}<span style={{ width: 18, textAlign: "center", fontWeight: 700 }}>{l.cant}</span>{!esVisor && <button onClick={() => cant(l.lid, 1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Plus size={14} /></button>}{!esVisor && <button onClick={() => setOrden((o) => ({ ...o, lineas: o.lineas.filter((x) => x.lid !== l.lid) }))} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red, border: "1px solid " + C.red }}><X size={13} /></button>}</div></div>{!esVisor && String(prodById[l.pid]?.cat).toLowerCase() !== "bebidas" && <div className="flex items-center gap-2 mt-2"><span style={{ color: C.muted, flexShrink: 0 }}><MsgIcon size={14} /></span><input value={l.nota} onChange={(e) => setNota(l.lid, e.target.value)} placeholder="Observación: sin aderezo, a punto…" style={{ background: "transparent", border: "none", color: C.text, fontSize: 12, width: "100%", outline: "none" }} /></div>}</div>))}</div>)}
+                {orden.lineas.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>Elegí productos para agregar.</p>) : (<div className="flex flex-col gap-3">{orden.lineas.map((l) => (<div key={l.lid} className="rounded-lg p-2" style={{ background: C.base }}><div className="flex items-center justify-between gap-2"><div style={{ fontSize: 13, fontWeight: 600 }} className="flex-1">{prodById[l.pid] ? prodById[l.pid].nombre : (l.nombre || "—")}{l.especial && <span style={{ fontSize: 10, fontWeight: 700, color: "#a0785a", marginLeft: 6 }}>ESPECIAL {pesos(l.precio)}</span>}</div><div className="flex items-center gap-1">{!esVisor && <button onClick={() => cant(l.lid, -1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Minus size={14} /></button>}<span style={{ width: 18, textAlign: "center", fontWeight: 700 }}>{l.cant}</span>{!esVisor && <button onClick={() => cant(l.lid, 1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Plus size={14} /></button>}{!esVisor && <button onClick={() => setOrden((o) => ({ ...o, lineas: o.lineas.filter((x) => x.lid !== l.lid) }))} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red, border: "1px solid " + C.red }}><X size={13} /></button>}</div></div>{!esVisor && String(prodById[l.pid]?.cat).toLowerCase() !== "bebidas" && <div className="flex items-center gap-2 mt-2"><span style={{ color: C.muted, flexShrink: 0 }}><MsgIcon size={14} /></span><input value={l.nota} onChange={(e) => setNota(l.lid, e.target.value)} placeholder="Observación: sin aderezo, a punto…" style={{ background: "transparent", border: "none", color: C.text, fontSize: 12, width: "100%", outline: "none" }} /></div>}</div>))}</div>)}
                 <div className="flex justify-between items-baseline mt-3 pt-3" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13, fontWeight: 700 }}>{orden.tipo === "mesa" ? "Total mesa" : "Total"}</span><span style={{ fontWeight: 900, fontSize: 20, color: C.text }}>{pesos(orden.tipo === "mesa" ? mesaTotal(orden.mesaId, orden.lineas) : sumLin(orden.lineas))}</span></div>{orden.tipo === "mesa" && ((mesas[orden.mesaId] || {}).pagosPend || []).length > 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "right" }}>Pagos a cuenta: {pesos(totalPagosACuenta(mesas[orden.mesaId]))} · el total es el saldo</div>}
                 {!esVisor && (() => { const hayComidas = orden.lineas.some((l) => prodById[l.pid]?.cat !== "Bebidas"); return hayComidas && <button onClick={enviar} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-2" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><Send size={16} /> Enviar a cocina</button>; })()}
                 {!esVisor && orden.tipo === "mesa" && (mesas[orden.mesaId]?.enviado || []).length === 0 && orden.lineas.length === 0 && ((mesas[orden.mesaId]?.despachado || []).length > 0 || (mesas[orden.mesaId]?.bebidas || []).length > 0) && (<button onClick={() => cerrarMesa(orden.mesaId)} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-2 w-full" style={{ background: "transparent", border: "1px solid " + C.border, color: C.text }}>Cobrar y cerrar mesa</button>)}
@@ -3504,6 +3531,28 @@ const cancelarDelivery = (d) => {
             <button onClick={() => setVerDelivery(null)} className="w-full py-2.5 rounded-lg font-semibold mt-3" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Cerrar</button>
           </div>
         </div>); })()}
+
+      {showEspecial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }} onClick={() => setShowEspecial(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1"><h3 style={{ fontWeight: 800, fontSize: 17 }}>Producto especial</h3><button onClick={() => setShowEspecial(null)} style={{ color: C.muted }}><X size={18} /></button></div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Algo que no está en la carta, una modificación o un costo extra (ej: "Extra roquefort").</div>
+            <div className="flex flex-col gap-2">
+              <div><label style={lbl}>Nombre</label><input autoFocus style={inputStyle} placeholder="Ej: Suprema gratinada con roquefort" value={showEspecial.nombre} onChange={(e) => setShowEspecial({ ...showEspecial, nombre: e.target.value })} /></div>
+              <div className="flex gap-2">
+                <div style={{ flex: 2 }}><label style={lbl}>Precio unitario ($)</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={showEspecial.precio} onChange={(e) => setShowEspecial({ ...showEspecial, precio: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={lbl}>Cantidad</label><input style={inputStyle} type="text" inputMode="numeric" value={showEspecial.cant} onChange={(e) => setShowEspecial({ ...showEspecial, cant: e.target.value.replace(/[^0-9]/g, "") })} /></div>
+              </div>
+              <div><label style={lbl}>Nota para cocina (opcional)</label><input style={inputStyle} placeholder="Ej: bien gratinada" value={showEspecial.nota} onChange={(e) => setShowEspecial({ ...showEspecial, nota: e.target.value })} /></div>
+              <div className="flex gap-2">{[[false, "Va a cocina"], [true, "Es bebida"]].map(([v, t]) => (
+                <button key={t} type="button" onClick={() => setShowEspecial({ ...showEspecial, bebida: v })} className="flex-1 py-2 rounded-lg text-sm font-semibold" style={{ background: showEspecial.bebida === v ? "#a0785a" : C.base, color: showEspecial.bebida === v ? "#fff" : C.text, border: "1px solid " + C.border }}>{t}</button>
+              ))}</div>
+              <div className="rounded-lg p-2 flex justify-between" style={{ background: C.base, fontSize: 13 }}><span>Total</span><span style={{ fontWeight: 800 }}>{pesos((numDec(showEspecial.precio) || 0) * Math.max(1, parseInt(showEspecial.cant) || 1))}</span></div>
+              <button onClick={() => { if (agregarEspecial(showEspecial)) setShowEspecial(null); }} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff" }}>Agregar al pedido</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmar cancelar delivery */}
       {confirmCancelDelivery && (
