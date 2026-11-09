@@ -414,13 +414,15 @@ function mesaEsVieja(id) {
 
 function saveMesas(mesas) {
   const stmt = getDB().prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)");
+  const rechazadas = [];
   const tx = getDB().transaction((obj) => {
     for (const [id, estado] of Object.entries(obj)) {
-      if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); continue; }
+      if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); rechazadas.push(String(id)); continue; }
       stmt.run(parseInt(id), JSON.stringify(estado));
     }
   });
   tx(mesas);
+  return rechazadas;
 }
 
 function saveMesa(id, estado) {
@@ -550,6 +552,21 @@ function saveStock(stock) {
   tx(stock);
 }
 
+// Cambios de stock atomicos: sumar (ej: factura +360, cocina -2), fijar un valor, borrar o reemplazar todo
+function ajustarStock(op) {
+  const d = getDB();
+  const get = d.prepare("SELECT cantidad FROM stock WHERE insumo_id = ?");
+  const put = d.prepare("INSERT OR REPLACE INTO stock (insumo_id, cantidad) VALUES (?, ?)");
+  const del = d.prepare("DELETE FROM stock WHERE insumo_id = ?");
+  d.transaction(() => {
+    if (op.reemplazar && typeof op.reemplazar === "object") { d.prepare("DELETE FROM stock").run(); for (const [id, v] of Object.entries(op.reemplazar)) put.run(id, Number(v) || 0); }
+    for (const [id, v] of Object.entries(op.fijar || {})) put.run(id, Math.round((Number(v) || 0) * 100) / 100);
+    for (const [id, delta] of Object.entries(op.sumar || {})) { const row = get.get(id); put.run(id, Math.round(((row ? Number(row.cantidad) : 0) + (Number(delta) || 0)) * 100) / 100); }
+    for (const id of (op.borrar || [])) del.run(id);
+  })();
+  return getStock();
+}
+
 function updateStock(insumoId, cantidad) {
   getDB().prepare("INSERT OR REPLACE INTO stock (insumo_id, cantidad) VALUES (?, ?)").run(insumoId, cantidad);
 }
@@ -655,7 +672,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, ajustarStock, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,

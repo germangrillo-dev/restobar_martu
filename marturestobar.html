@@ -302,14 +302,23 @@ function App() {
   const importedWAPedidosRef = React.useRef(new Set());
   const initialSyncDoneRef = React.useRef(false);
   const configRef = React.useRef(null);
-  const postMesas = (m) => { fetch(serverUrl + "/api/mesas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) }).catch(() => console.warn("sync: fallo post mesas")); };
+  const postMesas = (m) => { fetch(serverUrl + "/api/mesas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) })
+    .then((r) => r.json()).then((d) => {
+      const rech = (d && d.rechazadas) || [];
+      if (!rech.length) return;
+      rech.forEach((id) => { dirtyMesasRef.current.delete(String(id)); });
+      setToast({ tipo: "error", texto: "No se guardó la Mesa " + rech.join(", ") + ": se cobró o limpió en otra pantalla. Se actualizó con lo del servidor; revisá el pedido y cargalo de nuevo si falta algo." });
+    }).catch(() => console.warn("sync: fallo post mesas")); };
   const postDeliveries = (d) => { fetch(serverUrl + "/api/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) }).catch(() => console.warn("sync: fallo post deliveries")); };
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
     const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes, cuentaCorriente: cfg.cuentaCorriente, mesas: cfg.mesas } : undefined;
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
-    const payload = { caja: cajaVal, historialCierres, mesas: mesasLimpias, orden, config: configLiviano, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos };
+    const payload = { caja: cajaVal, historialCierres, mesas: mesasLimpias, orden, config: configLiviano, facturaXNum, productos };
+    // Catalogos: solo se mandan si esta pantalla los cambio (si son iguales a lo ultimo del servidor, no se reenvian)
+    const cat = { insumos, costos, proveedores, usuarios };
+    for (const [k, v] of Object.entries(cat)) { if (JSON.stringify(v) !== ultimoServidorRef.current[k]) payload[k] = v; }
     const cajaAbierta = cajaIniciadaRef.current || (cajaVal && (cajaVal.turno || (Array.isArray(cajaVal.movimientos) && cajaVal.movimientos.length > 0)));
 if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesVal || []; }
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -323,6 +332,20 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [tab, setTab] = useState("pedido");
   const [insumos, setInsumos] = useState(() => []);
   const [stock, setStock] = useState(() => ({}));
+  // Cambios de stock: se aplican en pantalla y se mandan al servidor como cambio (no como copia completa)
+  const cambiarStock = (op, motivo) => {
+    setStock((s) => {
+      let n = op.reemplazar ? { ...op.reemplazar } : { ...s };
+      for (const [id, v] of Object.entries(op.fijar || {})) n[id] = +(Number(v) || 0).toFixed(2);
+      for (const [id, d] of Object.entries(op.sumar || {})) n[id] = +((n[id] || 0) + (Number(d) || 0)).toFixed(2);
+      for (const id of (op.borrar || [])) delete n[id];
+      return n;
+    });
+    fetch(serverUrl + "/api/stock/ajuste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...op, motivo: motivo || "" }) })
+      .then((r) => r.json()).then((d) => { if (d && d.ok && d.stock) setStock(d.stock); }).catch(() => setToast({ tipo: "error", texto: "No se pudo actualizar el stock en el servidor." }));
+  };
+  // Ultimo dato recibido del servidor: una pantalla solo reenvia catalogos si los cambio ella
+  const ultimoServidorRef = React.useRef({});
   const [costos, setCostos] = useState(() => ({}));
   const [productos, setProductos] = useState(() => []);
   const [categorias, setCategorias] = useState(() => CATEGORIAS_DEF);
@@ -680,7 +703,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." });
       descuentaStock = false;
     }
-    if (descuentaStock) setStock((s) => { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; });
+    if (descuentaStock && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "envio a cocina");
     const itemsTicket = orden.lineas.map((l) => ({ nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
     const total = sumLin(orden.lineas);
     const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
@@ -905,13 +928,13 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
         }
       }
       setInsumos((xs) => xs.map((i) => i.id === abmIns.id ? { ...i, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc } : i));
-      setStock((s) => ({ ...s, [abmIns.id]: saF }));
+      cambiarStock({ fijar: { [abmIns.id]: saF } }, "edicion insumo");
       setCostos((c) => ({ ...c, [abmIns.id]: costoF }));
     }
-    else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: saF, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); setStock((s) => ({ ...s, [id]: saF })); setCostos((c) => ({ ...c, [id]: costoF })); }
+    else { const id = uid(); setInsumos((xs) => [...xs, { id, nombre: abmIns.nombre, unidad: abmIns.unidad, presentacion: abmIns.presentacion, inicial: saF, min: mn, unidadCompra: uc, pesoBulto: pb, factorCompra: fc }]); cambiarStock({ fijar: { [id]: saF } }, "insumo nuevo"); setCostos((c) => ({ ...c, [id]: costoF })); }
     abmInsCerroPor.current = "guardar"; setAbmIns(null); setToast({ tipo: "ok", texto: aviso });
   };
-  const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); setStock((s) => { const n = { ...s }; delete n[id]; return n; }); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
+  const borrarInsumo = (id) => { setInsumos((xs) => xs.filter((i) => i.id !== id)); cambiarStock({ borrar: [id] }, "insumo eliminado"); setToast({ tipo: "ok", texto: "Insumo eliminado." }); };
   // Cuenta corriente helpers
   const ccEntries = (config.cuentaCorriente || []);
   const ccDeCliente = (clienteId) => ccEntries.filter((e) => e.clienteId === clienteId).sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "") || (a.id || "").localeCompare(b.id || ""));
@@ -995,7 +1018,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     if (!fac.provId) { setToast({ tipo: "error", texto: "Elegí un proveedor." }); return; }
     const validos = fac.items.filter((it) => it.codigo && (numDec(it.cantidad) || 0) > 0);
     if (validos.length === 0) { setToast({ tipo: "error", texto: "Agregá al menos un artículo con cantidad." }); return; }
-    setStock((s) => { const n = { ...s }; for (const it of validos) { const c = calcItem(it); n[c.a.insumo] = +((n[c.a.insumo] || 0) + c.ingreso).toFixed(2); } return n; });
+    { const sumar = {}; for (const it of validos) { const c = calcItem(it); if (c.a && c.a.insumo) sumar[c.a.insumo] = +((sumar[c.a.insumo] || 0) + c.ingreso).toFixed(2); } cambiarStock({ sumar }, "factura " + (provSel ? provSel.nombre : "")); }
     setCostos((cs) => { const n = { ...cs }; for (const it of validos) { const c = calcItem(it); if (c.sub > 0 && c.cantB > 0) n[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } return n; });
     setFacturas((fs) => {
       const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, subtotal: c.sub, unitario: c.unit, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
@@ -1015,11 +1038,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const nfs = facturas.filter((x) => x.id !== id);
     setFacturas(nfs);
     fetch(serverUrl + "/api/facturas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nfs) }).catch(() => {});
-    if (revierte.length) setStock((s) => { const n = { ...s }; for (const it of revierte) n[it.insumo] = +(((n[it.insumo] || 0) - it.ingreso)).toFixed(2); return n; });
+    if (revierte.length) { const sumar = {}; for (const it of revierte) sumar[it.insumo] = +((sumar[it.insumo] || 0) - it.ingreso).toFixed(2); cambiarStock({ sumar }, "factura eliminada"); }
     setToast({ tipo: "ok", texto: "Factura eliminada." + (revierte.length ? " Stock revertido." : "") });
   };
 
-  const reponer = () => { setStock(Object.fromEntries(insumos.map((i) => [i.id, i.inicial || 0]))); setToast({ tipo: "ok", texto: "Stock reiniciado." }); };
+  const reponer = () => { cambiarStock({ reemplazar: Object.fromEntries(insumos.map((i) => [i.id, i.inicial || 0])) }, "stock reiniciado"); setToast({ tipo: "ok", texto: "Stock reiniciado." }); };
   const login = (u) => {
     if (u.clave) { setLoginUsuario(u); setLoginClave(""); setLoginError(""); return; }
     setUsuario(u); localStorage.setItem("elmo_usuario", JSON.stringify({ nombre: u.nombre, rol: u.rol })); setCaja((c) => ({ ...c, usuario: u.nombre })); setTab("pedido"); setVista("mapa"); setSalonVista("salon");
@@ -1141,7 +1164,9 @@ const cancelarDelivery = (d) => {
   });
   setToast({ tipo: "ok", texto: "Delivery cancelado." });
 };
-  const markMesaDirty = (id) => { const sid = String(id); dirtyMesasRef.current.add(sid); };
+  // Una mesa tocada en esta pantalla queda "pendiente" solo unos segundos (hasta que el servidor la confirma)
+  const dirtyDesdeRef = React.useRef({});
+  const markMesaDirty = (id) => { const sid = String(id); dirtyMesasRef.current.add(sid); dirtyDesdeRef.current[sid] = Date.now(); };
   const syncRef = React.useRef(null);
   React.useEffect(() => {
     if (!usuario) return;
@@ -1187,11 +1212,11 @@ const cancelarDelivery = (d) => {
         }
         if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias((prev) => { const prodCats = (prodRef.current || []).map((p) => p.cat).filter(Boolean); const out = []; for (const c of [...(prev || []), ...data.config.categorias, ...prodCats]) if (c && out.indexOf(c) < 0) out.push(c); return out; }); }
         if (typeof data.facturaXNum === "number") setFacturaXNum((prev) => Math.max(prev || 1, data.facturaXNum));
-        if (data.insumos && Array.isArray(data.insumos) && data.insumos.length > 0) setInsumos(data.insumos);
+        if (data.insumos && Array.isArray(data.insumos) && data.insumos.length > 0) { ultimoServidorRef.current.insumos = JSON.stringify(data.insumos); setInsumos(data.insumos); }
         if (data.stock && typeof data.stock === "object") setStock(data.stock);
-        if (data.costos && typeof data.costos === "object") setCostos(data.costos);
-        if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios);
-        if (data.proveedores && Array.isArray(data.proveedores) && data.proveedores.length > 0) setProveedores(data.proveedores);
+        if (data.costos && typeof data.costos === "object") { ultimoServidorRef.current.costos = JSON.stringify(data.costos); setCostos(data.costos); }
+        if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) { ultimoServidorRef.current.usuarios = JSON.stringify(data.usuarios); setUsuarios(data.usuarios); }
+        if (data.proveedores && Array.isArray(data.proveedores) && data.proveedores.length > 0) { ultimoServidorRef.current.proveedores = JSON.stringify(data.proveedores); setProveedores(data.proveedores); }
       }).catch(() => {});
       // Mesas from own endpoint - never overwrite local mesa with items with empty server mesa
       fetch(serverUrl + "/api/mesas").then(r => r.json()).then(serverMesas => {
@@ -1203,14 +1228,11 @@ const cancelarDelivery = (d) => {
             // Si la mesa se cobro/limpio despues de la version que tiene esta pantalla, manda el servidor
             const tsL = (local && local.cobradaTs) || 0, tsS = (sm && sm.cobradaTs) || 0;
             if (tsS > tsL) { m[id] = sm; dirtyMesasRef.current.delete(id); continue; }
-            if (tsL > tsS) continue;
-            const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0);
-            const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0);
-            if (dirtyMesasRef.current.has(id)) {
-              if (!serverHasItems) dirtyMesasRef.current.delete(id);
-              if (serverHasItems) continue;
-            }
-            if (localHasItems && !serverHasItems) continue;
+            // Cambio local recien hecho (menos de 10 s): se espera a que el servidor lo confirme
+            const pendiente = dirtyMesasRef.current.has(id) && (Date.now() - (dirtyDesdeRef.current[id] || 0)) < 10000;
+            if (pendiente) continue;
+            dirtyMesasRef.current.delete(id);
+            // Fuera de eso, manda el servidor (asi todas las pantallas ven lo mismo)
             m[id] = sm;
           }
           return m;
@@ -1245,7 +1267,7 @@ const cancelarDelivery = (d) => {
       for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
       const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
       if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
-      setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
+      if (!faltan.length && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "pedido whatsapp");
       setMesas((ms) => { const nm = { ...ms, [wp.mesa]: { ...ms[wp.mesa], enviado: [...ms[wp.mesa].enviado, ...items] } }; markMesaDirty(wp.mesa); postMesas(nm); return nm; });
       const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
       const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
@@ -1260,7 +1282,7 @@ const cancelarDelivery = (d) => {
         for (const l of items) for (const [iid, c] of (prodById[l.pid]?.receta || [])) req[iid] = (req[iid] || 0) + c * l.cant;
         const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
         if (faltan.length) { const txt = faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", "); setToast({ tipo: "error", texto: "Stock bajo: " + txt + " — se envía sin descontar stock." }); }
-        setStock((s) => { if (!faltan.length) { const n = { ...s }; for (const [iid, c] of Object.entries(req)) n[iid] = +(n[iid] - c).toFixed(2); return n; } return s; });
+        if (!faltan.length && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "pedido whatsapp");
         const totalItems = items.map(l => ({ pid: l.pid, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota }));
         const total = items.reduce((a, l) => a + (prodById[l.pid]?.precio || 0) * l.cant, 0);
         const newDel = { id: uid(), cliente: nombre, direccion, telefono: wp.telefono || "", hora: hora(), fecha: hoy(), remitente: wp.remitente || "", total, items: totalItems, estado: "cocina" };
@@ -2439,7 +2461,7 @@ const cancelarDelivery = (d) => {
                     <h3 style={{ fontWeight: 800, fontSize: 15, color: "#000000", marginBottom: 12 }}>Backup de datos</h3>
                     <div className="flex gap-3">
                       <button onClick={() => { const datos = { insumos, stock, costos, productos, proveedores, facturas, mesas, deliveries, caja, historialCierres, config, usuarios }; const blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "backup-elmostrador-" + hoy() + ".json"; a.click(); URL.revokeObjectURL(url); setToast({ tipo: "ok", texto: "Backup descargado." }); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}><Download size={15} /> Exportar</button>
-                      <label className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm cursor-pointer" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}><Upload size={15} /> Importar<input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = (ev) => { try { const datos = JSON.parse(ev.target.result); if (datos.insumos) setInsumos(datos.insumos); if (datos.stock) setStock(datos.stock); if (datos.costos) setCostos(datos.costos); if (datos.productos) setProductos(datos.productos); if (datos.proveedores) setProveedores(datos.proveedores); if (datos.facturas) setFacturas(datos.facturas); if (datos.caja) setCaja(datos.caja); if (datos.historialCierres) setHistorialCierres(datos.historialCierres); if (datos.config) setConfig(datos.config); if (datos.usuarios) setUsuarios(datos.usuarios); setToast({ tipo: "ok", texto: "Datos importados correctamente." }); } catch { setToast({ tipo: "error", texto: "Archivo inválido." }); } }; reader.readAsText(f); }} /></label>
+                      <label className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm cursor-pointer" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}><Upload size={15} /> Importar<input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = (ev) => { try { const datos = JSON.parse(ev.target.result); if (datos.insumos) setInsumos(datos.insumos); if (datos.stock) cambiarStock({ reemplazar: datos.stock }, "importar respaldo"); if (datos.costos) setCostos(datos.costos); if (datos.productos) setProductos(datos.productos); if (datos.proveedores) setProveedores(datos.proveedores); if (datos.facturas) setFacturas(datos.facturas); if (datos.caja) setCaja(datos.caja); if (datos.historialCierres) setHistorialCierres(datos.historialCierres); if (datos.config) setConfig(datos.config); if (datos.usuarios) setUsuarios(datos.usuarios); setToast({ tipo: "ok", texto: "Datos importados correctamente." }); } catch { setToast({ tipo: "error", texto: "Archivo inválido." }); } }; reader.readAsText(f); }} /></label>
                     </div>
                     <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 6 }}>Exportá todos los datos como archivo JSON. Importá para restaurar.</div>
                     <button onClick={async () => { if (!window.confirm("¿Restaurar datos desde el servidor? Se sobreescribirán los datos locales.")) return; try { const r = await fetch(serverUrl + "/api/caja"); const data = await r.json(); if (data.caja) setCaja(data.caja); if (data.cajaIniciada !== undefined) setCajaIniciada(data.cajaIniciada); if (data.historialCierres) setHistorialCierres(data.historialCierres); if (data.config) setConfig((c) => ({ ...c, ...data.config })); if (data.deliveries) setDeliveries(data.deliveries); if (data.mesas) setMesas(data.mesas); setToast({ tipo: "ok", texto: "Datos restaurados desde el servidor." }); } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm mt-3" style={{ background: C.raised, border: "1px solid " + C.border, color: C.amber }}><RotateCcw size={15} /> Restaurar desde servidor</button>

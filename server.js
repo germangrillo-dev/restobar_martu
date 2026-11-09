@@ -513,7 +513,8 @@ app.post("/api/caja", (req, res) => {
 
     // Insumos
     if (insumos !== undefined && Array.isArray(insumos) && insumos.length > 0) db.saveInsumos(insumos);
-    if (stock !== undefined && typeof stock === "object" && Object.keys(stock).length > 0) db.saveStock(stock);
+    // El stock ya no se guarda desde aca: cada pantalla mandaba su copia completa y una vieja pisaba a la nueva.
+    // Ahora cada cambio va por /api/stock/ajuste (sumar/fijar), que es atomico en el servidor.
     if (costos !== undefined && typeof costos === "object" && Object.keys(costos).length > 0) db.saveCostos(costos);
     if (proveedores !== undefined && Array.isArray(proveedores) && proveedores.length > 0) db.saveProveedores(proveedores);
     if (usuarios !== undefined && Array.isArray(usuarios) && usuarios.length > 0) db.saveUsuarios(usuarios);
@@ -547,8 +548,8 @@ app.get("/api/mesas", (req, res) => {
 app.post("/api/mesas", (req, res) => {
   const mesas = req.body;
   if (!mesas || typeof mesas !== "object") return res.status(400).json({ error: "invalid" });
-  db.saveMesas(mesas);
-  res.json({ ok: true });
+  const rechazadas = db.saveMesas(mesas) || [];
+  res.json({ ok: true, rechazadas });
 });
 
 // --- API: Deliveries ---
@@ -622,6 +623,18 @@ app.post("/api/caja/venta/cambiar-medio", (req, res) => {
     res.json({ ok: true, mov: nuevo });
   } catch (e) {
     console.error("[VENTA MEDIO] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+// --- API: Ajustar stock (atomico) ---
+app.post("/api/stock/ajuste", (req, res) => {
+  try {
+    const { sumar, fijar, borrar, reemplazar, motivo } = req.body || {};
+    const stock = db.ajustarStock({ sumar, fijar, borrar, reemplazar });
+    console.log("[STOCK]", motivo || "", JSON.stringify({ sumar, fijar, borrar, reemplazo: !!reemplazar }).slice(0, 300));
+    res.json({ ok: true, stock });
+  } catch (e) {
+    console.error("[STOCK] ERROR:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
