@@ -5,6 +5,10 @@ const Afip = require("@afipsdk/afip.js");
 
 const CERT_FILE = path.join(__dirname, "certificado.crt");
 const KEY_FILE = path.join(__dirname, "privada.key");
+// Modo real: certificado emitido por ARCA en produccion (si no existe se usa el de prueba y ARCA lo rechaza)
+const CERT_FILE_PROD = path.join(__dirname, "certificado-produccion.crt");
+const KEY_FILE_PROD = path.join(__dirname, "privada-produccion.key");
+const CUIT_DEFAULT = 27213414475;
 
 const WSFEV1_HOMO = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx";
 const WSFEV1_PROD = "https://servicios1.afip.gov.ar/wsfev1/service.asmx";
@@ -12,13 +16,22 @@ const SOAP_NS = "http://ar.gov.afip.dif.FEV1/";
 
 let afipSdk = null;
 
-function getAfipSdk(accessToken) {
-  const cert = fs.readFileSync(CERT_FILE, "utf-8");
-  const key = fs.readFileSync(KEY_FILE, "utf-8");
+function archivosCert(produccion) {
+  if (produccion) {
+    if (!fs.existsSync(CERT_FILE_PROD) || !fs.existsSync(KEY_FILE_PROD)) throw new Error("Falta el certificado de produccion (certificado-produccion.crt y privada-produccion.key en la carpeta del sistema).");
+    return { cert: CERT_FILE_PROD, key: KEY_FILE_PROD };
+  }
+  return { cert: CERT_FILE, key: KEY_FILE };
+}
+
+function getAfipSdk(accessToken, produccion, cuit) {
+  const f = archivosCert(!!produccion);
+  const cert = fs.readFileSync(f.cert, "utf-8");
+  const key = fs.readFileSync(f.key, "utf-8");
   afipSdk = new Afip({
-    CUIT: 27213414475,
+    CUIT: Number(cuit) || CUIT_DEFAULT,
     cert, key,
-    production: false,
+    production: !!produccion,
     access_token: accessToken
   });
   return afipSdk;
@@ -47,34 +60,36 @@ function parseTag(xml, tag) {
   return m ? m[1].trim() : null;
 }
 
-async function verificarPuntoVenta(produccion, accessToken) {
+async function verificarPuntoVenta(produccion, accessToken, opts = {}) {
   try {
-    const sdk = getAfipSdk(accessToken);
+    const sdk = getAfipSdk(accessToken, produccion, opts.cuit);
     const status = await sdk.ElectronicBilling.getServerStatus();
     return {
       ok: true,
-      mensaje: "Conexión AFIP OK. AppServer: " + status.AppServer + ", DBServer: " + status.DbServer + ", AuthServer: " + status.AuthServer
+      mensaje: (produccion ? "[REAL] " : "[PRUEBA] ") + "Conexión AFIP OK. AppServer: " + status.AppServer + ", DBServer: " + status.DbServer + ", AuthServer: " + status.AuthServer
     };
   } catch (e) {
     return { ok: false, mensaje: e.message };
   }
 }
 
-async function getLastVoucher(puntoVenta, cbteTipo, produccion, accessToken) {
-  const sdk = getAfipSdk(accessToken);
+async function getLastVoucher(puntoVenta, cbteTipo, produccion, accessToken, opts = {}) {
+  const sdk = getAfipSdk(accessToken, produccion, opts.cuit);
   return await sdk.ElectronicBilling.getLastVoucher(puntoVenta, cbteTipo);
 }
 
-async function facturar(data, produccion, accessToken) {
-  const sdk = getAfipSdk(accessToken);
+async function facturar(data, produccion, accessToken, opts = {}) {
+  const cuit = Number(opts.cuit) || CUIT_DEFAULT;
+  const sdk = getAfipSdk(accessToken, produccion, cuit);
   const ta = await sdk.ElectronicBilling.getTokenAuthorization();
 
+  // Tipo y punto de venta los define la configuracion del servidor (Factura C = 11 para monotributo)
+  const cbteTipo = Number(opts.cbteTipo) || 11;
+  const puntoVenta = Number(opts.puntoVenta) || Number(data.puntoVenta) || 2;
   const {
-    cbteTipo = 6,
     concepto = 1,
     docTipo = 99,
     docNro = 0,
-    puntoVenta = 2,
     items = [],
     condicionIvaReceptor = 5,
     cliente = {}
@@ -86,13 +101,15 @@ async function facturar(data, produccion, accessToken) {
   const finalCondicionIva = 5; // Consumidor Final
 
   const total = items.reduce((a, it) => a + (it.precio || 0) * (it.cant || 1), 0);
-  const impNeto = parseFloat(total.toFixed(2));
-  const impIVA = cbteTipo === 6 ? parseFloat((impNeto * 0.21).toFixed(2)) : 0;
-  const impTotal = cbteTipo === 6 ? parseFloat((impNeto + impIVA).toFixed(2)) : impNeto;
+  // Los precios de la carta son finales (IVA incluido). Factura C: sin IVA discriminado (neto = total).
+  const impTotal = parseFloat(total.toFixed(2));
+  const impNeto = cbteTipo === 6 ? parseFloat((impTotal / 1.21).toFixed(2)) : impTotal;
+  const impIVA = cbteTipo === 6 ? parseFloat((impTotal - impNeto).toFixed(2)) : 0;
+  if (!(impTotal > 0)) throw new Error("El total a facturar tiene que ser mayor a 0.");
 
   const lastVoucher = await sdk.ElectronicBilling.getLastVoucher(puntoVenta, cbteTipo);
   const nextNum = lastVoucher + 1;
-  const fecha = new Date().toISOString().split("T")[0].replace(/-/g, "");
+  const fecha = new Date(Date.now() - 3 * 3600 * 1000).toISOString().split("T")[0].replace(/-/g, ""); // fecha de Argentina (UTC-3)
 
   const ivaXml = cbteTipo === 6 ? `
             <ar:Iva>
@@ -110,7 +127,7 @@ async function facturar(data, produccion, accessToken) {
       <ar:Auth>
         <ar:Token>${ta.token}</ar:Token>
         <ar:Sign>${ta.sign}</ar:Sign>
-        <ar:Cuit>27213414475</ar:Cuit>
+        <ar:Cuit>${cuit}</ar:Cuit>
       </ar:Auth>
       <ar:FeCAEReq>
         <ar:FeCabReq>
@@ -153,7 +170,7 @@ async function facturar(data, produccion, accessToken) {
 
   if (resultado === "A" && cae) {
     console.log("[AFIP] CAE:", cae, "Vto:", vto, "Nro:", nextNum);
-    return { cae, vencimiento: vto, cbteNro: nextNum, ptoVenta: puntoVenta };
+    return { cae, vencimiento: vto, cbteNro: nextNum, ptoVenta: puntoVenta, cbteTipo, produccion: !!produccion, fecha, total: impTotal, cuit };
   }
 
   throw new Error("AFIP rechazó: " + (errMsg || resultado || response.substring(0, 300)));

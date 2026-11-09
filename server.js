@@ -507,7 +507,9 @@ app.post("/api/caja", (req, res) => {
 
     // Config
     if (config !== undefined && config !== null) {
-      db.saveConfig(config);
+      // El modo de facturacion (prueba/real) y el punto de venta solo se cambian con /api/afip/config (clave admin)
+      const { afipModo, afipPuntoVenta, ...configResto } = config;
+      db.saveConfig(configResto);
       delete MENU_CACHE.html;
     }
 
@@ -606,6 +608,7 @@ app.post("/api/caja/venta/eliminar", (req, res) => {
 app.post("/api/caja/venta/cambiar-medio", (req, res) => {
   try {
     const { id, metodo, ref, clave, motivo, usuario } = req.body || {};
+    const CON_COMISION = ["Mercado Pago", "Tarjeta débito", "Tarjeta crédito"];
     const MEDIOS = ["Efectivo", "Transferencia", "Mercado Pago", "Tarjeta débito", "Tarjeta crédito"];
     if (!id || typeof id !== "string") return res.status(400).json({ ok: false, error: "Falta la venta." });
     if (!MEDIOS.includes(metodo)) return res.status(400).json({ ok: false, error: "Medio de pago inválido." });
@@ -617,8 +620,10 @@ app.post("/api/caja/venta/cambiar-medio", (req, res) => {
     if (!mov) return res.status(404).json({ ok: false, error: "La venta no existe." });
     if (mov.tipo !== "venta") return res.status(400).json({ ok: false, error: "Solo se puede cambiar el medio de una venta." });
     if (mov.metodo === "Cuenta corriente") return res.status(400).json({ ok: false, error: "Las ventas a cuenta corriente no se cambian desde aca." });
-    if (mov.metodo === metodo && (mov.ref || "") === (ref || "")) return res.status(400).json({ ok: false, error: "La venta ya tiene ese medio de pago." });
-    const nuevo = db.cambiarMedioMovimiento(id, { metodo, ref: ref || "", motivo: String(motivo).trim(), usuario: usuario || "" });
+    let comision = CON_COMISION.includes(metodo) ? Math.round((Number(req.body.comision) || 0) * 100) / 100 : 0;
+    if (comision < 0 || comision >= Number(mov.monto)) return res.status(400).json({ ok: false, error: "La comisión tiene que ser menor al total de la venta." });
+    if (mov.metodo === metodo && (mov.ref || "") === (ref || "") && Math.abs((Number(mov.comision) || 0) - comision) < 0.01) return res.status(400).json({ ok: false, error: "La venta ya tiene ese medio de pago." });
+    const nuevo = db.cambiarMedioMovimiento(id, { metodo, ref: ref || "", comision, motivo: String(motivo).trim(), usuario: usuario || "" });
     console.log("[VENTA MEDIO CAMBIADO]", id, mov.metodo, "->", metodo, "-", motivo, "-", usuario);
     res.json({ ok: true, mov: nuevo });
   } catch (e) {
@@ -926,12 +931,34 @@ app.get("/api/qr", async (req, res) => {
 
 // --- AFIP ---
 const afip = require("./afip");
+// Configuracion de facturacion: modo prueba/real, punto de venta, tipo (C = monotributo)
+const afipOpts = (cfg) => ({ produccion: cfg.afipModo === "produccion", cuit: Number(String(cfg.afipCuit || "27213414475").replace(/[^0-9]/g, "")) || 27213414475, puntoVenta: Number(cfg.afipPuntoVenta) || 2, cbteTipo: Number(cfg.afipCbteTipo) || 11 });
+app.get("/api/afip/config", (req, res) => {
+  const o = afipOpts(getConfig());
+  const fs2 = require("fs"); const path2 = require("path");
+  res.json({ ok: true, modo: o.produccion ? "produccion" : "homologacion", cuit: o.cuit, puntoVenta: o.puntoVenta, cbteTipo: o.cbteTipo, certProduccion: fs2.existsSync(path2.join(__dirname, "certificado-produccion.crt")) && fs2.existsSync(path2.join(__dirname, "privada-produccion.key")) });
+});
+app.post("/api/afip/config", (req, res) => {
+  try {
+    const { modo, puntoVenta, clave, usuario } = req.body || {};
+    let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin");
+    if (!admins.length) admins = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
+    if (!admins.some((u) => String(u.clave) === String(clave || ""))) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    if (modo !== "produccion" && modo !== "homologacion") return res.status(400).json({ ok: false, error: "Modo invalido." });
+    const pv = parseInt(puntoVenta, 10);
+    if (!(pv > 0 && pv < 100000)) return res.status(400).json({ ok: false, error: "Punto de venta invalido." });
+    db.saveConfig({ afipModo: modo, afipPuntoVenta: pv });
+    console.log("[AFIP CONFIG]", modo, "PV", pv, "por", usuario || "");
+    res.json({ ok: true, modo, puntoVenta: pv });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 app.post("/api/afip/test", async (req, res) => {
   try {
     const cfg = getConfig();
     const accessToken = req.body.accessToken || cfg.afipAccessToken || "";
-    const result = await afip.verificarPuntoVenta(false, accessToken);
+    const o = afipOpts(cfg);
+    const result = await afip.verificarPuntoVenta(o.produccion, accessToken, o);
     res.json(result);
   } catch (e) {
     res.json({ ok: false, mensaje: e.message });
@@ -945,8 +972,10 @@ app.post("/api/afip/facturar", async (req, res) => {
     if (!data.items || !data.items.length) return res.status(400).json({ ok: false, error: "Sin items" });
     const accessToken = data.accessToken || cfg.afipAccessToken || "";
     delete data.accessToken;
-    const result = await afip.facturar(data, false, accessToken);
-    res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta });
+    const o = afipOpts(cfg);
+    const result = await afip.facturar(data, o.produccion, accessToken, o);
+    console.log("[AFIP] Factura", result.cbteTipo === 11 ? "C" : result.cbteTipo, o.produccion ? "REAL" : "PRUEBA", "PV", result.ptoVenta, "Nro", result.cbteNro, "CAE", result.cae);
+    res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta, cbteTipo: result.cbteTipo, produccion: result.produccion, fecha: result.fecha, total: result.total, cuit: result.cuit });
   } catch (e) {
     console.error("[AFIP] Error facturando:", e.message);
     res.json({ ok: false, error: e.message });
@@ -1001,7 +1030,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     let afipHtml = "";
     if (afipData && afipData.cae) {
       afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
-        <div><b>Factura Electrónica</b></div>
+        <div><b>Factura C${afipData.produccion === false ? " (PRUEBA - sin validez fiscal)" : ""}</b></div>
         <div>CAE: ${afipData.cae}</div>
         <div>Vto CAE: ${afipData.vencimiento || ""}</div>
         <div>Cbte N°: ${afipData.cbteNro || ""}</div>

@@ -186,6 +186,8 @@ function initDB() {
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN subtotal REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN unitario REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE movimientos ADD COLUMN cambios TEXT DEFAULT ''"); } catch {}
+  // Comision de tarjeta / Mercado Pago (la venta queda por el total, se recibe monto - comision)
+  try { getDB().exec("ALTER TABLE movimientos ADD COLUMN comision REAL DEFAULT 0"); } catch {}
   // Deliveries de cajas anteriores: se guardan aca al abrir una caja nueva (no se pierden)
   try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_archivo (id TEXT PRIMARY KEY, datos TEXT, archivado_ts INTEGER)"); } catch {}
 try { getDB().exec("ALTER TABLE productos ADD COLUMN imagen TEXT DEFAULT ''"); } catch {}
@@ -295,12 +297,13 @@ function addMovimiento(sesionId, mov) {
   const tsExistente = (existente && Number(existente.editado_ts)) || 0;
   if (tsExistente > (Number(mov.editado_ts) || 0)) return;
   getDB().prepare(
-    "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo, editado_ts, cambios) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo, editado_ts, cambios, comision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     mov.id, sesionId, mov.tipo, mov.concepto || "", mov.monto, mov.metodo || "",
     mov.hora || "", mov.ref || "", mov.usuario || "", mov.comprobante || "",
     mov.cae || "", mov.caeVto || "", mov.afipCbte || null, mov.afipTipo || "",
-    tsExistente || Number(mov.editado_ts) || 0, (existente && existente.cambios) || mov.cambios || ""
+    tsExistente || Number(mov.editado_ts) || 0, (existente && existente.cambios) || mov.cambios || "",
+    Math.max(0, Number(mov.comision) || 0)
   );
 }
 
@@ -311,7 +314,7 @@ function deleteMovimiento(id, info) {
   const r = d.prepare("DELETE FROM movimientos WHERE id = ?").run(id);
   d.prepare("INSERT OR IGNORE INTO movimientos_borrados (id, ts) VALUES (?, ?)").run(id, Date.now());
   if (mov) {
-    const detalle = JSON.stringify({ sesion_id: mov.sesion_id, concepto: mov.concepto, monto: mov.monto, metodo: mov.metodo, hora: mov.hora, ref: mov.ref, tipo: mov.tipo, motivo: (info && info.motivo) || "", usuario: (info && info.usuario) || "", borradoTs: Date.now() });
+    const detalle = JSON.stringify({ sesion_id: mov.sesion_id, concepto: mov.concepto, monto: mov.monto, metodo: mov.metodo, hora: mov.hora, ref: mov.ref, tipo: mov.tipo, comision: Number(mov.comision) || 0, motivo: (info && info.motivo) || "", usuario: (info && info.usuario) || "", borradoTs: Date.now() });
     try { d.prepare("UPDATE movimientos_borrados SET detalle = ? WHERE id = ?").run(detalle, id); } catch {}
   }
   return r.changes > 0;
@@ -324,10 +327,11 @@ function cambiarMedioMovimiento(id, info) {
   if (!mov) return null;
   let cambios = []; try { cambios = JSON.parse(mov.cambios || "[]"); } catch {}
   const ts = Date.now();
-  cambios.push({ ts, antes: { metodo: mov.metodo, ref: mov.ref }, despues: { metodo: info.metodo, ref: info.ref || "" }, motivo: info.motivo || "", usuario: info.usuario || "" });
+  const comision = Math.max(0, Number(info.comision) || 0);
+  cambios.push({ ts, antes: { metodo: mov.metodo, ref: mov.ref, comision: Number(mov.comision) || 0 }, despues: { metodo: info.metodo, ref: info.ref || "", comision }, motivo: info.motivo || "", usuario: info.usuario || "" });
   let concepto = mov.concepto || "";
   if (mov.metodo && concepto.endsWith(" — " + mov.metodo)) concepto = concepto.slice(0, concepto.length - mov.metodo.length) + info.metodo;
-  d.prepare("UPDATE movimientos SET metodo = ?, ref = ?, concepto = ?, editado_ts = ?, cambios = ? WHERE id = ?").run(info.metodo, info.ref || "", concepto, ts, JSON.stringify(cambios), id);
+  d.prepare("UPDATE movimientos SET metodo = ?, ref = ?, concepto = ?, editado_ts = ?, cambios = ?, comision = ? WHERE id = ?").run(info.metodo, info.ref || "", concepto, ts, JSON.stringify(cambios), comision, id);
   return d.prepare("SELECT * FROM movimientos WHERE id = ?").get(id);
 }
 
@@ -373,7 +377,7 @@ function getHistorialCierres() {
         id: m.id, tipo: m.tipo, concepto: m.concepto, monto: m.monto,
         metodo: m.metodo, hora: m.hora, ref: m.ref, usuario: m.usuario,
         comprobante: m.comprobante, cae: m.cae, caeVto: m.cae_vto,
-        afipCbte: m.afip_cbte, afipTipo: m.afip_tipo
+        afipCbte: m.afip_cbte, afipTipo: m.afip_tipo, comision: Number(m.comision) || 0
       })),
       cierre: s.cierre,
       saldoFinal: s.saldo_final,

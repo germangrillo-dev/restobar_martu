@@ -409,6 +409,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [ventaACambiar, setVentaACambiar] = useState(null);
   const [cambioMetodo, setCambioMetodo] = useState("Transferencia");
   const [cambioRef, setCambioRef] = useState("");
+  const [cambioNeto, setCambioNeto] = useState("");
   const [elimClave, setElimClave] = useState("");
   const [elimMotivo, setElimMotivo] = useState("");
   const [ventasEliminadas, setVentasEliminadas] = useState([]);
@@ -420,6 +421,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [parcialPartes, setParcialPartes] = useState("");
   const [parcialMetodo, setParcialMetodo] = useState("Efectivo");
   const [parcialRef, setParcialRef] = useState("");
+  const [parcialNeto, setParcialNeto] = useState("");
   // Aviso de version nueva: si el archivo del sistema cambia en el servidor, se pide recargar
   const [hayVersionNueva, setHayVersionNueva] = useState(false);
   React.useEffect(() => {
@@ -462,6 +464,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [cobroMixto, setCobroMixto] = useState([]);
   const [cobroPago, setCobroPago] = useState("");
   const [cobroRef, setCobroRef] = useState("");
+  const [cobroNeto, setCobroNeto] = useState("");
   const [showComprobanteModal, setShowComprobanteModal] = useState(null);
   const [showNuevoClienteModal, setShowNuevoClienteModal] = useState(false);
   const [configModal, setConfigModal] = useState(null);
@@ -555,12 +558,13 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const movsDePagosACuenta = (id, pagos, sufijo) => {
     const grupos = {};
     (pagos || []).forEach((pg) => {
-      const g = grupos[pg.metodo] || (grupos[pg.metodo] = { monto: 0, refs: [], items: [] });
+      const g = grupos[pg.metodo] || (grupos[pg.metodo] = { monto: 0, comision: 0, refs: [], items: [] });
+      g.comision = Math.round((g.comision + (Number(pg.comision) || 0)) * 100) / 100;
       g.monto = Math.round((g.monto + (Number(pg.monto) || 0)) * 100) / 100;
       if (pg.ref) g.refs.push(pg.ref);
       (pg.items || []).forEach((it) => g.items.push(it));
     });
-    return Object.entries(grupos).filter(([, g]) => g.monto > 0).map(([met, g]) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + id + " — " + (sufijo ? sufijo + " (" + met + ")" : met), monto: g.monto, metodo: met, ref: g.refs.join(" / "), hora: hora(), comprobante: "PARC", items: g.items }));
+    return Object.entries(grupos).filter(([, g]) => g.monto > 0).map(([met, g]) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + id + " — " + (sufijo ? sufijo + " (" + met + ")" : met), monto: g.monto, metodo: met, ref: g.refs.join(" / "), comision: g.comision || 0, hora: hora(), comprobante: "PARC", items: g.items }));
   };
   const totalPagosACuenta = (m) => Math.round(((m && m.pagosPend) || []).reduce((a, pg) => a + (Number(pg.monto) || 0), 0) * 100) / 100;
   const confirmarPagoParcial = () => {
@@ -580,7 +584,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       nuevaMesa = { ...m, pagado: Math.round(((Number(m.pagado) || 0) + monto) * 100) / 100 };
     }
     if (monto > saldo + 0.01) { setToast({ tipo: "error", texto: "El pago (" + pesos(monto) + ") supera el saldo de la mesa (" + pesos(saldo) + ")." }); return; }
-    const pago = { monto, metodo: parcialMetodo, ref: parcialMetodo !== "Efectivo" ? parcialRef : "", hora: hora(), items, usuario: usuario ? usuario.nombre : "" };
+    const pago = { monto, metodo: parcialMetodo, ref: parcialMetodo !== "Efectivo" ? parcialRef : "", comision: comisionDe(parcialMetodo, monto, parcialNeto), hora: hora(), items, usuario: usuario ? usuario.nombre : "" };
     const pagosPend = [...(m.pagosPend || []), pago];
     const quedaSaldo = Math.max(0, saldo - monto);
     markMesaDirty(id);
@@ -598,7 +602,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       setMesas(nuevasMesas); postMesas(nuevasMesas);
       setToast({ tipo: "ok", texto: "Pago a cuenta de " + pesos(monto) + " (" + parcialMetodo + "). Saldo de la mesa " + id + ": " + pesos(quedaSaldo) + ". La venta se registra cuando se termina de pagar." });
     }
-    setShowCobroModal(null); setCobroMetodo(null); setParcialSel({}); setParcialMonto(""); setParcialPartes(""); setParcialRef("");
+    setShowCobroModal(null); setCobroMetodo(null); setParcialSel({}); setParcialMonto(""); setParcialPartes(""); setParcialRef(""); setParcialNeto("");
     setOrden(null); setVista("mapa");
   };
   const mesaEstado = (id) => { const m = mesas[id] || { lineas: [], enviado: [], despachado: [], bebidas: [] }; return (m.enviado || []).length ? "cocina" : ((m.despachado || []).length ? "despachado" : ((m.lineas || []).length || (m.bebidas || []).length ? "abierta" : "libre")); };
@@ -616,6 +620,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const medioDeVenta = (m) => { const s = String(m.metodo || "Efectivo"); return s.startsWith("Tarjeta") ? "Tarjetas" : s; };
   const esEgresoEfectivo = (m) => !m.metodo || m.metodo === "Efectivo";
+  // Comision de tarjeta / Mercado Pago: la venta queda por el total y se registra lo que realmente se recibe
+  const MEDIOS_COMISION = ["Tarjeta débito", "Tarjeta crédito", "Mercado Pago"];
+  const llevaComision = (met) => MEDIOS_COMISION.includes(met);
+  const comisionDe = (met, monto, neto) => { if (!llevaComision(met) || neto == null || String(neto).trim() === "") return 0; const n = numDec(neto); const b = Number(monto) || 0; if (!(n > 0) || n >= b) return 0; return r2(b - n); };
+  const campoNeto = (met, monto, neto, setNeto) => { if (!llevaComision(met)) return null; const com = comisionDe(met, monto, neto); const mayor = String(neto || "").trim() !== "" && numDec(neto) > (Number(monto) || 0) + 0.009; return (<div className="flex flex-col gap-1"><input className="campo-neto" style={inputStyle} type="text" inputMode="decimal" placeholder={"Recibido neto (si cobraron comisión) — total " + dinero(monto)} value={neto || ""} onChange={(e) => setNeto(e.target.value)} />{com > 0 && <div style={{ fontSize: 12, color: "#b7791f" }}>Comisión {dinero(com)} · se recibe {dinero(r2((Number(monto) || 0) - com))} · la venta queda por {dinero(monto)}</div>}{mayor && <div style={{ fontSize: 12, color: C.red }}>El neto no puede ser mayor al total: no se registra comisión.</div>}</div>); };
   const calcControlCierre = (cj) => {
     const movs = (cj && cj.movimientos) || []; const ar = (cj && cj.arqueo) || {}; const apertura = r2(cj && cj.apertura);
     const sum = (f) => r2(movs.filter(f).reduce((a, m) => a + (Number(m.monto) || 0), 0));
@@ -624,16 +633,18 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const ventasEf = sum((m) => m.tipo === "venta" && medioDeVenta(m) === "Efectivo");
     const ventasMedio = {}; MEDIOS_ELEC.forEach((md) => { ventasMedio[md] = sum((m) => m.tipo === "venta" && medioDeVenta(m) === md); });
     const ventasOtros = r2(ventasSinCC - ventasEf - MEDIOS_ELEC.reduce((a, md) => a + ventasMedio[md], 0));
+    const comMedio = {}; MEDIOS_ELEC.forEach((md) => { comMedio[md] = r2(movs.filter((m) => m.tipo === "venta" && medioDeVenta(m) === md).reduce((a, m) => a + (Number(m.comision) || 0), 0)); });
+    const comisiones = r2(movs.filter((m) => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + (Number(m.comision) || 0), 0));
     const egresosEf = sum((m) => m.tipo === "egreso" && esEgresoEfectivo(m));
     const egresosOtros = sum((m) => m.tipo === "egreso" && !esEgresoEfectivo(m));
     const billetes = r2(BILLETES_ARQ.reduce((a, b) => a + b * (Number(ar[b]) || 0), 0));
     const filas = [{ medio: "Efectivo", sistema: r2(apertura + ventasEf - egresosEf), contado: billetes, manual: true }];
-    MEDIOS_ELEC.forEach((md) => { const manual = ar[md] != null && ar[md] !== ""; filas.push({ medio: md, sistema: ventasMedio[md], contado: manual ? r2(ar[md]) : ventasMedio[md], manual }); });
+    MEDIOS_ELEC.forEach((md) => { const manual = ar[md] != null && ar[md] !== ""; const neto = r2(ventasMedio[md] - comMedio[md]); filas.push({ medio: md, sistema: neto, contado: manual ? r2(ar[md]) : neto, manual }); });
     if (Math.abs(ventasOtros) >= 0.01) filas.push({ medio: "Otros", sistema: ventasOtros, contado: ventasOtros, manual: false });
     filas.forEach((f) => { f.dif = r2(f.contado - f.sistema); f.cuadra = Math.abs(f.dif) < 0.01; });
     const esperado = r2(filas.reduce((a, f) => a + f.sistema, 0));
     const contado = r2(filas.reduce((a, f) => a + f.contado, 0));
-    return { apertura, ventasSinCC, ventasCC, ventasEf, ventasMedio, egresosEf, egresosOtros, egresos: r2(egresosEf + egresosOtros), billetes, medios: r2(contado - billetes), filas, esperado, contado, dif: r2(contado - esperado), cuadraTodo: filas.every((f) => f.cuadra), resultado: r2(ventasSinCC - egresosEf - egresosOtros) };
+    return { apertura, ventasSinCC, ventasCC, ventasEf, ventasMedio, comMedio, comisiones, egresosEf, egresosOtros, egresos: r2(egresosEf + egresosOtros), billetes, medios: r2(contado - billetes), filas, esperado, contado, dif: r2(contado - esperado), cuadraTodo: filas.every((f) => f.cuadra), resultado: r2(ventasSinCC - comisiones - egresosEf - egresosOtros) };
   };
   // Arqueo final: deja grabados los montos de medios electronicos que se usaron en el control
   const arqueoConMedios = (cj) => { const k = calcControlCierre(cj); const ar = { ...((cj && cj.arqueo) || {}) }; MEDIOS_ELEC.forEach((md) => { const f = k.filas.find((x) => x.medio === md); ar[md] = f ? f.contado : 0; }); return ar; };
@@ -650,6 +661,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       { t: "Cuenta corriente: " + dinero(k.ventasCC), izq: true },
       { t: "Egresos efectivo: " + dinero(k.egresosEf), izq: true },
       { t: "Egresos transf/otros: " + dinero(k.egresosOtros), izq: true },
+      ...(k.comisiones > 0 ? [{ t: "Comisiones tarjeta/MP: " + dinero(k.comisiones), izq: true }] : []),
       { t: "Resultado turno: " + dinero(k.resultado), izq: true, bold: true },
       { t: "", rayita: true },
       { t: "CONTROL POR MEDIO DE PAGO", izq: true, bold: true },
@@ -769,7 +781,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     if (!tel) { setToast({ tipo: "error", texto: "Ingresá un teléfono" }); return; }
     setToast({ tipo: "ok", texto: "Generando comprobante y enviando por WhatsApp..." });
     const fallback = function() {
-      var tipo = showComprobanteModal.afip ? ("Factura B CAE: " + showComprobanteModal.afip.cae) : "Factura X";
+      var tipo = showComprobanteModal.afip ? ("Factura C CAE: " + showComprobanteModal.afip.cae) : "Factura X";
       var tot = pesos(showComprobanteModal.total);
       var met = showComprobanteModal.metodo;
       var msg = encodeURIComponent("Comprobante " + tipo + "\nTotal: " + tot + "\nMetodo: " + met + "\nGracias por su compra");
@@ -812,7 +824,8 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const clienteMesa = mesas[id]?.datos?.cliente || "";
     const itemsCobro = [...(mesas[id]?.enviado || []), ...(mesas[id]?.lineas || []), ...(mesas[id]?.despachado || []), ...(mesas[id]?.bebidas || [])].map((l) => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 }));
     const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + (clienteMesa ? " — " + clienteMesa : ""), monto: total, metodo, ref, hora: hora(), comprobante: numComp, items: itemsCobro };
-    if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
+    { const com = comisionDe(metodo, total, cobroNeto); if (com > 0) mov.comision = com; }
+    if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FC"; }
     const nuevaCaja = { ...caja, movimientos: [...caja.movimientos, mov, ...movsDePagosACuenta(id, mesas[id]?.pagosPend, "pagos a cuenta")] };
     const nuevasMesas = { ...mesas, [id]: { cobradaTs: Date.now(), lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
     setCaja(nuevaCaja);
@@ -890,10 +903,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
         const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
         setFacturaXNum((n) => n + 1);
         const mov = { id: movId, tipo: "venta", concepto: "Delivery: " + found.cliente, monto: found.total, metodo: metodoPago || "Efectivo", ref: ref || "", hora: hora(), comprobante: numComp, items: (found.items || []).map((it) => ({ nombre: it.nombre || "Item", cant: it.cant || 1, precio: it.precio || 0 })) };
-        if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FB"; }
+        { const com = comisionDe(mov.metodo, mov.monto, cobroNeto); if (com > 0) mov.comision = com; }
+        if (afipResult && afipResult.cae) { mov.cae = afipResult.cae; mov.caeVto = afipResult.vencimiento; mov.afipCbte = afipResult.cbteNro; mov.afipTipo = "FC"; }
         let movsNuevos = [mov];
         if (Array.isArray(pagosMixtos) && pagosMixtos.length) {
-          movsNuevos = pagosMixtos.map((pg, i) => ({ ...mov, id: i === 0 ? movId : movId + "-" + (i + 1), concepto: "Delivery: " + found.cliente + " — " + pg.metodo, monto: pg.monto, metodo: pg.metodo, ref: pg.ref || "", comprobante: numComp + " MIX" }));
+          movsNuevos = pagosMixtos.map((pg, i) => ({ ...mov, id: i === 0 ? movId : movId + "-" + (i + 1), concepto: "Delivery: " + found.cliente + " — " + pg.metodo, monto: pg.monto, metodo: pg.metodo, ref: pg.ref || "", comision: Number(pg.comision) || 0, comprobante: numComp + " MIX" }));
         }
         const nuevaCaja = { ...caja, movimientos: [...movimientos, ...movsNuevos] };
         setCaja(nuevaCaja);
@@ -906,6 +920,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     setTimeout(() => entregarDeliveryRef.current.delete(id), 2000);
   };
   const [showPagoDelivery, setShowPagoDelivery] = useState(null);
+  const [afipCfg, setAfipCfg] = useState(null);
+  const [afipForm, setAfipForm] = useState({ modo: "homologacion", pv: "", clave: "" });
+  React.useEffect(() => { if (configModal !== "afip") return; fetch(serverUrl + "/api/afip/config").then((r) => r.json()).then((d) => { if (d && d.ok) { setAfipCfg(d); setAfipForm({ modo: d.modo, pv: String(d.puntoVenta), clave: "" }); } }).catch(() => {}); }, [configModal]);
+  // El neto recibido (comision de tarjeta / Mercado Pago) se limpia al cambiar de cobro o de medio
+  React.useEffect(() => { setCobroNeto(""); }, [showCobroModal && showCobroModal.id, cobroMetodo, showPagoDelivery && showPagoDelivery.id, showPagoDelivery && showPagoDelivery._metodoSeleccionado]);
    const [showAddItemDelivery, setShowAddItemDelivery] = useState(null);
    const [verDelivery, setVerDelivery] = useState(null);
    const [showEspecial, setShowEspecial] = useState(null);
@@ -1559,8 +1578,10 @@ const cancelarDelivery = (d) => {
       { t: "", rayita: true }
     ];
     if (m.afip) {
-      l.push({ t: "FACTURA B", bold: true });
-      l.push({ t: "PV: 0002 · Nº " + String(m.afip.cbteNro || facturaXNum - 1).padStart(8, "0") });
+      l.push({ t: "FACTURA C", bold: true });
+      l.push({ t: "PV: " + String(m.afip.ptoVenta || 2).padStart(4, "0") + " · Nº " + String(m.afip.cbteNro || facturaXNum - 1).padStart(8, "0") });
+      l.push({ t: "Responsable Monotributo · Consumidor Final" });
+      if (m.afip.produccion === false) l.push({ t: "PRUEBA - SIN VALIDEZ FISCAL", bold: true });
       l.push({ t: "", rayita: true });
     }
     if (m.cliente) l.push({ t: "Cliente: " + m.cliente, izq: true, bold: true });
@@ -2228,7 +2249,8 @@ const cancelarDelivery = (d) => {
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-4 text-sm" style={{ color: C.muted }}>
                       <span>CUIT: <strong style={{ color: C.text }}>27-21341447-5</strong></span>
-                      <span>Punto venta: <strong style={{ color: C.text }}>2</strong></span>
+                      <span>Punto venta: <strong style={{ color: C.text }}>{afipCfg ? afipCfg.puntoVenta : "…"}</strong></span>
+                      <span>Comprobante: <strong style={{ color: C.text }}>Factura C</strong></span>
                       <span>Categoría: <strong style={{ color: C.text }}>Monotributo</strong></span>
                     </div>
                     <div className="flex items-center gap-4 text-sm" style={{ color: C.muted }}>
@@ -2237,10 +2259,29 @@ const cancelarDelivery = (d) => {
                     </div>
                     <div><label style={lbl}>Access Token (AfipSDK)</label><input value={config.afipAccessToken || ""} onChange={(e) => setConfig((c) => ({ ...c, afipAccessToken: e.target.value }))} placeholder="Token de app.afipsdk.com" style={inputStyle} /><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se guarda en el servidor y se comparte en todos los equipos. No se pierde al cambiar de navegador.</div></div>
                     <div className="flex gap-2"><button onClick={async () => { try { if (!config.afipAccessToken || config.afipAccessToken.trim().length < 10) { setToast({ tipo: "error", texto: "Pegá el token primero." }); return; } const r = await fetch(serverUrl + "/api/afip/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken.trim() }) }); const d = await r.json(); if (d.ok) { setToast({ tipo: "ok", texto: "Token AFIP guardado en el servidor." }); } else { setToast({ tipo: "error", texto: "Error: " + d.error }); } } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><CheckCircle2 size={15} /> Guardar token AFIP</button><button onClick={async () => { try { setToast({ tipo: "ok", texto: "Verificando conexión con AFIP..." }); const r = await fetch(serverUrl + "/api/afip/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken || "" }) }); const d = await r.json(); if (d.ok) { setToast({ tipo: "ok", texto: d.mensaje }); } else { setToast({ tipo: "error", texto: "Error AFIP: " + d.mensaje }); } } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><RefreshCw size={15} /> Verificar conexión AFIP</button></div>
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
-                      <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
-                      <span style={{ fontSize: 12, color: C.muted }}>Homologación (pruebas). Los CAE son válidos solo en el ambiente de prueba de AFIP.</span>
-                    </div>
+                    {(!afipCfg || afipCfg.modo !== "produccion") ? (
+                      <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
+                        <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
+                        <span style={{ fontSize: 12, color: C.muted }}>Modo PRUEBA (homologación). Los CAE son válidos solo en el ambiente de prueba de AFIP: las facturas no tienen validez fiscal.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.green + "18", border: "1px solid " + C.green }}>
+                        <span style={{ fontSize: 12, color: C.text }}><b>Modo REAL.</b> Las facturas se emiten de verdad en ARCA (Factura C, punto de venta {afipCfg.puntoVenta}).</span>
+                      </div>
+                    )}
+                    {usuario && usuario.rol === "admin" && (
+                      <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: C.base, border: "1px solid " + C.border }}>
+                        <div style={{ fontWeight: 800, fontSize: 13 }}>Modo de facturación</div>
+                        <div className="grid grid-cols-2 gap-2">{[["homologacion", "Prueba"], ["produccion", "Real"]].map(([v, t]) => (
+                          <button key={v} onClick={() => setAfipForm((f) => ({ ...f, modo: v }))} className="py-2 rounded-lg text-sm font-semibold" style={{ background: afipForm.modo === v ? (v === "produccion" ? C.red : C.green) : C.raised, color: afipForm.modo === v ? "#fff" : C.text, border: "1px solid " + C.border }}>{t}</button>
+                        ))}</div>
+                        <input style={inputStyle} type="text" inputMode="numeric" placeholder="Punto de venta (número habilitado en ARCA para web services)" value={afipForm.pv} onChange={(e) => setAfipForm((f) => ({ ...f, pv: e.target.value.replace(/[^0-9]/g, "") }))} />
+                        {afipForm.modo === "produccion" && afipCfg && !afipCfg.certProduccion && <div style={{ fontSize: 12, color: C.red }}>Falta el certificado de producción en el servidor (certificado-produccion.crt y privada-produccion.key). Sin eso ARCA rechaza las facturas.</div>}
+                        {afipForm.modo === "produccion" && <div style={{ fontSize: 12, color: C.red }}>En modo real cada "Factura Electrónica" queda emitida en ARCA a nombre del local y no se puede borrar (solo anular con nota de crédito).</div>}
+                        <input style={inputStyle} type="password" placeholder="Clave de administrador" value={afipForm.clave} onChange={(e) => setAfipForm((f) => ({ ...f, clave: e.target.value }))} />
+                        <button onClick={async () => { try { const r = await fetch(serverUrl + "/api/afip/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modo: afipForm.modo, puntoVenta: afipForm.pv, clave: afipForm.clave, usuario: usuario ? usuario.nombre : "" }) }); const d = await r.json(); if (!d.ok) { setToast({ tipo: "error", texto: d.error || "No se pudo guardar." }); return; } setAfipCfg((c) => ({ ...(c || {}), modo: d.modo, puntoVenta: d.puntoVenta })); setAfipForm((f) => ({ ...f, clave: "" })); setToast({ tipo: "ok", texto: "Facturación en modo " + (d.modo === "produccion" ? "REAL" : "PRUEBA") + ", punto de venta " + d.puntoVenta + "." }); } catch { setToast({ tipo: "error", texto: "Error de conexión con el servidor." }); } }} className="w-full py-2 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff" }}>Guardar modo de facturación</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2633,6 +2674,7 @@ const cancelarDelivery = (d) => {
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Ventas (sin cuenta corriente)</span><span style={{ color: C.green }}>{dinero(controlCaja.ventasSinCC)}</span></div>
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos en efectivo</span><span style={{ color: C.red }}>{dinero(controlCaja.egresosEf)}</span></div>
                     {controlCaja.egresosOtros > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos por transferencia/otro <span style={{ color: C.muted, fontSize: 11 }}>(no salen de caja)</span></span><span style={{ color: C.muted }}>{dinero(controlCaja.egresosOtros)}</span></div>}
+                    {controlCaja.comisiones > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Comisiones tarjeta / Mercado Pago <span style={{ color: C.muted, fontSize: 11 }}>(no entran a la cuenta)</span></span><span style={{ color: C.red }}>{dinero(controlCaja.comisiones)}</span></div>}
                     <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
                     <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado (efectivo + medios)</span><span style={{ fontWeight: 800, color: C.text }}>{dinero(controlCaja.esperado)}</span></div>
                   </div>
@@ -2662,7 +2704,7 @@ const cancelarDelivery = (d) => {
                       <span style={{ fontSize: 12, color: manual ? "#b7791f" : C.muted, minWidth: 80, textAlign: "right", fontWeight: manual ? 700 : 400 }}>{dinero(f.contado)}{manual ? " ✎" : ""}</span>
                     </div>
                   ); })}
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Transferencias, Mercado Pago y tarjetas se toman <b>automáticamente</b> de las ventas registradas. Escribí un monto solo si lo que entró es distinto: vas a tener que explicar el motivo.</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Transferencias, Mercado Pago y tarjetas se toman <b>automáticamente</b> de las ventas registradas (lo recibido, ya descontadas las comisiones). Escribí un monto solo si lo que entró es distinto: vas a tener que explicar el motivo.</div>
                   {MEDIOS_ELEC.some((md) => caja.arqueo?.[md] != null && caja.arqueo?.[md] !== "") && <button onClick={() => setCaja((c) => { const ar = { ...(c.arqueo || {}) }; MEDIOS_ELEC.forEach((md) => { delete ar[md]; }); return { ...c, arqueo: ar }; })} className="w-full py-2 rounded-lg text-xs font-semibold mt-1" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Volver a los montos del sistema</button>}
 
                   <div className="mt-3 flex flex-col gap-1 rounded-lg p-3" style={{ background: C.base, fontSize: 13 }}>
@@ -2670,7 +2712,7 @@ const cancelarDelivery = (d) => {
                     <div className="flex justify-between"><span>Total medios electrónicos</span><span style={{ fontWeight: 800, color: C.text }}>{dinero(controlCaja.medios)}</span></div>
                     <div className="flex justify-between"><span>Cuenta corriente (no suma)</span><span style={{ fontWeight: 800, color: C.muted }}>{dinero(controlCaja.ventasCC)}</span></div>
                     <div className="flex justify-between"><span>Egresos (todos)</span><span style={{ fontWeight: 800, color: C.red }}>{dinero(controlCaja.egresos)}</span></div>
-                    <div className="flex justify-between" style={{ borderTop: "1px solid " + C.border, paddingTop: 4, marginTop: 2 }}><span style={{ fontWeight: 700 }}>Resultado del turno (ventas sin CC − egresos)</span><span style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{dinero(controlCaja.resultado)}</span></div>
+                    <div className="flex justify-between" style={{ borderTop: "1px solid " + C.border, paddingTop: 4, marginTop: 2 }}><span style={{ fontWeight: 700 }}>Resultado del turno (ventas sin CC − {controlCaja.comisiones > 0 ? "comisiones − " : ""}egresos)</span><span style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{dinero(controlCaja.resultado)}</span></div>
                   </div>
 
                   {/* Control por medio de pago: sistema vs. contado */}
@@ -2890,7 +2932,7 @@ const cancelarDelivery = (d) => {
                   </button>
                 ))}</div>
                  <button onClick={() => { setCobroMetodo("Mixto"); setCobroMixto([{ metodo: "Efectivo", monto: "", ref: "" }, { metodo: "Transferencia", monto: "", ref: "" }]); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Pago mixto (varios métodos)</button>
-                 <button onClick={() => { setCobroMetodo("Parcial"); setParcialModo("productos"); setParcialSel({}); setParcialMonto(""); setParcialPartes(""); setParcialMetodo("Efectivo"); setParcialRef(""); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Pago parcial (dividir la cuenta)</button>
+                 <button onClick={() => { setCobroMetodo("Parcial"); setParcialModo("productos"); setParcialSel({}); setParcialMonto(""); setParcialPartes(""); setParcialMetodo("Efectivo"); setParcialRef(""); setParcialNeto(""); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Pago parcial (dividir la cuenta)</button>
               </>
 ) : cobroMetodo === "Parcial" ? (() => {
   const idM = showCobroModal.id; const grupos = itemsMesaAgrupados(idM); const saldo = mesaTotal(idM);
@@ -2928,6 +2970,7 @@ const cancelarDelivery = (d) => {
       <button key={mm} onClick={() => setParcialMetodo(mm)} className="py-1.5 rounded-lg text-xs font-semibold" style={{ background: parcialMetodo === mm ? C.green : C.base, color: parcialMetodo === mm ? "#fff" : C.text, border: "1px solid " + C.border }}>{mm}</button>
     ))}</div>
     {parcialMetodo !== "Efectivo" && <input style={inputStyle} placeholder="N° comprobante / referencia del pago" value={parcialRef} onChange={(e) => setParcialRef(e.target.value)} />}
+    {campoNeto(parcialMetodo, montoParcial, parcialNeto, setParcialNeto)}
     <div className="rounded-lg p-2 flex justify-between" style={{ background: C.base, fontSize: 13 }}><span>Paga ahora</span><span style={{ fontWeight: 800 }}>{pesos(montoParcial)}</span></div>
     <div className="rounded-lg p-2 flex justify-between" style={{ background: C.base, fontSize: 13 }}><span>Queda en la mesa</span><span style={{ fontWeight: 800, color: C.muted }}>{pesos(Math.max(0, saldo - montoParcial))}</span></div>
     <button onClick={confirmarPagoParcial} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Cobrar {pesos(montoParcial)}</button>
@@ -2945,17 +2988,18 @@ const cancelarDelivery = (d) => {
         <button onClick={() => setCobroMixto((prev) => prev.filter((_, i) => i !== idx))} className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red }}><X size={14} /></button>
       </div>
       {p.metodo !== "Efectivo" && <input style={{ ...inputStyle, marginTop: -4 }} placeholder={"N° comprobante / referencia (" + p.metodo + ")"} value={p.ref || ""} onChange={(e) => setCobroMixto((prev) => prev.map((x, i) => i === idx ? { ...x, ref: e.target.value } : x))} />}
+      {campoNeto(p.metodo, numDec(p.monto) || 0, p.neto, (v) => setCobroMixto((prev) => prev.map((x, i) => i === idx ? { ...x, neto: v } : x)))}
     </React.Fragment>))}
     <button onClick={() => setCobroMixto((prev) => [...prev, { metodo: "Efectivo", monto: "", ref: "" }])} className="w-full py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.muted }}>+ Agregar pago</button>
     <div className="rounded-lg p-2 flex justify-between" style={{ background: C.base, fontSize: 13 }}><span>Total pagado</span><span style={{ fontWeight: 800, color: Math.abs(cobroMixto.reduce((a, p) => a + (numDec(p.monto) || 0), 0) - showCobroModal.total) < 0.01 ? C.green : C.red }}>{dinero(cobroMixto.reduce((a, p) => a + (numDec(p.monto) || 0), 0))}</span></div>
     <div className="flex flex-col gap-2">
       {config.afipAccessToken && <button id="cobro-factura" onClick={async () => {
-        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "" })).filter((p) => p.monto > 0);
+        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "", comision: comisionDe(p.metodo, numDec(p.monto) || 0, p.neto) })).filter((p) => p.monto > 0);
         const suma = pagos.reduce((a, p) => a + p.monto, 0);
         if (Math.abs(suma - showCobroModal.total) > 0.01) { setToast({ tipo: "error", texto: "Los pagos deben sumar " + pesos(showCobroModal.total) + "." }); return; }
         setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null;
-        try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); }
-        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", hora: hora(), comprobante: "MIX" }));
+        try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); }
+        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", comision: p.comision || 0, hora: hora(), comprobante: "MIX" }));
         const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), ...movs, ...movsDePagosACuenta(showCobroModal.id, mesas[showCobroModal.id]?.pagosPend, "pagos a cuenta")] };
         const nuevasMesas = { ...mesas, [showCobroModal.id]: { cobradaTs: Date.now(), lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
         markMesaDirty(showCobroModal.id); setCaja(nuevaCaja); setMesas(nuevasMesas); postMesas(nuevasMesas); postAlServer(nuevaCaja, nuevasMesas, null);
@@ -2963,10 +3007,10 @@ const cancelarDelivery = (d) => {
         setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Mixto", afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) });
       }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
       <button id="cobro-remito" onClick={async () => {
-        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "" })).filter((p) => p.monto > 0);
+        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "", comision: comisionDe(p.metodo, numDec(p.monto) || 0, p.neto) })).filter((p) => p.monto > 0);
         const suma = pagos.reduce((a, p) => a + p.monto, 0);
         if (Math.abs(suma - showCobroModal.total) > 0.01) { setToast({ tipo: "error", texto: "Los pagos deben sumar " + pesos(showCobroModal.total) + "." }); return; }
-        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", hora: hora(), comprobante: "MIX" }));
+        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", comision: p.comision || 0, hora: hora(), comprobante: "MIX" }));
         const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), ...movs, ...movsDePagosACuenta(showCobroModal.id, mesas[showCobroModal.id]?.pagosPend, "pagos a cuenta")] };
         const nuevasMesas = { ...mesas, [showCobroModal.id]: { cobradaTs: Date.now(), lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
         markMesaDirty(showCobroModal.id); setCaja(nuevaCaja); setMesas(nuevasMesas); postMesas(nuevasMesas); postAlServer(nuevaCaja, nuevasMesas, null);
@@ -2975,10 +3019,10 @@ const cancelarDelivery = (d) => {
         imprimirTicket("facturacion", await conLogo(lineasComprobante(comp)));
       }} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
       <button id="cobro-sinticket" onClick={() => {
-        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "" })).filter((p) => p.monto > 0);
+        if (!puedeCobrar()) return; const pagos = cobroMixto.map((p) => ({ metodo: p.metodo, monto: numDec(p.monto) || 0, ref: p.metodo !== "Efectivo" ? (p.ref || "") : "", comision: comisionDe(p.metodo, numDec(p.monto) || 0, p.neto) })).filter((p) => p.monto > 0);
         const suma = pagos.reduce((a, p) => a + p.monto, 0);
         if (Math.abs(suma - showCobroModal.total) > 0.01) { setToast({ tipo: "error", texto: "Los pagos deben sumar " + pesos(showCobroModal.total) + "." }); return; }
-        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", hora: hora(), comprobante: "MIX" }));
+        const movs = pagos.map((p) => ({ id: uid(), tipo: "venta", concepto: "Mesa " + showCobroModal.id + " — " + p.metodo, monto: p.monto, metodo: p.metodo, ref: p.ref || "", comision: p.comision || 0, hora: hora(), comprobante: "MIX" }));
         const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), ...movs, ...movsDePagosACuenta(showCobroModal.id, mesas[showCobroModal.id]?.pagosPend, "pagos a cuenta")] };
         const nuevasMesas = { ...mesas, [showCobroModal.id]: { cobradaTs: Date.now(), lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } } };
         markMesaDirty(showCobroModal.id); setCaja(nuevaCaja); setMesas(nuevasMesas); postMesas(nuevasMesas); postAlServer(nuevaCaja, nuevasMesas, null);
@@ -2997,7 +3041,7 @@ const cancelarDelivery = (d) => {
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, "Efectivo", afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, "Efectivo", afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: "Efectivo", afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, "Efectivo", null); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, "Efectivo", null); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3015,8 +3059,9 @@ const cancelarDelivery = (d) => {
             ) : (cobroMetodo === "Transferencia" || cobroMetodo === "Tarjeta crédito" || cobroMetodo === "Tarjeta débito" || cobroMetodo === "Mercado Pago") ? (
               <div className="flex flex-col gap-3">
                 <input autoFocus style={inputStyle} placeholder="N° comprobante" value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
+                {campoNeto(cobroMetodo, mesaTotal(showCobroModal.id), cobroNeto, setCobroNeto)}
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, cobroMetodo, null); setCobroRef(""); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3024,7 +3069,7 @@ const cancelarDelivery = (d) => {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button id="cobro-factura" onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const allItems = showCobroModal.itemsCapturados || []; const items = allItems.map(l => { const p = prodById[l.pid]; return { nombre: p?.nombre || l.pid || "Item", cant: l.cant || 1, precio: p?.precio || 0 }; }); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: showCobroModal.clienteData || {} }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "Factura AFIP CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error conectando con AFIP" }); } confirmarCobro(showCobroModal.id, cobroMetodo, afipR, true); setShowComprobanteModal({ id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: afipR, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }); }} className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button id="cobro-remito" onClick={async () => { const comp = { id: showCobroModal.id, total: showCobroModal.total, cliente: showCobroModal.cliente || "", clienteData: showCobroModal.clienteData, metodo: cobroMetodo, afip: null, items: (showCobroModal.itemsCapturados || []).map(l => ({ nombre: prodById[l.pid]?.nombre || l.pid || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio || 0 })) }; confirmarCobro(showCobroModal.id, cobroMetodo, null); await imprimirTicket("facturacion", await conLogo(lineasComprobante(comp))); }} className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Remito X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                   <button id="cobro-sinticket" onClick={() => { confirmarCobro(showCobroModal.id, cobroMetodo); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3110,12 +3155,13 @@ const cancelarDelivery = (d) => {
                       <button onClick={() => setDelivMixto((prev) => prev.filter((_, i) => i !== idx))} className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: C.raised2, color: C.red }}><X size={14} /></button>
                     </div>
                     {pg.metodo !== "Efectivo" && <input style={inputStyle} placeholder="N° comprobante / referencia del pago" value={pg.ref || ""} onChange={(e) => setDelivMixto((prev) => prev.map((x, i) => i === idx ? { ...x, ref: e.target.value } : x))} />}
+                    {campoNeto(pg.metodo, numDec(pg.monto) || 0, pg.neto, (v) => setDelivMixto((prev) => prev.map((x, i) => i === idx ? { ...x, neto: v } : x)))}
                   </div>
                 ))}
                 <button onClick={() => setDelivMixto((prev) => [...prev, { metodo: "Efectivo", monto: "", ref: "" }])} className="w-full py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.muted }}>+ Agregar pago</button>
                 <div className="rounded-lg p-2 flex justify-between" style={{ background: C.base, fontSize: 13 }}><span>Total pagado</span><span style={{ fontWeight: 800, color: Math.abs(delivMixto.reduce((a, pg) => a + (numDec(pg.monto) || 0), 0) - showPagoDelivery.total) < 0.01 ? C.green : C.red }}>{dinero(delivMixto.reduce((a, pg) => a + (numDec(pg.monto) || 0), 0))}</span></div>
                 <button id="cobro-sinticket" onClick={() => {
-                  const pagos = delivMixto.map((pg) => ({ metodo: pg.metodo, monto: numDec(pg.monto) || 0, ref: pg.metodo !== "Efectivo" ? (pg.ref || "") : "" })).filter((pg) => pg.monto > 0);
+                  const pagos = delivMixto.map((pg) => ({ metodo: pg.metodo, monto: numDec(pg.monto) || 0, ref: pg.metodo !== "Efectivo" ? (pg.ref || "") : "", comision: comisionDe(pg.metodo, numDec(pg.monto) || 0, pg.neto) })).filter((pg) => pg.monto > 0);
                   const suma = pagos.reduce((a, pg) => a + pg.monto, 0);
                   if (Math.abs(suma - showPagoDelivery.total) > 0.01) { setToast({ tipo: "error", texto: "Los pagos deben sumar " + pesos(showPagoDelivery.total) + "." }); return; }
                   entregarDelivery(showPagoDelivery.id, "Mixto", null, null, pagos);
@@ -3132,7 +3178,7 @@ const cancelarDelivery = (d) => {
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, "Efectivo", null, afipR); setShowPagoDelivery(null); setCobroPago(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: "Efectivo", telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, "Efectivo", null, afipR); setShowPagoDelivery(null); setCobroPago(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: "Efectivo", telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button onClick={() => { entregarDelivery(showPagoDelivery.id, "Efectivo", null, null); setShowPagoDelivery(null); setCobroPago(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: "Efectivo", telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-remito" className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Recibo X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                    <button id="cobro-sinticket" onClick={() => { entregarDelivery(showPagoDelivery.id, "Efectivo", null, null); setShowPagoDelivery(null); setCobroPago(""); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3165,8 +3211,9 @@ const cancelarDelivery = (d) => {
             ) : (showPagoDelivery._metodoSeleccionado === "Transferencia" || showPagoDelivery._metodoSeleccionado === "Tarjeta crédito" || showPagoDelivery._metodoSeleccionado === "Tarjeta débito" || showPagoDelivery._metodoSeleccionado === "Mercado Pago") ? (
               <div className="flex flex-col gap-3">
                 <input autoFocus style={inputStyle} placeholder={showPagoDelivery._metodoSeleccionado === "Transferencia" ? "N° comprobante / operación" : "N° comprobante"} value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
+                {campoNeto(showPagoDelivery._metodoSeleccionado, showPagoDelivery.total, cobroNeto, setCobroNeto)}
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, afipR); setShowPagoDelivery(null); setCobroRef(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, afipR); setShowPagoDelivery(null); setCobroRef(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, null); setShowPagoDelivery(null); setCobroRef(""); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-remito" className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Recibo X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                    <button id="cobro-sinticket" onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, cobroRef, null); setShowPagoDelivery(null); setCobroRef(""); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3174,7 +3221,7 @@ const cancelarDelivery = (d) => {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
-                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 6, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, afipR); setShowPagoDelivery(null); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
+                  {config.afipAccessToken && <button onClick={async () => { setToast({ tipo: "ok", texto: "Generando factura AFIP..." }); let afipR = null; try { const items = (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })); const r = await fetch(serverUrl + "/api/afip/facturar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken, items, cbteTipo: 11, cliente: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" } }) }); const d = await r.json(); if (d.ok) { afipR = d; setToast({ tipo: "ok", texto: "CAE: " + d.cae }); } else { setToast({ tipo: "error", texto: "AFIP: " + d.error }); } } catch { setToast({ tipo: "error", texto: "Error AFIP" }); } entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, afipR); setShowPagoDelivery(null); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: afipR, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-factura" className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2" style={{ background: C.green, color: "#fff" }}><FileText size={16} /> Factura Electrónica <span style={{ fontSize: 11, opacity: .8 }}>(F10)</span></button>}
                   <button onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, null); setShowPagoDelivery(null); setShowComprobanteModal({ id: showPagoDelivery.id, total: showPagoDelivery.total, metodo: showPagoDelivery._metodoSeleccionado, telefono: showPagoDelivery.telefono, remitente: showPagoDelivery.remitente || "", cliente: showPagoDelivery.cliente, clienteData: { nombre: showPagoDelivery.cliente || "", cuit: showPagoDelivery.cuit || "", direccion: showPagoDelivery.direccion || "", telefono: showPagoDelivery.telefono || "" }, afip: null, items: (showPagoDelivery.items || []).map(l => ({ nombre: l.nombre || "Item", cant: l.cant, precio: l.precio || 0 })) }); if (showPagoDelivery.telefono) abrirWA(showPagoDelivery.telefono, "¡Hola " + showPagoDelivery.cliente + "! Tu pedido de " + pesos(showPagoDelivery.total) + " ya fue entregado. ¡Gracias por tu compra!"); }} id="cobro-remito" className="w-full py-3 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Recibo X <span style={{ fontSize: 11, opacity: .8 }}>(F9)</span></button>
                    <button id="cobro-sinticket" onClick={() => { entregarDelivery(showPagoDelivery.id, showPagoDelivery._metodoSeleccionado, null, null); setShowPagoDelivery(null); }} className="w-full py-3 rounded-lg font-bold" style={{ background: C.muted2 || "#6b7a8f", color: "#fff" }}>Guardar sin ticket <span style={{ fontSize: 11, opacity: .8 }}>(F7)</span></button>
                 </div>
@@ -3212,8 +3259,10 @@ const cancelarDelivery = (d) => {
               {/* Factura info */}
               {showComprobanteModal.afip && (
                 <div style={{ textAlign: "center", marginBottom: 8, borderBottom: "1px dashed #ccc", paddingBottom: 8 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#000000" }}>FACTURA B</div>
-                  <div>PV: 0002 · Nº {String(showComprobanteModal.afip.cbteNro || facturaXNum - 1).padStart(8, "0")}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#000000" }}>FACTURA C</div>
+                  <div>PV: {String(showComprobanteModal.afip.ptoVenta || 2).padStart(4, "0")} · Nº {String(showComprobanteModal.afip.cbteNro || facturaXNum - 1).padStart(8, "0")}</div>
+                  <div style={{ fontSize: 11 }}>Responsable Monotributo · Consumidor Final</div>
+                  {showComprobanteModal.afip.produccion === false && <div style={{ fontWeight: 800, fontSize: 11 }}>PRUEBA - SIN VALIDEZ FISCAL</div>}
                 </div>
               )}
               {/* Items */}
@@ -3420,8 +3469,8 @@ const cancelarDelivery = (d) => {
             <div className="flex items-center justify-between mb-3"><h3 style={{ fontWeight: 800, fontSize: 18 }}>Ventas del turno</h3><button onClick={() => setShowVentasTurno(false)} style={{ color: C.muted }}><X size={18} /></button></div>
             {!cajaIniciada && <div className="rounded-lg p-2 mb-3 text-xs" style={{ background: C.red + "22", color: C.red }}>No hay caja abierta.</div>}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3" style={{ fontSize: 13 }}>
-              {[["Efectivo", k.ventasEf], ["Transferencia", k.ventasMedio["Transferencia"]], ["Mercado Pago", k.ventasMedio["Mercado Pago"]], ["Tarjetas", k.ventasMedio["Tarjetas"]], ["Cuenta corriente", k.ventasCC], ["Egresos", k.egresos]].map(([t, v]) => (
-                <div key={t} className="rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 11, color: C.muted }}>{t}</div><div style={{ fontWeight: 800, color: t === "Egresos" ? C.red : C.text }}>{dinero(v || 0)}</div></div>
+              {[["Efectivo", k.ventasEf], ["Transferencia", k.ventasMedio["Transferencia"]], ["Mercado Pago", k.ventasMedio["Mercado Pago"]], ["Tarjetas", k.ventasMedio["Tarjetas"]], ["Cuenta corriente", k.ventasCC], ["Egresos", k.egresos], ...(k.comisiones > 0 ? [["Comisiones", k.comisiones]] : [])].map(([t, v]) => (
+                <div key={t} className="rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 11, color: C.muted }}>{t}</div><div style={{ fontWeight: 800, color: t === "Egresos" || t === "Comisiones" ? C.red : C.text }}>{dinero(v || 0)}</div></div>
               ))}
             </div>
             {(() => { const pend = Object.entries(mesas).flatMap(([idm, m]) => ((m && m.pagosPend) || []).map((pg) => ({ ...pg, mesa: idm }))); if (!pend.length) return null; return <div className="rounded-lg p-2 mb-3" style={{ background: "#b7791f18", fontSize: 12 }}><div style={{ fontWeight: 800, marginBottom: 2 }}>Pagos a cuenta de mesas abiertas (todavía no son venta)</div>{pend.map((pg, i) => <div key={i}>Mesa {pg.mesa} · {pg.hora} · {pg.metodo}{pg.ref ? " (" + pg.ref + ")" : ""} · <b>{pesos(pg.monto)}</b></div>)}</div>; })()}
@@ -3432,11 +3481,12 @@ const cancelarDelivery = (d) => {
             {ventaACambiar && (
               <div className="rounded-lg p-3 mb-3" style={{ background: "#a0785a18", border: "1px solid #a0785a" }}>
                 <div style={{ fontWeight: 800, color: "#a0785a", marginBottom: 6 }}>Cambiar medio de pago</div>
-                <div style={{ fontSize: 13, marginBottom: 8 }}>{ventaACambiar.hora} · {ventaACambiar.concepto} · <b>{dinero(ventaACambiar.monto)}</b> · ahora: <b>{ventaACambiar.metodo}</b></div>
+                <div style={{ fontSize: 13, marginBottom: 8 }}>{ventaACambiar.hora} · {ventaACambiar.concepto} · <b>{dinero(ventaACambiar.monto)}</b> · ahora: <b>{ventaACambiar.metodo}</b>{Number(ventaACambiar.comision) > 0 ? " · comisión " + dinero(ventaACambiar.comision) : ""}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 mb-2">{["Efectivo", "Transferencia", "Mercado Pago", "Tarjeta débito", "Tarjeta crédito"].map((mm) => (
                   <button key={mm} onClick={() => setCambioMetodo(mm)} className="py-1.5 rounded-lg text-xs font-semibold" style={{ background: cambioMetodo === mm ? C.green : C.base, color: cambioMetodo === mm ? "#fff" : C.text, border: "1px solid " + C.border }}>{mm}</button>
                 ))}</div>
                 {cambioMetodo !== "Efectivo" && <input style={{ ...inputStyle, marginBottom: 6 }} placeholder="N° comprobante / referencia del pago" value={cambioRef} onChange={(e) => setCambioRef(e.target.value)} />}
+                {llevaComision(cambioMetodo) && <div style={{ marginBottom: 6 }}>{campoNeto(cambioMetodo, ventaACambiar.monto, cambioNeto, setCambioNeto)}</div>}
                 <input style={{ ...inputStyle, marginBottom: 6 }} type="password" placeholder="Clave de administrador" value={elimClave} onChange={(e) => setElimClave(e.target.value)} />
                 <input style={{ ...inputStyle, marginBottom: 8 }} placeholder="Motivo (obligatorio). Ej: dijo efectivo y pagó por transferencia" value={elimMotivo} onChange={(e) => setElimMotivo(e.target.value)} />
                 <div className="flex gap-2">
@@ -3444,15 +3494,15 @@ const cancelarDelivery = (d) => {
                   <button onClick={async () => {
                     if (!elimMotivo.trim()) { setToast({ tipo: "error", texto: "Escribí el motivo." }); return; }
                     try {
-                      const r = await fetch(serverUrl + "/api/caja/venta/cambiar-medio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ventaACambiar.id, metodo: cambioMetodo, ref: cambioMetodo !== "Efectivo" ? cambioRef : "", clave: elimClave, motivo: elimMotivo.trim(), usuario: usuario ? usuario.nombre : "" }) });
+                      const r = await fetch(serverUrl + "/api/caja/venta/cambiar-medio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ventaACambiar.id, metodo: cambioMetodo, ref: cambioMetodo !== "Efectivo" ? cambioRef : "", comision: comisionDe(cambioMetodo, ventaACambiar.monto, cambioNeto), clave: elimClave, motivo: elimMotivo.trim(), usuario: usuario ? usuario.nombre : "" }) });
                       const d = await r.json();
                       if (!d.ok) { setToast({ tipo: "error", texto: d.error || "No se pudo cambiar." }); return; }
                       const nv = d.mov || {};
-                      setCaja((cj) => { const nueva = { ...cj, movimientos: (cj.movimientos || []).map((m) => m.id === nv.id ? { ...m, metodo: nv.metodo, ref: nv.ref, concepto: nv.concepto, editado_ts: nv.editado_ts, cambios: nv.cambios } : m) }; cajaRef.current = nueva; return nueva; });
-                      setToast({ tipo: "ok", texto: "Medio de pago cambiado: " + ventaACambiar.metodo + " → " + cambioMetodo + " (" + dinero(ventaACambiar.monto) + ")." });
-                      setVentaACambiar(null); setElimClave(""); setElimMotivo(""); setCambioRef("");
+                      setCaja((cj) => { const nueva = { ...cj, movimientos: (cj.movimientos || []).map((m) => m.id === nv.id ? { ...m, metodo: nv.metodo, ref: nv.ref, concepto: nv.concepto, comision: Number(nv.comision) || 0, editado_ts: nv.editado_ts, cambios: nv.cambios } : m) }; cajaRef.current = nueva; return nueva; });
+                      setToast({ tipo: "ok", texto: (cambioMetodo === ventaACambiar.metodo ? "Venta corregida" : "Medio de pago cambiado: " + ventaACambiar.metodo + " → " + cambioMetodo) + " (" + dinero(ventaACambiar.monto) + (Number(nv.comision) > 0 ? ", comisión " + dinero(nv.comision) : "") + ")." });
+                      setVentaACambiar(null); setElimClave(""); setElimMotivo(""); setCambioRef(""); setCambioNeto("");
                     } catch { setToast({ tipo: "error", texto: "Error de conexión con el servidor." }); }
-                  }} className="flex-1 py-2 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff" }}>Cambiar a {cambioMetodo}</button>
+                  }} className="flex-1 py-2 rounded-lg font-bold" style={{ background: "#a0785a", color: "#fff" }}>{cambioMetodo === ventaACambiar.metodo ? "Guardar cambios" : "Cambiar a " + cambioMetodo}</button>
                 </div>
               </div>
             )}
@@ -3484,12 +3534,12 @@ const cancelarDelivery = (d) => {
                 <div key={m.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: C.base, fontSize: 13 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600 }}>{m.concepto}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.tipo === "egreso" ? "Egreso " + (esEgresoEfectivo(m) ? "en efectivo" : "por transferencia/otro") : (m.metodo || "Efectivo")}{m.ref ? " · Ref: " + m.ref : ""}{m.comprobante ? " · " + m.comprobante : ""}</div>
-                    {(() => { let cs = []; try { cs = JSON.parse(m.cambios || "[]"); } catch {} return cs.map((cb, i) => <div key={i} style={{ fontSize: 11, color: "#b7791f" }}>Medio cambiado: {cb.antes && cb.antes.metodo} → {cb.despues && cb.despues.metodo} — {cb.motivo}{cb.usuario ? " (" + cb.usuario + ")" : ""}</div>); })()}
+                    <div style={{ fontSize: 11, color: C.muted }}>{m.hora} · {m.tipo === "egreso" ? "Egreso " + (esEgresoEfectivo(m) ? "en efectivo" : "por transferencia/otro") : (m.metodo || "Efectivo")}{m.ref ? " · Ref: " + m.ref : ""}{m.comprobante ? " · " + m.comprobante : ""}{Number(m.comision) > 0 ? " · Comisión " + dinero(m.comision) + " (recibido " + dinero(r2(m.monto - m.comision)) + ")" : ""}</div>
+                    {(() => { let cs = []; try { cs = JSON.parse(m.cambios || "[]"); } catch {} return cs.map((cb, i) => <div key={i} style={{ fontSize: 11, color: "#b7791f" }}>{cb.antes && cb.despues && cb.antes.metodo === cb.despues.metodo ? "Corregida" : "Medio cambiado: " + (cb.antes && cb.antes.metodo) + " → " + (cb.despues && cb.despues.metodo)}{cb.despues && cb.despues.comision != null && (Number(cb.despues.comision) || 0) !== (Number(cb.antes && cb.antes.comision) || 0) ? " (comisión " + dinero(cb.despues.comision || 0) + ")" : ""} — {cb.motivo}{cb.usuario ? " (" + cb.usuario + ")" : ""}</div>); })()}
                   </div>
                   <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                     <span style={{ fontWeight: 800, color: m.tipo === "egreso" ? C.red : C.green }}>{m.tipo === "egreso" ? "−" : "+"}{dinero(m.monto)}</span>
-                    {m.tipo === "venta" && !esVisor && m.metodo !== "Cuenta corriente" && <button onClick={() => { setVentaAEliminar(null); setVentaACambiar(m); setCambioMetodo(m.metodo === "Efectivo" ? "Transferencia" : "Efectivo"); setCambioRef(""); setElimClave(""); setElimMotivo(""); }} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: "#a0785a", color: "#fff" }}>Cambiar medio</button>}
+                    {m.tipo === "venta" && !esVisor && m.metodo !== "Cuenta corriente" && <button onClick={() => { setVentaAEliminar(null); setVentaACambiar(m); setCambioMetodo(m.metodo === "Efectivo" ? "Transferencia" : (llevaComision(m.metodo) ? m.metodo : "Efectivo")); setCambioRef(m.ref || ""); setCambioNeto(Number(m.comision) > 0 ? String(r2(m.monto - m.comision)) : ""); setElimClave(""); setElimMotivo(""); }} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: "#a0785a", color: "#fff" }}>Cambiar medio</button>}
                     {m.tipo === "venta" && !esVisor && <button onClick={() => { setVentaACambiar(null); setVentaAEliminar(m); setElimClave(""); setElimMotivo(""); }} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: C.red, color: "#fff" }}>Eliminar</button>}
                   </div>
                 </div>
