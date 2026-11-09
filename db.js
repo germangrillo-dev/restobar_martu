@@ -177,6 +177,11 @@ function initDB() {
   try { getDB().exec("ALTER TABLE deliveries ADD COLUMN cuit TEXT DEFAULT ''"); } catch {}
   // Deliveries cancelados: se recuerdan para que ningun dispositivo los vuelva a subir
   try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_borrados (id TEXT PRIMARY KEY, ts INTEGER)"); } catch {}
+  // Registro de ventas eliminadas: quien, cuando, por que y que se borro
+  try { getDB().exec("ALTER TABLE movimientos_borrados ADD COLUMN detalle TEXT DEFAULT ''"); } catch {}
+  // Cambios de medio de pago: version del movimiento + historial de cambios
+  try { getDB().exec("ALTER TABLE movimientos ADD COLUMN editado_ts INTEGER DEFAULT 0"); } catch {}
+  try { getDB().exec("ALTER TABLE movimientos ADD COLUMN cambios TEXT DEFAULT ''"); } catch {}
   // Deliveries de cajas anteriores: se guardan aca al abrir una caja nueva (no se pierden)
   try { getDB().exec("CREATE TABLE IF NOT EXISTS deliveries_archivo (id TEXT PRIMARY KEY, datos TEXT, archivado_ts INTEGER)"); } catch {}
 try { getDB().exec("ALTER TABLE productos ADD COLUMN imagen TEXT DEFAULT ''"); } catch {}
@@ -280,23 +285,57 @@ function movimientoBorrado(id) {
 function addMovimiento(sesionId, mov) {
   if (!mov || !mov.id || movimientoBorrado(mov.id)) return;
   // Si el movimiento ya pertenece a otra caja (anterior), no se mueve a la caja actual
-  const existente = getDB().prepare("SELECT sesion_id FROM movimientos WHERE id = ?").get(mov.id);
+  const existente = getDB().prepare("SELECT * FROM movimientos WHERE id = ?").get(mov.id);
   if (existente && existente.sesion_id != sesionId) return;
+  // Si el movimiento fue corregido en el servidor (cambio de medio de pago), una pantalla con la version vieja no lo pisa
+  const tsExistente = (existente && Number(existente.editado_ts)) || 0;
+  if (tsExistente > (Number(mov.editado_ts) || 0)) return;
   getDB().prepare(
-    "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO movimientos (id, sesion_id, tipo, concepto, monto, metodo, hora, ref, usuario, comprobante, cae, cae_vto, afip_cbte, afip_tipo, editado_ts, cambios) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     mov.id, sesionId, mov.tipo, mov.concepto || "", mov.monto, mov.metodo || "",
     mov.hora || "", mov.ref || "", mov.usuario || "", mov.comprobante || "",
-    mov.cae || "", mov.caeVto || "", mov.afipCbte || null, mov.afipTipo || ""
+    mov.cae || "", mov.caeVto || "", mov.afipCbte || null, mov.afipTipo || "",
+    tsExistente || Number(mov.editado_ts) || 0, (existente && existente.cambios) || mov.cambios || ""
   );
 }
 
-function deleteMovimiento(id) {
+function deleteMovimiento(id, info) {
   if (!id) return false;
   const d = getDB();
+  const mov = d.prepare("SELECT * FROM movimientos WHERE id = ?").get(id);
   const r = d.prepare("DELETE FROM movimientos WHERE id = ?").run(id);
   d.prepare("INSERT OR IGNORE INTO movimientos_borrados (id, ts) VALUES (?, ?)").run(id, Date.now());
+  if (mov) {
+    const detalle = JSON.stringify({ sesion_id: mov.sesion_id, concepto: mov.concepto, monto: mov.monto, metodo: mov.metodo, hora: mov.hora, ref: mov.ref, tipo: mov.tipo, motivo: (info && info.motivo) || "", usuario: (info && info.usuario) || "", borradoTs: Date.now() });
+    try { d.prepare("UPDATE movimientos_borrados SET detalle = ? WHERE id = ?").run(detalle, id); } catch {}
+  }
   return r.changes > 0;
+}
+
+// Cambia el medio de pago de una venta y deja registrado el cambio
+function cambiarMedioMovimiento(id, info) {
+  const d = getDB();
+  const mov = d.prepare("SELECT * FROM movimientos WHERE id = ?").get(id);
+  if (!mov) return null;
+  let cambios = []; try { cambios = JSON.parse(mov.cambios || "[]"); } catch {}
+  const ts = Date.now();
+  cambios.push({ ts, antes: { metodo: mov.metodo, ref: mov.ref }, despues: { metodo: info.metodo, ref: info.ref || "" }, motivo: info.motivo || "", usuario: info.usuario || "" });
+  let concepto = mov.concepto || "";
+  if (mov.metodo && concepto.endsWith(" — " + mov.metodo)) concepto = concepto.slice(0, concepto.length - mov.metodo.length) + info.metodo;
+  d.prepare("UPDATE movimientos SET metodo = ?, ref = ?, concepto = ?, editado_ts = ?, cambios = ? WHERE id = ?").run(info.metodo, info.ref || "", concepto, ts, JSON.stringify(cambios), id);
+  return d.prepare("SELECT * FROM movimientos WHERE id = ?").get(id);
+}
+
+function getMovimientoById(id) {
+  return getDB().prepare("SELECT * FROM movimientos WHERE id = ?").get(id);
+}
+
+function getVentasEliminadas(sesionId) {
+  let rows = [];
+  try { rows = getDB().prepare("SELECT id, ts, detalle FROM movimientos_borrados WHERE detalle IS NOT NULL AND detalle != '' ORDER BY ts DESC").all(); } catch { return []; }
+  return rows.map((r) => { let det = {}; try { det = JSON.parse(r.detalle); } catch {} return { id: r.id, ts: r.ts, ...det }; })
+    .filter((x) => x.motivo && (sesionId == null || x.sesion_id == sesionId));
 }
 
 function updateSesionArqueo(sesionId, arqueo) {
@@ -363,10 +402,21 @@ function getMesas() {
   return mesas;
 }
 
+// Una mesa cobrada/limpiada lleva "cobradaTs". Si llega una version de la mesa anterior a ese cobro
+// (de una pantalla desactualizada), se ignora: asi una mesa ya cobrada no vuelve a aparecer.
+function mesaEsVieja(id) {
+  const row = getDB().prepare("SELECT estado FROM mesas WHERE id = ?").get(parseInt(id));
+  if (!row) return () => false;
+  let actual = {}; try { actual = JSON.parse(row.estado || "{}"); } catch {}
+  const tsActual = Number(actual.cobradaTs) || 0;
+  return (estado) => (Number(estado && estado.cobradaTs) || 0) < tsActual;
+}
+
 function saveMesas(mesas) {
   const stmt = getDB().prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)");
   const tx = getDB().transaction((obj) => {
     for (const [id, estado] of Object.entries(obj)) {
+      if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); continue; }
       stmt.run(parseInt(id), JSON.stringify(estado));
     }
   });
@@ -374,6 +424,7 @@ function saveMesas(mesas) {
 }
 
 function saveMesa(id, estado) {
+  if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); return; }
   getDB().prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)").run(parseInt(id), JSON.stringify(estado));
 }
 
@@ -604,7 +655,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, addMovimiento, deleteMovimiento, getMovimientosBorrados, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,

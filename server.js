@@ -445,6 +445,7 @@ app.get("/api/caja", (req, res) => {
 app.post("/api/caja", (req, res) => {
   try {
     const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos, abrirCaja } = req.body;
+    let sinCaja = false;
     console.log("[POST /api/caja] cajaIniciada:", cajaIniciada, "fecha:", caja?.fecha, "turno:", caja?.turno, "movimientos:", caja?.movimientos?.length || 0);
 
     // Caja
@@ -469,6 +470,7 @@ app.post("/api/caja", (req, res) => {
           } else {
             // Un dispositivo con datos viejos (caja ya cerrada) sigue sincronizando: no se abre una caja fantasma
             console.log("[POST /api/caja] Sync ignorado: no hay caja abierta y no es una apertura");
+            sinCaja = true;
           }
         }
         if (serverCaja) {
@@ -518,7 +520,7 @@ app.post("/api/caja", (req, res) => {
     if (facturaXNum !== undefined && typeof facturaXNum === "number" && facturaXNum > (db.getFacturaXNum() || 0)) db.setFacturaXNum(facturaXNum);
     if (productos !== undefined && Array.isArray(productos) && productos.length > 0) { PRODUCTOS = productos.map(p => ({ ...p, receta: p.receta || [] })); db.saveProductos(PRODUCTOS); Object.assign(prodPorRef, Object.fromEntries(PRODUCTOS.map(p => [p.ref, p]))); Object.assign(prodPorNombre, Object.fromEntries(PRODUCTOS.map(p => [p.nombre.toLowerCase(), p]))); }
 
-    res.json({ ok: true });
+    res.json({ ok: true, sinCaja });
   } catch (e) {
     console.error("[POST /api/caja] ERROR:", e.message);
     res.status(500).json({ ok: false, error: e.message });
@@ -577,6 +579,58 @@ app.post("/api/deliveries/delete", (req, res) => {
 });
 app.get("/api/deliveries/borrados", (req, res) => {
   try { res.json(db.getDeliveriesBorrados()); } catch (e) { res.json([]); }
+});
+
+// --- API: Eliminar una venta (requiere clave de administrador y motivo; queda registrado) ---
+app.post("/api/caja/venta/eliminar", (req, res) => {
+  try {
+    const { id, clave, motivo, usuario } = req.body || {};
+    if (!id || typeof id !== "string") return res.status(400).json({ ok: false, error: "Falta la venta." });
+    if (!motivo || !String(motivo).trim()) return res.status(400).json({ ok: false, error: "Escribí el motivo." });
+    let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin");
+    if (!admins.length) admins = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
+    if (!admins.some((u) => String(u.clave) === String(clave || ""))) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    const mov = db.getMovimientoById(id);
+    if (!mov) return res.status(404).json({ ok: false, error: "La venta no existe (puede que ya se haya eliminado)." });
+    if (mov.tipo !== "venta") return res.status(400).json({ ok: false, error: "Solo se pueden eliminar ventas desde aca." });
+    db.deleteMovimiento(id, { motivo: String(motivo).trim(), usuario: usuario || "" });
+    console.log("[VENTA ELIMINADA]", id, mov.concepto, mov.monto, "-", motivo, "-", usuario);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[VENTA ELIMINADA] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+// --- API: Cambiar el medio de pago de una venta (clave de administrador + motivo; queda registrado) ---
+app.post("/api/caja/venta/cambiar-medio", (req, res) => {
+  try {
+    const { id, metodo, ref, clave, motivo, usuario } = req.body || {};
+    const MEDIOS = ["Efectivo", "Transferencia", "Mercado Pago", "Tarjeta débito", "Tarjeta crédito"];
+    if (!id || typeof id !== "string") return res.status(400).json({ ok: false, error: "Falta la venta." });
+    if (!MEDIOS.includes(metodo)) return res.status(400).json({ ok: false, error: "Medio de pago inválido." });
+    if (!motivo || !String(motivo).trim()) return res.status(400).json({ ok: false, error: "Escribí el motivo." });
+    let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin");
+    if (!admins.length) admins = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
+    if (!admins.some((u) => String(u.clave) === String(clave || ""))) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    const mov = db.getMovimientoById(id);
+    if (!mov) return res.status(404).json({ ok: false, error: "La venta no existe." });
+    if (mov.tipo !== "venta") return res.status(400).json({ ok: false, error: "Solo se puede cambiar el medio de una venta." });
+    if (mov.metodo === "Cuenta corriente") return res.status(400).json({ ok: false, error: "Las ventas a cuenta corriente no se cambian desde aca." });
+    if (mov.metodo === metodo && (mov.ref || "") === (ref || "")) return res.status(400).json({ ok: false, error: "La venta ya tiene ese medio de pago." });
+    const nuevo = db.cambiarMedioMovimiento(id, { metodo, ref: ref || "", motivo: String(motivo).trim(), usuario: usuario || "" });
+    console.log("[VENTA MEDIO CAMBIADO]", id, mov.metodo, "->", metodo, "-", motivo, "-", usuario);
+    res.json({ ok: true, mov: nuevo });
+  } catch (e) {
+    console.error("[VENTA MEDIO] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+app.get("/api/caja/ventas-eliminadas", (req, res) => {
+  try {
+    const caja = db.getCaja();
+    const sesion = req.query.sesion != null ? req.query.sesion : (caja ? caja.id : -1);
+    res.json(db.getVentasEliminadas(sesion));
+  } catch (e) { res.json([]); }
 });
 
 // --- API: Borrar un movimiento de caja (ej: cobro duplicado) ---
@@ -669,6 +723,10 @@ app.post("/api/backups/restaurar", async (req, res) => {
 
 // --- API: Update ---
 const updater = require("./updater");
+// Version del archivo del sistema (para avisar a las pantallas que recarguen despues de una actualizacion)
+app.get("/api/html-version", (req, res) => {
+  try { const st = fs.statSync(path.join(__dirname, "marturestobar.html")); res.json({ v: Math.round(st.mtimeMs) + "-" + st.size }); } catch (e) { res.json({ v: null }); }
+});
 app.get("/api/version", (req, res) => {
   let version = {};
   try { version = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8")); } catch {}
