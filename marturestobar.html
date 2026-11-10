@@ -926,6 +926,10 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [showPagoDelivery, setShowPagoDelivery] = useState(null);
   const [afipCfg, setAfipCfg] = useState(null);
   const [afipForm, setAfipForm] = useState({ modo: "homologacion", pv: "", clave: "" });
+  const [waEst, setWaEst] = useState(null);
+  const [waClave, setWaClave] = useState("");
+  React.useEffect(() => { if (configModal !== "whatsapp") return; let vivo = true; const leer = () => fetch(serverUrl + "/api/whatsapp/estado").then((r) => r.json()).then((d) => { if (vivo && d && d.ok) setWaEst(d); }).catch(() => { if (vivo) setWaEst({ estado: "sinservidor" }); }); leer(); const t = setInterval(leer, 3000); return () => { vivo = false; clearInterval(t); }; }, [configModal]);
+  const waReconectar = async (nuevoQr) => { try { const r = await fetch(serverUrl + "/api/whatsapp/reconectar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave: waClave, nuevoQr }) }); const d = await r.json(); if (!d.ok) { setToast({ tipo: "error", texto: d.error || "No se pudo reconectar." }); return; } setWaClave(""); setWaEst((e) => ({ ...(e || {}), estado: "iniciando", qr: "", error: "" })); setToast({ tipo: "ok", texto: nuevoQr ? "Generando un QR nuevo... (puede tardar hasta 1 minuto)" : "Reconectando WhatsApp..." }); } catch { setToast({ tipo: "error", texto: "Error de conexión con el servidor." }); } };
   React.useEffect(() => { if (configModal !== "afip") return; fetch(serverUrl + "/api/afip/config").then((r) => r.json()).then((d) => { if (d && d.ok) { setAfipCfg(d); setAfipForm({ modo: d.modo, pv: String(d.puntoVenta), clave: "" }); } }).catch(() => {}); }, [configModal]);
   // El neto recibido (comision de tarjeta / Mercado Pago) se limpia al cambiar de cobro o de medio
   React.useEffect(() => { setCobroNeto(""); }, [showCobroModal && showCobroModal.id, cobroMetodo, showPagoDelivery && showPagoDelivery.id, showPagoDelivery && showPagoDelivery._metodoSeleccionado]);
@@ -2090,6 +2094,10 @@ const cancelarDelivery = (d) => {
                 <FileText size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>AFIP</span>
               </button>
+              <button onClick={() => setConfigModal("whatsapp")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
+                <Smartphone size={24} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>WhatsApp</span>
+              </button>
               <button onClick={() => setConfigModal("sistema")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                 <Download size={24} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Sistema</span>
@@ -2310,6 +2318,43 @@ const cancelarDelivery = (d) => {
               </div>
             )}
 
+            {configModal === "whatsapp" && (
+              <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>WhatsApp</h3>
+                    <button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+                  </div>
+                  {(() => {
+                    const e = waEst || { estado: "cargando" };
+                    const info = { cargando: ["Consultando...", C.muted], sinservidor: ["Sin conexión con el servidor", C.red], iniciando: ["Iniciando WhatsApp... (puede tardar hasta 1 minuto)", C.amber], autenticando: ["Vinculado, cargando los chats...", C.amber], qr: ["Falta vincular: escaneá el QR", C.amber], conectado: ["Conectado", C.green], desconectado: ["Desconectado", C.red], error: ["Con error", C.red] }[e.estado] || [e.estado, C.muted];
+                    return (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-2"><span style={{ width: 10, height: 10, borderRadius: 99, background: info[1], display: "inline-block" }} /><b style={{ color: info[1] }}>{info[0]}</b></div>
+                        {e.estado === "conectado" && <div style={{ fontSize: 13, color: C.muted }}>Número vinculado: <b style={{ color: C.text }}>{e.numero ? "+" + e.numero : "—"}</b>{e.nombre ? " (" + e.nombre + ")" : ""}</div>}
+                        {e.error && <div style={{ fontSize: 12, color: C.red }}>{e.error}</div>}
+                        {e.estado === "qr" && e.qr && (
+                          <div className="flex flex-col items-center gap-2">
+                            <img alt="QR WhatsApp" src={serverUrl + "/api/qr?size=280&data=" + encodeURIComponent(e.qr)} style={{ width: 240, height: 240, background: "#fff", padding: 8, borderRadius: 8 }} />
+                            <div style={{ fontSize: 12, color: C.muted, textAlign: "center" }}>En el celular del local: WhatsApp → ⋮ (tres puntitos) → <b>Dispositivos vinculados</b> → <b>Vincular un dispositivo</b> y apuntá a este QR. Se renueva solo cada unos segundos.</div>
+                          </div>
+                        )}
+                        {usuario && usuario.rol === "admin" && (
+                          <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: C.base, border: "1px solid " + C.border }}>
+                            <input style={inputStyle} type="password" placeholder="Clave de administrador" value={waClave} onChange={(ev) => setWaClave(ev.target.value)} />
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => waReconectar(false)} className="py-2 rounded-lg text-sm font-semibold" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>Reconectar</button>
+                              <button onClick={() => waReconectar(true)} className="py-2 rounded-lg text-sm font-semibold" style={{ background: "#25D366", color: "#fff" }}>Vincular de nuevo (QR)</button>
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted }}>"Reconectar" reinicia WhatsApp con la sesión guardada. "Vincular de nuevo" cierra la sesión y muestra un QR nuevo (para cambiar de celular o si se desvinculó).</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
             {configModal === "sistema" && (
               <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>

@@ -345,17 +345,40 @@ const parsearPedido = (texto) => {
 
 // --- WhatsApp Client ---
 let client = null;
+// Navegador para WhatsApp: Chrome o Edge instalados (si no, el que trae puppeteer)
+const NAVEGADOR_WA = [
+  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+].find((x) => { try { return fs.existsSync(x); } catch { return false; } });
 const WA_OPTS = {
-  puppeteer: { headless: true, executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", args: ["--no-sandbox"] },
+  puppeteer: { headless: true, ...(NAVEGADOR_WA ? { executablePath: NAVEGADOR_WA } : {}), args: ["--no-sandbox"] },
   authTimeoutMs: 120000,
 };
 const processedMsgIds = new Set();
+// Estado de WhatsApp visible desde el sistema (Config > WhatsApp): ya no depende de ver la consola
+const waEstado = { estado: "iniciando", qr: "", numero: "", nombre: "", error: "", desde: Date.now(), reintentos: 0 };
+const waSet = (cambios) => { Object.assign(waEstado, cambios, { desde: Date.now() }); };
+let waTimer = null;
+function waReintentar(segundos, borrarSesion) {
+  if (waTimer) return;
+  waTimer = setTimeout(async () => {
+    waTimer = null;
+    try { if (client) await client.destroy(); } catch {}
+    client = null;
+    if (borrarSesion) { try { fs.rmSync(".wwebjs_auth", { recursive: true, force: true }); } catch {} }
+    iniciarWhatsApp();
+  }, segundos * 1000);
+}
 
 function iniciarWhatsApp() {
   const authStrategy = new LocalAuth();
+  waSet({ estado: "iniciando", qr: "", error: "" });
   client = new Client({ authStrategy, ...WA_OPTS });
 
   client.on("qr", (qr) => {
+    waSet({ estado: "qr", qr, error: "" });
     console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log(" ESCANEÁ ESTE QR CON WHATSAPP EN TU CELU");
     console.log("   (Abrí WhatsApp > 3 puntitos > WhatsApp Web)");
@@ -365,8 +388,24 @@ function iniciarWhatsApp() {
     console.log("📌 También podés ver el QR en http://localhost:3456/qr\n");
   });
 
+  client.on("authenticated", () => { waSet({ estado: "autenticando", qr: "" }); try { fs.unlinkSync("qr.txt"); } catch {} });
   client.on("ready", () => {
+    let numero = "", nombre = "";
+    try { numero = (client.info && client.info.wid && client.info.wid.user) || ""; nombre = (client.info && client.info.pushname) || ""; } catch {}
+    waSet({ estado: "conectado", qr: "", error: "", numero, nombre, reintentos: 0 });
+    try { fs.unlinkSync("qr.txt"); } catch {}
     console.log("\n✅ WhatsApp conectado. Esperando mensajes...\n");
+  });
+  client.on("auth_failure", (m) => {
+    console.log("⚠️  WhatsApp: fallo la sesion (" + m + "). Hay que escanear el QR de nuevo.");
+    waSet({ estado: "error", error: "La sesión guardada no sirve más: hay que escanear el QR de nuevo.", qr: "" });
+    waReintentar(5, true);
+  });
+  client.on("disconnected", (motivo) => {
+    console.log("⚠️  WhatsApp desconectado:", motivo);
+    const cerroSesion = String(motivo || "").toUpperCase().includes("LOGOUT");
+    waSet({ estado: "desconectado", error: cerroSesion ? "Se cerró la sesión desde el celular: escaneá el QR de nuevo." : "Se desconectó (" + motivo + "). Reconectando...", qr: "", numero: "", nombre: "" });
+    waReintentar(10, cerroSesion);
   });
 
   client.on("message", async (msg) => {
@@ -409,14 +448,35 @@ function iniciarWhatsApp() {
   });
 
   client.initialize().catch(err => {
-    console.log(`⚠️  WhatsApp: ${err.message || "Error"}. Reintentando en 60 seg...`);
+    const msg = (err && err.message) || "Error";
+    console.log(`⚠️  WhatsApp: ${msg}. Reintentando en 60 seg...`);
     try { fs.unlinkSync("qr.txt"); } catch {}
-    if (!err.message.includes("already running")) {
-      try { fs.rmSync(".wwebjs_auth", { recursive: true, force: true }); } catch {}
-    }
-    setTimeout(iniciarWhatsApp, 60000);
+    waEstado.reintentos = (waEstado.reintentos || 0) + 1;
+    waSet({ estado: "error", error: msg + (NAVEGADOR_WA ? "" : " (no se encontró Chrome ni Edge instalado)"), qr: "" });
+    // Antes se borraba la sesion en cada error y obligaba a escanear de nuevo: ahora solo despues de varios fallos seguidos
+    waReintentar(60, waEstado.reintentos >= 3 && !msg.includes("already running"));
   });
 }
+
+app.get("/api/whatsapp/estado", (req, res) => {
+  res.json({ ok: true, estado: waEstado.estado, qr: waEstado.qr, numero: waEstado.numero, nombre: waEstado.nombre, error: waEstado.error, desde: waEstado.desde, navegador: NAVEGADOR_WA || "" });
+});
+app.post("/api/whatsapp/reconectar", (req, res) => {
+  try {
+    const { clave, nuevoQr } = req.body || {};
+    let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin");
+    if (!admins.length) admins = [{ clave: "1234" }];
+    if (!admins.some((u) => String(u.clave) === String(clave || ""))) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    console.log("[WA] Reconexion pedida desde el sistema" + (nuevoQr ? " (nuevo QR)" : ""));
+    waSet({ estado: "iniciando", qr: "", error: "", numero: "", nombre: "" });
+    (async () => {
+      if (nuevoQr) { try { if (client) await client.logout(); } catch {} }
+      if (waTimer) { clearTimeout(waTimer); waTimer = null; }
+      waReintentar(1, !!nuevoQr);
+    })();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 // --- API: Config ---
 app.get("/api/config", (req, res) => {
