@@ -420,22 +420,46 @@ function mesaEsVieja(id) {
   return (estado) => (Number(estado && estado.cobradaTs) || 0) < tsActual;
 }
 
+// Cada mesa guarda una version (_v) y quien la cambio por ultima vez (_d = pestaña/equipo).
+// Una pantalla solo puede guardar una mesa si parte de la version actual (o si fue ella la ultima en cambiarla):
+// asi una copia vieja de otra pantalla ya no pisa un pedido nuevo.
+function sinMeta(o) { const { _v, _d, ...r } = o || {}; return JSON.stringify(r); }
+function guardarMesaVersionada(id, estado, out) {
+  const d = getDB();
+  if (!estado || typeof estado !== "object") return;
+  const row = d.prepare("SELECT estado FROM mesas WHERE id = ?").get(parseInt(id));
+  let actual = null;
+  if (row) { try { actual = JSON.parse(row.estado || "{}"); } catch { actual = {}; } }
+  const vA = Number(actual && actual._v) || 0;
+  if (actual && sinMeta(actual) === sinMeta(estado)) { out.versiones[id] = vA; return; }
+  const tsA = Number(actual && actual.cobradaTs) || 0, tsN = Number(estado.cobradaTs) || 0;
+  let ok;
+  if (!actual) ok = true;
+  else if (tsN > tsA) ok = true;            // cobro / limpieza / pago a cuenta mas nuevo
+  else if (tsN < tsA) ok = false;           // version anterior a un cobro
+  else if (estado._v !== undefined && estado._v !== null && Number(estado._v) === vA) ok = true;
+  else if (estado._d && actual._d && estado._d === actual._d) ok = true;
+  else ok = false;
+  if (!ok) {
+    console.log("[MESAS] Rechazada copia desactualizada de mesa", id, "(base", estado._v, "- actual", vA + ")");
+    out.rechazadas.push(String(id)); out.versiones[id] = vA; return;
+  }
+  const nuevo = { ...estado, _v: vA + 1, _d: estado._d || "" };
+  d.prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)").run(parseInt(id), JSON.stringify(nuevo));
+  out.versiones[id] = vA + 1;
+}
+
 function saveMesas(mesas) {
-  const stmt = getDB().prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)");
-  const rechazadas = [];
-  const tx = getDB().transaction((obj) => {
-    for (const [id, estado] of Object.entries(obj)) {
-      if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); rechazadas.push(String(id)); continue; }
-      stmt.run(parseInt(id), JSON.stringify(estado));
-    }
-  });
+  const out = { rechazadas: [], versiones: {} };
+  const tx = getDB().transaction((obj) => { for (const [id, estado] of Object.entries(obj)) guardarMesaVersionada(id, estado, out); });
   tx(mesas);
-  return rechazadas;
+  return out;
 }
 
 function saveMesa(id, estado) {
-  if (mesaEsVieja(id)(estado)) { console.log("[MESAS] Ignorada version vieja de mesa", id); return; }
-  getDB().prepare("INSERT OR REPLACE INTO mesas (id, estado) VALUES (?, ?)").run(parseInt(id), JSON.stringify(estado));
+  const out = { rechazadas: [], versiones: {} };
+  guardarMesaVersionada(id, { ...estado, _d: (estado && estado._d) || "servidor", _v: (estado && estado._v !== undefined) ? estado._v : undefined }, out);
+  return out;
 }
 
 // ─── Deliveries ───

@@ -638,8 +638,8 @@ app.get("/api/mesas", (req, res) => {
 app.post("/api/mesas", (req, res) => {
   const mesas = req.body;
   if (!mesas || typeof mesas !== "object") return res.status(400).json({ error: "invalid" });
-  const rechazadas = db.saveMesas(mesas) || [];
-  res.json({ ok: true, rechazadas });
+  const r = db.saveMesas(mesas) || { rechazadas: [], versiones: {} };
+  res.json({ ok: true, rechazadas: r.rechazadas, versiones: r.versiones });
 });
 
 // --- API: Deliveries ---

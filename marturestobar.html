@@ -295,6 +295,10 @@ const METODOS_PAGO = ["Efectivo", "Tarjeta débito", "Tarjeta crédito", "Mercad
 const teclaNumero = (e) => (e.key >= "1" && e.key <= "5") ? Number(e.key) : 0;
 const badgeTecla = { fontSize: 11, fontWeight: 800, color: C.muted, background: C.raised2, border: "1px solid " + C.border, borderRadius: 5, padding: "1px 7px", lineHeight: 1.4, flexShrink: 0 };
 
+// Identifica esta pestaña: el servidor acepta cambios seguidos de una mesa de la misma pestaña aunque no haya llegado la confirmacion
+const DEV_ID = Math.random().toString(36).slice(2, 10);
+const mesaSinMeta = (v) => { const { _v, _d, ...r } = v || {}; return r; };
+
 function App() {
   const cargar = (key, def) => { try { const v = localStorage.getItem("elmo_" + key); return v ? JSON.parse(v) : def; } catch { return def; } };
   const mesasRef = React.useRef({}); const deliveriesRef = React.useRef([]);
@@ -302,12 +306,31 @@ function App() {
   const importedWAPedidosRef = React.useRef(new Set());
   const initialSyncDoneRef = React.useRef(false);
   const configRef = React.useRef(null);
-  const postMesas = (m) => { fetch(serverUrl + "/api/mesas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) })
+  // Version de cada mesa que esta pantalla vio en el servidor, y su contenido (para mandar solo lo que esta pantalla cambio)
+  const mesasVerRef = React.useRef({}); const mesasSrvRef = React.useRef({});
+  const anotarMesaServidor = (id, sm) => { mesasVerRef.current[id] = Number(sm && sm._v) || 0; mesasSrvRef.current[id] = JSON.stringify(mesaSinMeta(sm)); };
+  const postMesas = (m) => {
+    const env = {};
+    for (const [id, v] of Object.entries(m || {})) {
+      if (!v) continue;
+      const resto = mesaSinMeta(v);
+      if (JSON.stringify(resto) === mesasSrvRef.current[id]) continue; // igual a lo del servidor: no se manda
+      if (mesasSrvRef.current[id] === undefined && !dirtyMesasRef.current.has(String(id))) continue; // todavia no se leyo del servidor y esta pantalla no la toco
+      env[id] = { ...resto, _v: mesasVerRef.current[id] || 0, _d: DEV_ID };
+    }
+    if (!Object.keys(env).length) return;
+    fetch(serverUrl + "/api/mesas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(env) })
     .then((r) => r.json()).then((d) => {
-      const rech = (d && d.rechazadas) || [];
+      const rech = ((d && d.rechazadas) || []).map(String);
+      const vers = (d && d.versiones) || {};
+      for (const [id, ver] of Object.entries(vers)) {
+        if (rech.includes(String(id))) continue;
+        if ((Number(ver) || 0) >= (mesasVerRef.current[id] || 0)) { mesasVerRef.current[id] = Number(ver) || 0; if (env[id]) mesasSrvRef.current[id] = JSON.stringify(mesaSinMeta(env[id])); }
+      }
       if (!rech.length) return;
       rech.forEach((id) => { dirtyMesasRef.current.delete(String(id)); });
-      setToast({ tipo: "error", texto: "No se guardó la Mesa " + rech.join(", ") + ": se cobró o limpió en otra pantalla. Se actualizó con lo del servidor; revisá el pedido y cargalo de nuevo si falta algo." });
+      if (syncRef.current) syncRef.current();
+      setToast({ tipo: "error", texto: "No se guardó la Mesa " + rech.join(", ") + ": otra pantalla la cambió antes (cargó, cobró o limpió). Se actualizó con lo del servidor: revisá el pedido y cargá de nuevo lo que falte." });
     }).catch(() => console.warn("sync: fallo post mesas")); };
   const postDeliveries = (d) => { fetch(serverUrl + "/api/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) }).catch(() => console.warn("sync: fallo post deliveries")); };
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
@@ -315,7 +338,8 @@ function App() {
     const cfg = configRef.current || config;
     const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes, cuentaCorriente: cfg.cuentaCorriente, mesas: cfg.mesas } : undefined;
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
-    const payload = { caja: cajaVal, historialCierres, mesas: mesasLimpias, orden, config: configLiviano, facturaXNum, productos };
+    // Las mesas ya no viajan aca (cada pantalla mandaba su copia de TODAS las mesas y podia pisar pedidos de otra): van solo por /api/mesas
+    const payload = { caja: cajaVal, historialCierres, orden, config: configLiviano, facturaXNum, productos };
     // Catalogos: solo se mandan si esta pantalla los cambio (si son iguales a lo ultimo del servidor, no se reenvian)
     const cat = { insumos, costos, proveedores, usuarios };
     for (const [k, v] of Object.entries(cat)) { if (JSON.stringify(v) !== ultimoServidorRef.current[k]) payload[k] = v; }
@@ -1292,13 +1316,13 @@ const cancelarDelivery = (d) => {
             const local = m[id];
             // Si la mesa se cobro/limpio despues de la version que tiene esta pantalla, manda el servidor
             const tsL = (local && local.cobradaTs) || 0, tsS = (sm && sm.cobradaTs) || 0;
-            if (tsS > tsL) { m[id] = sm; dirtyMesasRef.current.delete(id); continue; }
+            if (tsS > tsL) { m[id] = sm; anotarMesaServidor(id, sm); dirtyMesasRef.current.delete(id); continue; }
             // Cambio local recien hecho (menos de 10 s): se espera a que el servidor lo confirme
             const pendiente = dirtyMesasRef.current.has(id) && (Date.now() - (dirtyDesdeRef.current[id] || 0)) < 10000;
             if (pendiente) continue;
             dirtyMesasRef.current.delete(id);
             // Fuera de eso, manda el servidor (asi todas las pantallas ven lo mismo)
-            m[id] = sm;
+            m[id] = sm; anotarMesaServidor(id, sm);
           }
           return m;
         });
