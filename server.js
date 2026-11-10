@@ -372,7 +372,21 @@ function waReintentar(segundos, borrarSesion) {
   }, segundos * 1000);
 }
 
+// Cierra el Chrome invisible de WhatsApp que pudo quedar de un arranque anterior del servidor
+// (al reiniciar se cierra node pero ese Chrome sigue vivo y no deja usar la sesion: "The browser is already running")
+function liberarNavegadorWA() {
+  if (process.platform !== "win32") return;
+  try {
+    require("child_process").execSync(
+      "powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'chrome.exe' -or $_.Name -eq 'msedge.exe') -and $_.CommandLine -like '*wwebjs_auth*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\"",
+      { stdio: "ignore", timeout: 20000, windowsHide: true }
+    );
+  } catch {}
+  for (const f of ["lockfile", "SingletonLock", "SingletonCookie", "SingletonSocket"]) { try { fs.rmSync(path.join(".wwebjs_auth", "session", f), { force: true }); } catch {} }
+}
+
 function iniciarWhatsApp() {
+  if (!client) liberarNavegadorWA();
   const authStrategy = new LocalAuth();
   waSet({ estado: "iniciando", qr: "", error: "" });
   client = new Client({ authStrategy, ...WA_OPTS });
@@ -454,7 +468,8 @@ function iniciarWhatsApp() {
     waEstado.reintentos = (waEstado.reintentos || 0) + 1;
     waSet({ estado: "error", error: msg + (NAVEGADOR_WA ? "" : " (no se encontró Chrome ni Edge instalado)"), qr: "" });
     // Antes se borraba la sesion en cada error y obligaba a escanear de nuevo: ahora solo despues de varios fallos seguidos
-    waReintentar(60, waEstado.reintentos >= 3 && !msg.includes("already running"));
+    if (msg.includes("already running")) { client = null; liberarNavegadorWA(); }
+    waReintentar(msg.includes("already running") ? 10 : 60, waEstado.reintentos >= 3 && !msg.includes("already running"));
   });
 }
 
