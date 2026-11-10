@@ -966,6 +966,8 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [ccClienteSel, setCcClienteSel] = useState("");
   const [ccMontoPago, setCcMontoPago] = useState("");
   const [ccConcepto, setCcConcepto] = useState("");
+  const [ccMedio, setCcMedio] = useState("Efectivo");
+  const [ccCarga, setCcCarga] = useState(null); // consumo a cargar en cuenta corriente: { items, q, libreNombre, libreMonto, fecha, nota }
   const despacharMesa = (id) => { markMesaDirty(id); const nuevasMesas = { ...mesas, [id]: { ...mesas[id], despachado: [...(mesas[id].despachado || []), ...mesas[id].enviado], enviado: [] } }; setMesas(nuevasMesas); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); postMesas(nuevasMesas); };
 
   // ABM Insumos
@@ -1025,17 +1027,18 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const ccEntries = (config.cuentaCorriente || []);
   const ccDeCliente = (clienteId) => ccEntries.filter((e) => e.clienteId === clienteId).sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "") || (a.id || "").localeCompare(b.id || ""));
   const saldoCliente = (clienteId) => ccDeCliente(clienteId).reduce((acc, e) => acc + (e.tipo === "cargo" ? e.monto : -e.monto), 0);
-  const cargoACuenta = (clienteId, monto, concepto) => {
+  const cargoACuenta = (clienteId, monto, concepto, extra) => {
     cajaDirtyUntilRef.current = Date.now() + 5000;
-    const entry = { id: uid(), clienteId, fecha: hoy(), tipo: "cargo", monto: +monto, concepto: concepto || "Cargo", saldo: 0 };
+    const entry = { id: uid(), clienteId, fecha: (extra && extra.fecha) || hoy(), tipo: "cargo", monto: +monto, concepto: concepto || "Cargo", saldo: 0, ...(extra && extra.items ? { items: extra.items } : {}), ...(extra && extra.nota ? { nota: extra.nota } : {}) };
     const nuevas = [...(config.cuentaCorriente || []), entry];
     configRef.current = { ...(configRef.current || config), cuentaCorriente: nuevas };
     setConfig((c) => ({ ...c, cuentaCorriente: nuevas }));
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { cuentaCorriente: nuevas } }) }).catch(() => {});
     return entry;
   };
-  const pagoACuenta = (clienteId, monto, concepto) => {
+  const pagoACuenta = (clienteId, monto, concepto, medio) => {
     cajaDirtyUntilRef.current = Date.now() + 5000;
+    const medioPago = medio || "Efectivo";
     const entry = { id: uid(), clienteId, fecha: hoy(), tipo: "pago", monto: +monto, concepto: concepto || "Pago", saldo: 0 };
     const nuevas = [...(config.cuentaCorriente || []), entry];
     configRef.current = { ...(configRef.current || config), cuentaCorriente: nuevas };
@@ -1043,11 +1046,35 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     // Also add caja movement
     const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
     setFacturaXNum((n) => n + 1);
-    const mov = { id: uid(), tipo: "venta", concepto: "Cobro CC: " + (config.clientes || []).find((c) => c.id === clienteId)?.nombre || "Cliente", monto: +monto, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: numComp };
-    const nuevaCaja = { ...caja, movimientos: [...(caja.movimientos || []), mov] };
+    // El pago de la deuda entra a la caja por el medio con que paga (antes quedaba como "Cuenta corriente" y no contaba en el cierre)
+    const mov = { id: uid(), tipo: "venta", concepto: "Cobro cuenta corriente: " + (((config.clientes || []).find((c) => c.id === clienteId) || {}).nombre || "Cliente"), monto: +monto, metodo: medioPago, ref: "", hora: hora(), comprobante: numComp };
+    const base = cajaRef.current || caja;
+    const nuevaCaja = { ...base, movimientos: [...(base.movimientos || []), mov] };
+    cajaRef.current = nuevaCaja;
     setCaja(nuevaCaja);
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { cuentaCorriente: nuevas }, caja: nuevaCaja }) }).catch(() => {});
     return entry;
+  };
+
+  // Cargar en cuenta corriente un consumo que ya se entrego y no se cargo (no va a cocina ni se imprime)
+  const cargarConsumoCC = (clienteId) => {
+    const cc = ccCarga || {};
+    const items = [...(cc.items || [])];
+    const libreMonto = numDec(cc.libreMonto);
+    if ((cc.libreNombre || "").trim() && libreMonto > 0) items.push({ nombre: cc.libreNombre.trim(), cant: 1, precio: libreMonto });
+    const total = Math.round(items.reduce((a, it) => a + (Number(it.precio) || 0) * (Number(it.cant) || 0), 0) * 100) / 100;
+    if (!items.length || !(total > 0)) { setToast({ tipo: "error", texto: "Agregá al menos un producto o un ítem con monto." }); return; }
+    if (!puedeCobrar()) return;
+    const cli = (config.clientes || []).find((c) => c.id === clienteId);
+    const detalle = items.map((it) => it.cant + "x " + it.nombre).join(", ");
+    const fecha = cc.fecha || hoy();
+    cargoACuenta(clienteId, total, "Consumo: " + detalle, { fecha, items, nota: (cc.nota || "").trim() });
+    const mov = { id: uid(), tipo: "venta", concepto: "Consumo cargado a cuenta corriente" + (cli ? " (" + cli.nombre + ")" : "") + (fecha !== hoy() ? " — del " + fecha.split("-").reverse().join("/") : ""), monto: total, metodo: "Cuenta corriente", ref: (cc.nota || "").trim(), hora: hora(), comprobante: "CC", items };
+    const base = cajaRef.current || caja;
+    const nuevaCaja = { ...base, movimientos: [...(base.movimientos || []), mov] };
+    cajaRef.current = nuevaCaja; setCaja(nuevaCaja); postAlServer(nuevaCaja, mesasRef.current, deliveriesRef.current);
+    setCcCarga(null);
+    setToast({ tipo: "ok", texto: "Consumo de " + pesos(total) + " cargado a la cuenta de " + (cli ? cli.nombre : "el cliente") + "." });
   };
 
   // ABM Productos
@@ -2520,11 +2547,11 @@ const cancelarDelivery = (d) => {
               let acum = 0;
               const rows = entries.map((e) => { acum += e.tipo === "cargo" ? e.monto : -e.monto; return { ...e, acum }; });
               return (
-                <div onMouseDown={cerrarSiFondo(() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div onMouseDown={cerrarSiFondo(() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); setCcCarga(null); })} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                   <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                     <div className="flex items-center justify-between mb-4">
                       <h3 style={{ fontWeight: 800, fontSize: 18 }}>Cuenta corriente — {cli ? cli.nombre : "Cliente"}</h3>
-                      <button onClick={() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); }} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+                      <button onClick={() => { setShowCuentaCorriente(null); setCcMontoPago(""); setCcConcepto(""); setCcCarga(null); }} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
                     </div>
                     <div style={{ textAlign: "center", marginBottom: 12, padding: 10, borderRadius: 8, background: saldo > 0 ? "#f8d7da" : saldo < 0 ? "#d4edda" : C.base }}>
                       <div style={{ fontSize: 12, color: C.muted }}>Saldo actual</div>
@@ -2544,7 +2571,7 @@ const cancelarDelivery = (d) => {
                           <div key={e.id} style={{ display: "flex", padding: "6px 10px", borderTop: "1px solid " + C.border, fontSize: 12 }}>
                             <div style={{ flex: 2 }}>
                               <div style={{ fontWeight: 600 }}>{e.concepto}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>{e.fecha}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>{(e.fecha || "").split("-").reverse().join("/")}{e.nota ? " · " + e.nota : ""}</div>
                             </div>
                             <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "—"}</span>
                             <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "—"}</span>
@@ -2553,8 +2580,55 @@ const cancelarDelivery = (d) => {
                         ))}
                       </div>
                     )}
+                    <div style={{ borderTop: "1px solid " + C.border, paddingTop: 12, marginBottom: 12 }}>
+                      {!ccCarga ? (
+                        !esVisor && <button onClick={() => setCcCarga({ items: [], q: "", libreNombre: "", libreMonto: "", fecha: hoy(), nota: "" })} className="w-full py-2.5 rounded-lg font-bold text-sm" style={{ background: C.raised2, border: "1px solid " + C.border, color: C.text }}>+ Cargar consumo (algo que ya se llevó y no se cargó)</button>
+                      ) : (() => {
+                        const cc = ccCarga;
+                        const q = (cc.q || "").trim().toLowerCase();
+                        const resultados = q ? productos.filter((p) => (p.nombre || "").toLowerCase().includes(q)).slice(0, 8) : [];
+                        const libre = numDec(cc.libreMonto) > 0 && (cc.libreNombre || "").trim() ? numDec(cc.libreMonto) : 0;
+                        const total = (cc.items || []).reduce((a, it) => a + it.precio * it.cant, 0) + libre;
+                        const setCant = (i, d) => setCcCarga((x) => ({ ...x, items: x.items.map((it, j) => j === i ? { ...it, cant: it.cant + d } : it).filter((it) => it.cant > 0) }));
+                        return (
+                          <div className="flex flex-col gap-2">
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>Cargar consumo a la cuenta</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>No se manda a cocina ni se imprime: es para registrar algo que ya se entregó.</div>
+                            <input className="cc-buscar" style={inputStyle} placeholder="Buscar producto de la carta..." value={cc.q} onChange={(e) => setCcCarga((x) => ({ ...x, q: e.target.value }))} />
+                            {resultados.length > 0 && <div className="flex flex-col gap-1">{resultados.map((p) => (
+                              <button key={p.id} onClick={() => setCcCarga((x) => { const ex = x.items.findIndex((it) => it.pid === p.id); const items = ex >= 0 ? x.items.map((it, j) => j === ex ? { ...it, cant: it.cant + 1 } : it) : [...x.items, { pid: p.id, nombre: p.nombre, precio: Number(p.precio) || 0, cant: 1 }]; return { ...x, items, q: "" }; })} className="flex justify-between px-3 py-2 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text, textAlign: "left" }}><span>{p.nombre}</span><span style={{ color: C.muted }}>{pesos(p.precio)}</span></button>
+                            ))}</div>}
+                            {(cc.items || []).map((it, i) => (
+                              <div key={i} className="flex items-center gap-2" style={{ fontSize: 13 }}>
+                                <button onClick={() => setCant(i, -1)} style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid " + C.border, background: C.raised2 }}>−</button>
+                                <b style={{ minWidth: 18, textAlign: "center" }}>{it.cant}</b>
+                                <button onClick={() => setCant(i, 1)} style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid " + C.border, background: C.raised2 }}>+</button>
+                                <span style={{ flex: 1 }}>{it.nombre}</span><span>{pesos(it.precio * it.cant)}</span>
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <input style={{ ...inputStyle, flex: 2 }} placeholder="Otro ítem (no está en la carta)" value={cc.libreNombre} onChange={(e) => setCcCarga((x) => ({ ...x, libreNombre: e.target.value }))} />
+                              <input style={{ ...inputStyle, flex: 1 }} type="text" inputMode="decimal" placeholder="Monto" value={cc.libreMonto} onChange={(e) => setCcCarga((x) => ({ ...x, libreMonto: e.target.value }))} />
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <label style={{ fontSize: 12, color: C.muted }}>Fecha en que se lo llevó</label>
+                              <input type="date" style={{ ...inputStyle, flex: 1 }} value={cc.fecha} max={hoy()} onChange={(e) => setCcCarga((x) => ({ ...x, fecha: e.target.value || hoy() }))} />
+                            </div>
+                            <input style={inputStyle} placeholder="Nota (opcional): ej. retiró el sábado a la noche" value={cc.nota} onChange={(e) => setCcCarga((x) => ({ ...x, nota: e.target.value }))} />
+                            <div className="flex justify-between" style={{ fontWeight: 800 }}><span>Total a cargar</span><span>{pesos(total)}</span></div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => setCcCarga(null)} className="py-2.5 rounded-lg font-bold text-sm" style={{ background: C.raised2, border: "1px solid " + C.border, color: C.text }}>Cancelar</button>
+                              <button onClick={() => cargarConsumoCC(showCuentaCorriente.clienteId)} className="py-2.5 rounded-lg font-bold text-sm" style={{ background: C.red, color: "#fff" }}>Cargar a la cuenta</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                     <div style={{ borderTop: "1px solid " + C.border, paddingTop: 12 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Asentar pago</div>
+                      <div className="grid grid-cols-3 gap-1 mb-2">{["Efectivo", "Transferencia", "Mercado Pago", "Tarjeta débito", "Tarjeta crédito"].map((md) => (
+                        <button key={md} onClick={() => setCcMedio(md)} className="py-1.5 rounded-lg text-xs font-semibold" style={{ background: ccMedio === md ? "#a0785a" : C.raised2, color: ccMedio === md ? "#fff" : C.text, border: "1px solid " + C.border }}>{md}</button>
+                      ))}</div>
                       <div className="flex gap-2 mb-2">
                         <input style={{ ...inputStyle, flex: 1 }} type="text" inputMode="decimal" placeholder="Monto" value={ccMontoPago} onChange={(e) => setCcMontoPago(e.target.value)} />
                         <input style={{ ...inputStyle, flex: 2 }} placeholder="Concepto (opcional)" value={ccConcepto} onChange={(e) => setCcConcepto(e.target.value)} />
@@ -2562,9 +2636,10 @@ const cancelarDelivery = (d) => {
                       <button onClick={() => {
                         const monto = numDec(ccMontoPago);
                         if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingresá un monto válido." }); return; }
-                        pagoACuenta(showCuentaCorriente.clienteId, monto, ccConcepto || "Pago a cuenta");
+                        if (!puedeCobrar()) return;
+                        pagoACuenta(showCuentaCorriente.clienteId, monto, (ccConcepto || "Pago a cuenta") + " (" + ccMedio + ")", ccMedio);
                         setCcMontoPago(""); setCcConcepto("");
-                        setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " asentado." });
+                        setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " en " + ccMedio + " asentado: entra en el cierre de caja." });
                       }} className="w-full py-2.5 rounded-lg font-bold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Asentar pago</button>
                     </div>
                   </div>
