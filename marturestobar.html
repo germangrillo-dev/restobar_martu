@@ -621,6 +621,10 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const medioDeVenta = (m) => { const s = String(m.metodo || "Efectivo"); return s.startsWith("Tarjeta") ? "Tarjetas" : s; };
   const esEgresoEfectivo = (m) => !m.metodo || m.metodo === "Efectivo";
   // Comision de tarjeta / Mercado Pago: la venta queda por el total y se registra lo que realmente se recibe
+  // QR obligatorio de ARCA (RG 4892) para facturas electronicas
+  const qrAfip = (a, totalFallback) => { if (!a || !a.cae) return ""; const f = String(a.fecha || ""); const hoy = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); const fecha = /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : hoy; const j = { ver: 1, fecha, cuit: Number(a.cuit) || 27213414475, ptoVta: Number(a.ptoVenta) || 2, tipoCmp: Number(a.cbteTipo) || 11, nroCmp: Number(a.cbteNro) || 0, importe: Number(a.total) || Number(totalFallback) || 0, moneda: "PES", ctz: 1, tipoDocRec: 99, nroDocRec: 0, tipoCodAut: "E", codAut: Number(a.cae) }; return "https://www.afip.gob.ar/fe/qr/?p=" + btoa(JSON.stringify(j)); };
+  const fechaAfip = (f) => { const x = String(f || ""); return /^\d{8}$/.test(x) ? x.slice(6, 8) + "/" + x.slice(4, 6) + "/" + x.slice(0, 4) : x; };
+  const datosFiscales = () => ({ titular: config.afipRazonSocial || "IBAÑEZ SILVINA PAOLA", domicilio: config.afipDomicilio || config.direccion || "", iibb: config.afipIIBB || "", inicio: config.afipInicio || "" });
   const MEDIOS_COMISION = ["Tarjeta débito", "Tarjeta crédito", "Mercado Pago"];
   const llevaComision = (met) => MEDIOS_COMISION.includes(met);
   const comisionDe = (met, monto, neto) => { if (!llevaComision(met) || neto == null || String(neto).trim() === "") return 0; const n = numDec(neto); const b = Number(monto) || 0; if (!(n > 0) || n >= b) return 0; return r2(b - n); };
@@ -1578,9 +1582,17 @@ const cancelarDelivery = (d) => {
       { t: "", rayita: true }
     ];
     if (m.afip) {
-      l.push({ t: "FACTURA C", bold: true });
+      const df = datosFiscales();
+      l.splice(1, 0, { t: df.titular });
+      if (df.domicilio) l[3] = { t: df.domicilio };
+      if (df.iibb) l.push({ t: "IIBB: " + df.iibb });
+      if (df.inicio) l.push({ t: "Inicio de actividades: " + df.inicio });
+      l.push({ t: "Responsable Monotributo" });
+      l.push({ t: "", rayita: true });
+      l.push({ t: "FACTURA C", bold: true, grande: true });
+      if (m.afip.fecha && /^\d{8}$/.test(String(m.afip.fecha))) { const f = String(m.afip.fecha); l.push({ t: "Fecha: " + f.slice(6, 8) + "/" + f.slice(4, 6) + "/" + f.slice(0, 4) }); }
       l.push({ t: "PV: " + String(m.afip.ptoVenta || 2).padStart(4, "0") + " · Nº " + String(m.afip.cbteNro || facturaXNum - 1).padStart(8, "0") });
-      l.push({ t: "Responsable Monotributo · Consumidor Final" });
+      l.push({ t: "A CONSUMIDOR FINAL" });
       if (m.afip.produccion === false) l.push({ t: "PRUEBA - SIN VALIDEZ FISCAL", bold: true });
       l.push({ t: "", rayita: true });
     }
@@ -1597,8 +1609,10 @@ const cancelarDelivery = (d) => {
     if (m.afip && m.afip.cae) {
       l.push({ t: "", rayita: true });
       l.push({ t: "CAE: " + m.afip.cae, izq: true, bold: true });
-      if (m.afip.vencimiento) l.push({ t: "Vto CAE: " + m.afip.vencimiento, izq: true });
-      l.push({ t: "Valido AFIP - Verifica en afip.gob.ar", izq: true });
+      if (m.afip.vencimiento) l.push({ t: "Vto CAE: " + fechaAfip(m.afip.vencimiento), izq: true });
+      const urlQr = qrAfip(m.afip, m.total);
+      if (urlQr) l.push({ qr: urlQr });
+      l.push({ t: "Comprobante autorizado por ARCA" });
     }
     if (!m.afip) {
       l.push({ t: "", rayita: true });
@@ -2259,6 +2273,15 @@ const cancelarDelivery = (d) => {
                     </div>
                     <div><label style={lbl}>Access Token (AfipSDK)</label><input value={config.afipAccessToken || ""} onChange={(e) => setConfig((c) => ({ ...c, afipAccessToken: e.target.value }))} placeholder="Token de app.afipsdk.com" style={inputStyle} /><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se guarda en el servidor y se comparte en todos los equipos. No se pierde al cambiar de navegador.</div></div>
                     <div className="flex gap-2"><button onClick={async () => { try { if (!config.afipAccessToken || config.afipAccessToken.trim().length < 10) { setToast({ tipo: "error", texto: "Pegá el token primero." }); return; } const r = await fetch(serverUrl + "/api/afip/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken.trim() }) }); const d = await r.json(); if (d.ok) { setToast({ tipo: "ok", texto: "Token AFIP guardado en el servidor." }); } else { setToast({ tipo: "error", texto: "Error: " + d.error }); } } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><CheckCircle2 size={15} /> Guardar token AFIP</button><button onClick={async () => { try { setToast({ tipo: "ok", texto: "Verificando conexión con AFIP..." }); const r = await fetch(serverUrl + "/api/afip/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: config.afipAccessToken || "" }) }); const d = await r.json(); if (d.ok) { setToast({ tipo: "ok", texto: d.mensaje }); } else { setToast({ tipo: "error", texto: "Error AFIP: " + d.mensaje }); } } catch { setToast({ tipo: "error", texto: "No se pudo conectar con el servidor." }); } }} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}><RefreshCw size={15} /> Verificar conexión AFIP</button></div>
+                    <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: C.base, border: "1px solid " + C.border }}>
+                      <div style={{ fontWeight: 800, fontSize: 13 }}>Datos que se imprimen en la factura</div>
+                      <input style={inputStyle} placeholder="Titular (como figura en ARCA)" value={config.afipRazonSocial ?? "IBAÑEZ SILVINA PAOLA"} onChange={(e) => setConfig((c) => ({ ...c, afipRazonSocial: e.target.value }))} />
+                      <input style={inputStyle} placeholder="Domicilio comercial" value={config.afipDomicilio ?? (config.direccion || "")} onChange={(e) => setConfig((c) => ({ ...c, afipDomicilio: e.target.value }))} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input style={inputStyle} placeholder="Ingresos Brutos (Nº o Exento)" value={config.afipIIBB || ""} onChange={(e) => setConfig((c) => ({ ...c, afipIIBB: e.target.value }))} />
+                        <input style={inputStyle} placeholder="Inicio de actividades (dd/mm/aaaa)" value={config.afipInicio || ""} onChange={(e) => setConfig((c) => ({ ...c, afipInicio: e.target.value }))} />
+                      </div>
+                    </div>
                     {(!afipCfg || afipCfg.modo !== "produccion") ? (
                       <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
                         <AlertTriangle size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
@@ -3245,7 +3268,7 @@ const cancelarDelivery = (d) => {
                 {config.logo && <img src={config.logo} alt="logo" style={{ maxWidth: 100, maxHeight: 60, margin: "0 auto 6px", display: "block", objectFit: "contain" }} />}
                 <div style={{ fontWeight: 800, fontSize: 16 }}>{config.nombreLocal || "Martu Resto Bar"}</div>
                 <div style={{ fontSize: 11 }}>CUIT: 27-21341447-5</div>
-                <div style={{ fontSize: 11 }}>{config.direccion || "YPF El Cruce / Ruta Nac 157 y 64"}</div>
+                <div style={{ fontSize: 11 }}>{(showComprobanteModal.afip && config.afipDomicilio) || config.direccion || "YPF El Cruce / Ruta Nac 157 y 64"}</div>
               </div>
               {/* Cliente */}
               {showComprobanteModal.cliente && (
@@ -3261,7 +3284,10 @@ const cancelarDelivery = (d) => {
                 <div style={{ textAlign: "center", marginBottom: 8, borderBottom: "1px dashed #ccc", paddingBottom: 8 }}>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#000000" }}>FACTURA C</div>
                   <div>PV: {String(showComprobanteModal.afip.ptoVenta || 2).padStart(4, "0")} · Nº {String(showComprobanteModal.afip.cbteNro || facturaXNum - 1).padStart(8, "0")}</div>
-                  <div style={{ fontSize: 11 }}>Responsable Monotributo · Consumidor Final</div>
+                  <div style={{ fontSize: 11 }}>{datosFiscales().titular} · Responsable Monotributo</div>
+                  {datosFiscales().iibb && <div style={{ fontSize: 11 }}>IIBB: {datosFiscales().iibb}</div>}
+                  {datosFiscales().inicio && <div style={{ fontSize: 11 }}>Inicio de actividades: {datosFiscales().inicio}</div>}
+                  <div style={{ fontSize: 11 }}>A CONSUMIDOR FINAL</div>
                   {showComprobanteModal.afip.produccion === false && <div style={{ fontWeight: 800, fontSize: 11 }}>PRUEBA - SIN VALIDEZ FISCAL</div>}
                 </div>
               )}
@@ -3290,8 +3316,9 @@ const cancelarDelivery = (d) => {
               {showComprobanteModal.afip && (
                 <div style={{ borderTop: "2px dashed #000", paddingTop: 8, textAlign: "center" }}>
                   <div style={{ fontWeight: 700 }}>CAE: {showComprobanteModal.afip.cae}</div>
-                  <div>Vto CAE: {showComprobanteModal.afip.vencimiento}</div>
-                  <div style={{ marginTop: 6, fontSize: 10 }}>Válido AFIP · Verificá en afip.gob.ar</div>
+                  <div>Vto CAE: {fechaAfip(showComprobanteModal.afip.vencimiento)}</div>
+                  {qrAfip(showComprobanteModal.afip, showComprobanteModal.total) && <img alt="QR ARCA" src={serverUrl + "/api/qr?size=180&data=" + encodeURIComponent(qrAfip(showComprobanteModal.afip, showComprobanteModal.total))} style={{ width: 130, height: 130, margin: "6px auto 0", display: "block" }} />}
+                  <div style={{ marginTop: 6, fontSize: 10 }}>Comprobante autorizado por ARCA</div>
                 </div>
               )}
               {!showComprobanteModal.afip && (

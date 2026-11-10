@@ -194,12 +194,40 @@ function bytesTexto(s) {
   }
   return out;
 }
+// QR como imagen (GS v 0): funciona en cualquier impresora que ya imprime el logo
+function qrRaster(texto) {
+  const QRCode = require("qrcode");
+  const q = QRCode.create(String(texto), { errorCorrectionLevel: "M" });
+  const n = q.modules.size, borde = 2;
+  const escala = Math.max(3, Math.floor(300 / (n + borde * 2)));
+  const lado = (n + borde * 2) * escala;
+  const fila = Math.ceil(lado / 8);
+  const raw = Buffer.alloc(fila * lado);
+  for (let y = 0; y < lado; y++) {
+    const my = Math.floor(y / escala) - borde;
+    for (let x = 0; x < lado; x++) {
+      const mx = Math.floor(x / escala) - borde;
+      if (mx >= 0 && my >= 0 && mx < n && my < n && q.modules.get(my, mx)) raw[y * fila + (x >> 3)] |= (0x80 >> (x & 7));
+    }
+  }
+  return { raw, fila, alto: lado };
+}
 function construirESCPOS(lineas) {
   const b = [];
   const push = (...x) => b.push(...x);
   push(27, 64);                 // ESC @ init
   push(27, 97, 1);              // centrado
   for (const l of (lineas || [])) {
+    if (l.qr) {
+      try {
+        const { raw, fila, alto } = qrRaster(l.qr);
+        push(27, 97, 1);
+        push(29, 118, 48, 0, fila & 255, (fila >> 8) & 255, alto & 255, (alto >> 8) & 255);
+        for (let i = 0; i < raw.length; i++) b.push(raw[i]);
+        push(10);
+      } catch (e) { console.warn("[IMPRIMIR] QR invalido:", e.message); }
+      continue;
+    }
     if (l.logo) {
       try {
         const raw = Buffer.from(String(l.logo), "base64");
@@ -1028,7 +1056,13 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
       </div>`;
     }
     let afipHtml = "";
+    let afipQrImg = "";
     if (afipData && afipData.cae) {
+      try {
+        const f = String(afipData.fecha || "");
+        const j = { ver: 1, fecha: /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10), cuit: Number(afipData.cuit) || 27213414475, ptoVta: Number(afipData.ptoVenta) || 2, tipoCmp: Number(afipData.cbteTipo) || 11, nroCmp: Number(afipData.cbteNro) || 0, importe: Number(afipData.total) || Number(total) || 0, moneda: "PES", ctz: 1, tipoDocRec: 99, nroDocRec: 0, tipoCodAut: "E", codAut: Number(afipData.cae) };
+        afipQrImg = await require("qrcode").toDataURL("https://www.afip.gob.ar/fe/qr/?p=" + Buffer.from(JSON.stringify(j)).toString("base64"), { margin: 1, width: 240 });
+      } catch (e) { console.warn("[QR] factura:", e.message); }
       afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
         <div><b>Factura C${afipData.produccion === false ? " (PRUEBA - sin validez fiscal)" : ""}</b></div>
         <div>CAE: ${afipData.cae}</div>
@@ -1037,6 +1071,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
         <div>Pto Venta: ${afipData.ptoVenta || "2"}</div>
         <div>CUIT: ${cuit}</div>
         <div>Régimen: Monotributo</div>
+        ${afipQrImg ? `<div style="text-align:center;margin-top:8px"><img src="${afipQrImg}" style="width:120px;height:120px"></div><div style="text-align:center">Comprobante autorizado por ARCA</div>` : ""}
       </div>`;
     }
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
