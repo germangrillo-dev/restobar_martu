@@ -543,6 +543,17 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const abrirWA = (tel, msg) => { window.location.href = waLink(tel, msg); };
   const listaMesas = useMemo(() => (Array.isArray(config.mesas) && config.mesas.length ? config.mesas : MESAS), [config.mesas]);
   const keyListaMesas = JSON.stringify(listaMesas);
+  // ── Plano de mesas por sector (Salón / Exterior) ──
+  const sectorDe = (m) => (m && m.sector) || "Salón";
+  const sectoresMesas = useMemo(() => { const s = ["Salón"]; if (listaMesas.some((m) => sectorDe(m) === "Exterior")) s.push("Exterior"); listaMesas.forEach((m) => { if (!s.includes(sectorDe(m))) s.push(sectorDe(m)); }); return s; }, [listaMesas]);
+  const sectorDeMesaId = (id) => sectorDe(listaMesas.find((m) => String(m.id) === String(id)));
+  const [sectorVista, setSectorVista] = useState(() => { try { return localStorage.getItem("martu_sector") || "Salón"; } catch { return "Salón"; } });
+  const [planoModo, setPlanoModo] = useState(() => { try { return localStorage.getItem("martu_plano") || "plano"; } catch { return "plano"; } });
+  const [planoEditSector, setPlanoEditSector] = useState("Salón");
+  const [planoDrag, setPlanoDrag] = useState(null); // { id, dx, dy, x, y } mientras se arrastra en Config
+  const sectorActivo = sectoresMesas.includes(sectorVista) ? sectorVista : sectoresMesas[0];
+  const posMesa = (m, i) => (typeof m.x === "number" && typeof m.y === "number") ? { x: m.x, y: m.y } : { x: 3 + (i % 5) * 19.5, y: 4 + Math.floor(i / 5) * 24 };
+  const tamMesa = (m) => ((Number(m.asientos) || 4) >= 6 ? { w: 19, h: 17 } : { w: 14, h: 17 });
   React.useEffect(() => {
     setMesas((prev) => {
       const faltan = listaMesas.filter((m) => !prev[m.id]);
@@ -724,6 +735,32 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     setOrden({ tipo: "mesa", mesaId: id, lineas: Array.from(mapa.values()), datos: { cliente: "", direccion: "", telefono: "", cuit: "", ...datosGuardados, ...datosActuales } });
     setCat("Pizzas");
     setVista("orden");
+  };
+  // Pasar el pedido de una mesa a otra (si la otra esta ocupada, se juntan). La cocina recibe un aviso si ya habia platos enviados.
+  const [showCambioMesa, setShowCambioMesa] = useState(false);
+  const mesaOcupada = (x) => !!x && ([x.lineas, x.enviado, x.despachado, x.bebidas].some((a) => (a || []).length > 0) || Number(x.pagado) > 0 || (x.pagosPend || []).length > 0);
+  const moverMesa = (origen, destino) => {
+    if (String(origen) === String(destino)) return;
+    const ms = mesas; const o = ms[origen] || {}; const d = ms[destino] || {};
+    const enEdicion = orden && orden.tipo === "mesa" && orden.mesaId === origen;
+    const lineasO = enEdicion ? (orden.lineas || []) : (o.lineas || []);
+    const datosO = enEdicion ? { ...(o.datos || {}), ...(orden.datos || {}) } : (o.datos || {});
+    const juntar = mesaOcupada(d);
+    const unir = (a, b) => [...(a || []), ...(b || [])];
+    const lineas = []; for (const l of unir(d.lineas, lineasO)) { const ex = lineas.find((x) => x.pid === l.pid && (x.nota || "") === (l.nota || "")); if (ex) ex.cant = (Number(ex.cant) || 0) + (Number(l.cant) || 0); else lineas.push({ ...l }); }
+    const ts = Date.now();
+    const pagado = Math.round(((Number(d.pagado) || 0) + (Number(o.pagado) || 0)) * 100) / 100;
+    const pagosPend = unir(d.pagosPend, o.pagosPend);
+    const nuevoD = { ...d, cobradaTs: ts, lineas, enviado: unir(d.enviado, o.enviado), despachado: unir(d.despachado, o.despachado), bebidas: unir(d.bebidas, o.bebidas), datos: juntar ? (d.datos || datosO) : datosO };
+    if (pagado > 0) nuevoD.pagado = pagado; else delete nuevoD.pagado;
+    if (pagosPend.length) nuevoD.pagosPend = pagosPend; else delete nuevoD.pagosPend;
+    const nuevoO = { cobradaTs: ts, lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } };
+    markMesaDirty(origen); markMesaDirty(destino);
+    const nm = { ...ms, [origen]: nuevoO, [destino]: nuevoD };
+    setMesas(nm); postMesas(nm);
+    setShowCambioMesa(false); setOrden(null); setVista("mapa");
+    if ((o.enviado || []).length > 0 || (o.despachado || []).length > 0) imprimirTicket("comanda", [{ t: "CAMBIO DE MESA", bold: true, grande: true }, { t: "MESA " + origen + "  ->  MESA " + destino, bold: true, grande: true }, { t: (juntar ? "Se junto con la mesa " + destino : "") }, { t: hora() + " hs" }]).catch(() => {});
+    setToast({ tipo: "ok", texto: (juntar ? "Mesa " + origen + " se juntó con la Mesa " + destino : "Pedido pasado de la Mesa " + origen + " a la Mesa " + destino) + "." });
   };
   const abrirDelivery = () => { setOrden({ tipo: "delivery", mesaId: null, lineas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }); setCat("Pizzas"); setVista("orden"); };
   const volver = () => { if (orden && orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: orden.lineas, datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); } setOrden(null); setVista("mapa"); };
@@ -1474,10 +1511,38 @@ const cancelarDelivery = (d) => {
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { impresoras: config.impresoras } }) })
       .then(() => setToast({ tipo: "ok", texto: "Impresoras guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
   };
-  const guardarMesasCfg = (arr) => {
+  const guardarMesasCfg = (arr, silencioso) => {
     setConfig((c) => ({ ...c, mesas: arr }));
+    if (configRef && configRef.current) configRef.current = { ...configRef.current, mesas: arr };
     fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { mesas: arr } }) })
-      .then(() => setToast({ tipo: "ok", texto: arr.length + " mesas guardadas." })).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
+      .then(() => { if (!silencioso) setToast({ tipo: "ok", texto: arr.length + " mesas guardadas." }); }).catch(() => setToast({ tipo: "error", texto: "Error al guardar." }));
+  };
+  // Dibuja el plano de un sector. editable = se arrastran las mesas (Config); si no, tocar una mesa la abre (Vender)
+  const renderPlano = (sector, editable) => {
+    const ms = listaMesas.filter((m) => sectorDe(m) === sector);
+    return (
+      <div className="plano-mesas" style={{ position: "relative", width: "100%", aspectRatio: "16 / 10", minHeight: 300, borderRadius: 14, border: "2px dashed " + C.border, background: sector === "Exterior" ? "#eef5e9" : C.base, overflow: "hidden", touchAction: editable ? "none" : "auto" }}
+        onPointerMove={editable ? (ev) => { if (!planoDrag) return; const r = ev.currentTarget.getBoundingClientRect(); const m = listaMesas.find((it) => it.id === planoDrag.id); const t = tamMesa(m || {}); const x = Math.max(0, Math.min(100 - t.w, ((ev.clientX - r.left) / r.width) * 100 - planoDrag.dx)); const y = Math.max(0, Math.min(100 - t.h, ((ev.clientY - r.top) / r.height) * 100 - planoDrag.dy)); setPlanoDrag((d) => d && ({ ...d, x, y })); } : undefined}
+        onPointerUp={editable ? () => { if (!planoDrag) return; const d = planoDrag; setPlanoDrag(null); if (typeof d.x === "number") guardarMesasCfg(listaMesas.map((it) => it.id === d.id ? { ...it, x: Math.round(d.x * 10) / 10, y: Math.round(d.y * 10) / 10 } : it), true); } : undefined}
+        onPointerLeave={editable ? () => { if (planoDrag) { const d = planoDrag; setPlanoDrag(null); if (typeof d.x === "number") guardarMesasCfg(listaMesas.map((it) => it.id === d.id ? { ...it, x: Math.round(d.x * 10) / 10, y: Math.round(d.y * 10) / 10 } : it), true); } } : undefined}>
+        {ms.length === 0 && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: 13 }}>No hay mesas en {sector}.</div>}
+        {ms.map((m, i) => {
+          const p0 = posMesa(m, i); const p = planoDrag && planoDrag.id === m.id && typeof planoDrag.x === "number" ? { x: planoDrag.x, y: planoDrag.y } : p0;
+          const t = tamMesa(m); const e = editable ? "libre" : mesaEstado(m.id);
+          const totalMesa = editable ? 0 : ((orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id));
+          return (
+            <div key={m.id} className="mesa-plano" data-mesa={m.id}
+              onPointerDown={editable ? (ev) => { ev.preventDefault(); const r = ev.currentTarget.parentElement.getBoundingClientRect(); setPlanoDrag({ id: m.id, dx: ((ev.clientX - r.left) / r.width) * 100 - p0.x, dy: ((ev.clientY - r.top) / r.height) * 100 - p0.y }); } : undefined}
+              onClick={!editable && !esVisor ? () => abrirMesa(m.id) : undefined}
+              style={{ position: "absolute", left: p.x + "%", top: p.y + "%", width: t.w + "%", height: t.h + "%", minWidth: 58, minHeight: 52, borderRadius: m.forma === "redonda" ? "50%" : 12, background: editable ? "#fff" : (e === "libre" ? C.raised : colorEstado(e) + "26"), border: "3px solid " + (editable ? (planoDrag && planoDrag.id === m.id ? "#a0785a" : C.border) : colorEstado(e)), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: editable ? "grab" : (esVisor ? "default" : "pointer"), userSelect: "none", boxShadow: "0 1px 3px rgba(0,0,0,.12)", zIndex: planoDrag && planoDrag.id === m.id ? 5 : 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 18, lineHeight: 1 }}>{m.id}</div>
+              <div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 11 }}><Users size={11} /> {m.asientos || 4}</div>
+              {!editable && (e === "libre" ? null : <div style={{ fontSize: 11, fontWeight: 800 }}>{pesos(totalMesa)}</div>)}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
   const guardarUsuarioEdit = () => {
     const e = editUsuario;
@@ -1517,7 +1582,7 @@ const cancelarDelivery = (d) => {
     if (!t) return [];
     const l = [
       { t: "COMANDA", bold: true, grande: true },
-      { t: t.tipo === "mesa" ? "MESA " + t.mesaId : "DELIVERY", bold: true, grande: true },
+      { t: t.tipo === "mesa" ? "MESA " + t.mesaId + (sectorDeMesaId(t.mesaId) !== "Salón" ? " - " + sectorDeMesaId(t.mesaId).toUpperCase() : "") : "DELIVERY", bold: true, grande: true },
       { t: (t.hora || hora()) + " hs", grande: true }
     ];
     if (t.agregado) l.push({ t: "** AGREGADO AL PEDIDO **", bold: true, grande: true });
@@ -1761,7 +1826,18 @@ const cancelarDelivery = (d) => {
 
 
             {salonVista === "salon" ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">{listaMesas.map((m) => { const e = mesaEstado(m.id); const totalMesa = (orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id); return (<div key={m.id} className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: C.raised, border: "3px solid " + colorEstado(e), minHeight: 92, cursor: esVisor ? "default" : "pointer" }} onClick={() => !esVisor && abrirMesa(m.id)}><div style={{ fontWeight: 800, fontSize: 18 }}>Mesa {m.id}</div><div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 12 }}><Users size={12} /> {m.asientos}</div>{e === "libre" ? <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Libre</div> : <div style={{ color: C.text, fontSize: 12, fontWeight: 800, marginTop: 4 }}>{pesos(totalMesa)}</div>}{!esVisor && <button onClick={(e) => { e.stopPropagation(); setQrMesa(m.id); }} className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><QrCode size={12} /> QR</button>}</div>); })}</div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {sectoresMesas.map((sec) => { const ocup = listaMesas.filter((m) => sectorDe(m) === sec && mesaEstado(m.id) !== "libre").length; const tot = listaMesas.filter((m) => sectorDe(m) === sec).length; return (
+                    <button key={sec} onClick={() => { setSectorVista(sec); try { localStorage.setItem("martu_sector", sec); } catch {} }} className="px-4 py-2 rounded-lg text-sm font-bold" style={{ background: sectorActivo === sec ? "#a0785a" : C.raised, color: sectorActivo === sec ? "#fff" : C.text, border: "1px solid " + C.border }}>{sec} <span style={{ fontWeight: 500, opacity: .85 }}>· {ocup}/{tot} ocupadas</span></button>
+                  ); })}
+                  <div style={{ flex: 1 }} />
+                  {[["plano", "Plano"], ["lista", "Lista"]].map(([v, t]) => <button key={v} onClick={() => { setPlanoModo(v); try { localStorage.setItem("martu_plano", v); } catch {} }} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: planoModo === v ? C.text : C.raised, color: planoModo === v ? "#fff" : C.muted, border: "1px solid " + C.border }}>{t}</button>)}
+                </div>
+                {planoModo === "plano" ? renderPlano(sectorActivo, false) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">{listaMesas.filter((m) => sectorDe(m) === sectorActivo).map((m) => { const e = mesaEstado(m.id); const totalMesa = (orden && orden.tipo === "mesa" && orden.mesaId === m.id) ? mesaTotal(m.id, orden.lineas) : mesaTotal(m.id); return (<div key={m.id} className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: C.raised, border: "3px solid " + colorEstado(e), minHeight: 92, cursor: esVisor ? "default" : "pointer" }} onClick={() => !esVisor && abrirMesa(m.id)}><div style={{ fontWeight: 800, fontSize: 18 }}>Mesa {m.id}</div><div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 12 }}><Users size={12} /> {m.asientos}</div>{e === "libre" ? <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Libre</div> : <div style={{ color: C.text, fontSize: 12, fontWeight: 800, marginTop: 4 }}>{pesos(totalMesa)}</div>}{!esVisor && <button onClick={(e) => { e.stopPropagation(); setQrMesa(m.id); }} className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md text-xs" style={{ background: C.base, color: C.muted }}><QrCode size={12} /> QR</button>}</div>); })}</div>
+                )}
+              </div>
             ) : (
               <div>
                 {waPedidos.length > 0 && (
@@ -1857,7 +1933,7 @@ const cancelarDelivery = (d) => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{productosCat.map((p) => (<button key={p.id} onClick={() => !esVisor && add(p.id)} className="text-left p-3 rounded-xl transition-transform active:scale-95" style={{ background: C.raised, border: "1px solid " + C.border, opacity: esVisor ? 0.7 : 1, cursor: esVisor ? "default" : "pointer" }}><div style={{ display: "flex", gap: 8, alignItems: "center" }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 800, fontSize: 13, color: "#000000", lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{p.nombre}</div><div style={{ color: C.text, fontWeight: 800, fontSize: 13, marginTop: 2 }}>{pesos(p.precio)}</div></div>{p.imagen && <div style={{ width: 50, height: 50, flexShrink: 0, overflow: "hidden", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: C.base }}><img src={p.imagen} alt={p.nombre} style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>}</div></button>))}</div>
               </div>
               <aside className="lg:w-80 rounded-xl p-4" style={{ background: C.raised, border: "1px solid " + C.border }}>
-                <div className="flex items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17 }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <div className="ml-auto flex gap-1.5"><button id="atajo-cobrar" onClick={() => cerrarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: "#a0785a", color: "#fff", fontWeight: 700, fontWeight: 700 }}>Cobrar <span style={{ fontSize: 10, opacity: .8 }}>(F2)</span></button><button onClick={async () => { if (mesaTotal(orden.mesaId, orden.lineas) <= 0 && !(Number((mesas[orden.mesaId] || {}).pagado) > 0)) { setToast({ tipo: "error", texto: "La mesa no tiene consumos para imprimir." }); return; } await imprimirTicket("facturacion", await conLogo(lineasCuentaMesa(orden.mesaId, orden.lineas))); }} title="Imprimir el detalle de lo consumido para el cliente (no cobra la mesa)" className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Imprimir cuenta</button><button onClick={() => limpiarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button></div>}</div>
+                <div className="flex flex-wrap items-center gap-2 mb-3"><span style={{ color: C.amber }}>{orden.tipo === "delivery" ? <Bike size={18} /> : <Users size={18} />}</span><h2 style={{ fontWeight: 800, fontSize: 17, whiteSpace: "nowrap" }}>{orden.tipo === "delivery" ? "Delivery" : "Mesa " + orden.mesaId}</h2>{orden.tipo === "mesa" && !esVisor && <div className="botones-mesa w-full grid grid-cols-4 gap-1.5"><button id="atajo-cobrar" onClick={() => cerrarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: "#a0785a", color: "#fff", fontWeight: 700, fontWeight: 700 }}>Cobrar <span style={{ fontSize: 10, opacity: .8 }}>(F2)</span></button><button onClick={async () => { if (mesaTotal(orden.mesaId, orden.lineas) <= 0 && !(Number((mesas[orden.mesaId] || {}).pagado) > 0)) { setToast({ tipo: "error", texto: "La mesa no tiene consumos para imprimir." }); return; } await imprimirTicket("facturacion", await conLogo(lineasCuentaMesa(orden.mesaId, orden.lineas))); }} title="Imprimir el detalle de lo consumido para el cliente (no cobra la mesa)" className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Imprimir cuenta</button><button onClick={() => setShowCambioMesa(true)} title="Pasar el pedido a otra mesa" className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.border, color: C.text }}>Cambiar mesa</button><button onClick={() => limpiarMesa(orden.mesaId)} className="px-2 py-1 rounded-md text-xs" style={{ background: C.base, border: "1px solid " + C.red, color: C.red }}>Limpiar <span style={{ fontSize: 10, opacity: .8 }}>(F4)</span></button></div>}</div>
                 {orden.tipo === "delivery" && (<div className="flex flex-col gap-2 mb-3">{esVisor ? (<div className="flex flex-col gap-1 rounded-lg p-2" style={{ background: C.base }}><div style={{ fontSize: 13, fontWeight: 600 }}>{orden.datos.cliente}</div><div style={{ fontSize: 12, color: C.muted }}>{orden.datos.direccion}{orden.datos.telefono ? " · " + orden.datos.telefono : ""}</div></div>) : (<>{(config.clientes || []).length > 0 && <select style={inputStyle} value="" onChange={(e) => { const c = (config.clientes || []).find(x => x.id === e.target.value); if (c) setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: c.nombre, direccion: c.direccion || "", telefono: c.telefono || "", cuit: c.cuit || "" } })); }}><option value="">Seleccionar cliente...</option>{(config.clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? " (" + c.cuit + ")" : ""}</option>)}</select>}<button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>+ Agregar cliente nuevo</button><input style={inputStyle} placeholder="Nombre del cliente" value={orden.datos.cliente} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="CUIT / DNI" value={orden.datos.cuit || ""} onChange={(e) => setD("cuit", e.target.value)} /><input style={inputStyle} placeholder="Dirección" value={orden.datos.direccion} onChange={(e) => setD("direccion", e.target.value)} /><input style={inputStyle} placeholder="Teléfono (opcional)" value={orden.datos.telefono} onChange={(e) => setD("telefono", e.target.value)} /></>)}</div>)}
                 {orden.tipo === "mesa" && !esVisor && (<div className="flex flex-col gap-2 mb-3">{(config.clientes || []).length > 0 && <select style={inputStyle} value="" onChange={(e) => { const c = (config.clientes || []).find(x => x.id === e.target.value); if (c) setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: c.nombre, direccion: c.direccion || "", telefono: c.telefono || "", cuit: c.cuit || "" } })); }}><option value="">Seleccionar cliente...</option>{(config.clientes || []).map(c => <option key={c.id} value={c.id}>{c.nombre}{c.cuit ? " (" + c.cuit + ")" : ""}</option>)}</select>}<button onClick={() => setShowNuevoClienteModal(true)} className="w-full py-1.5 rounded-lg text-xs font-semibold" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>+ Agregar cliente nuevo</button><input style={inputStyle} placeholder="Nombre del cliente (opcional)" value={orden.datos.cliente || ""} onChange={(e) => setD("cliente", e.target.value)} /><input style={inputStyle} placeholder="CUIT / DNI" value={orden.datos.cuit || ""} onChange={(e) => setD("cuit", e.target.value)} /></div>)}
                 {orden.tipo === "mesa" && (mesas[orden.mesaId].enviado.length > 0 || (mesas[orden.mesaId].despachado || []).length > 0 || (mesas[orden.mesaId].bebidas || []).length > 0) && (
@@ -2674,18 +2750,22 @@ const cancelarDelivery = (d) => {
               <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>Mesas del salón</h3>
+                    <h3 style={{ fontWeight: 800, fontSize: 16, color: "#000000" }}>Mesas y plano del local</h3>
                     <button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Cantidad de mesas y asientos de cada una. Vale para el salón, el mapa de estado, la cocina, el QR de mesa y el menú del cliente.</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Arrastrá las mesas para armar el plano parecido al local. Cada mesa tiene su sector (Salón o Exterior), asientos y forma. En verano agregá las mesas del exterior y en invierno quitalas.</div>
+                  <div className="flex gap-2 mb-2">{["Salón", "Exterior"].map((sec) => <button key={sec} onClick={() => setPlanoEditSector(sec)} className="px-4 py-2 rounded-lg text-sm font-bold" style={{ background: planoEditSector === sec ? "#a0785a" : C.raised2, color: planoEditSector === sec ? "#fff" : C.text, border: "1px solid " + C.border }}>{sec} ({listaMesas.filter((m) => sectorDe(m) === sec).length})</button>)}</div>
+                  <div className="mb-4">{renderPlano(planoEditSector, true)}</div>
                   <div className="flex flex-col gap-2 mb-4">
-                    {listaMesas.map((m) => {
+                    {listaMesas.filter((m) => sectorDe(m) === planoEditSector).map((m) => {
                       const x = mesas[m.id];
                       const ocupada = !!x && ((x.lineas || []).length > 0 || (x.enviado || []).length > 0 || (x.despachado || []).length > 0 || (x.bebidas || []).length > 0);
                       const puedeQuitar = !ocupada && listaMesas.length > 1;
                       return (
                         <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border }}>
                           <span style={{ fontWeight: 800, fontSize: 14, color: "#000000", minWidth: 68 }}>Mesa {m.id}</span>
+                          <select value={sectorDe(m)} onChange={(e) => guardarMesasCfg(listaMesas.map((it) => it.id === m.id ? { ...it, sector: e.target.value, x: undefined, y: undefined } : it))} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.border, background: C.raised, color: C.text, fontSize: 13 }}><option>Salón</option><option>Exterior</option></select>
+                          <select value={m.forma || "cuadrada"} onChange={(e) => guardarMesasCfg(listaMesas.map((it) => it.id === m.id ? { ...it, forma: e.target.value } : it), true)} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.border, background: C.raised, color: C.text, fontSize: 13 }}><option value="cuadrada">Cuadrada</option><option value="redonda">Redonda</option></select>
                           <label style={{ fontSize: 11, color: C.muted }}>Asientos</label>
                           <input type="number" min="1" max="30" value={m.asientos || 4} onChange={(e) => { const n = Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 1)); guardarMesasCfg(listaMesas.map((it) => it.id === m.id ? { ...it, asientos: n } : it)); }} style={{ width: 66, padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.border, background: C.raised, color: C.text, fontSize: 13 }} />
                           <div style={{ flex: 1 }} />
@@ -2696,7 +2776,7 @@ const cancelarDelivery = (d) => {
                     })}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => { const usados = listaMesas.map((it) => it.id); let id = 1; while (usados.includes(id)) id++; guardarMesasCfg([...listaMesas, { id, asientos: 4 }].sort((a, b) => a.id - b.id)); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><Plus size={15} /> Agregar mesa</button>
+                    <button onClick={() => { const usados = listaMesas.map((it) => it.id); let id = 1; while (usados.includes(id)) id++; guardarMesasCfg([...listaMesas, { id, asientos: 4, sector: planoEditSector }].sort((a, b) => a.id - b.id)); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: C.green, color: "#fff" }}><Plus size={15} /> Agregar mesa en {planoEditSector}</button>
                     <button onClick={() => guardarMesasCfg(listaMesas)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><CheckCircle2 size={15} /> Guardar ({listaMesas.length})</button>
                   </div>
                 </div>
@@ -3102,6 +3182,27 @@ const cancelarDelivery = (d) => {
       })()}
 
       {/* Cobro modal */}
+            {showCambioMesa && orden && orden.tipo === "mesa" && (
+              <div onMouseDown={cerrarSiFondo(() => setShowCambioMesa(false))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.raised, border: "1px solid " + C.border }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 style={{ fontWeight: 800, fontSize: 17 }}>Pasar la Mesa {orden.mesaId} a...</h3>
+                    <button onClick={() => setShowCambioMesa(false)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Se pasa todo: lo pedido, lo enviado a cocina, las bebidas y los pagos a cuenta. Si elegís una mesa ocupada, se juntan. Si ya había platos en cocina, sale un aviso de cambio de mesa.</div>
+                  {sectoresMesas.map((sec) => (
+                    <div key={sec} className="mb-3">
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.muted, marginBottom: 6 }}>{sec.toUpperCase()}</div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{listaMesas.filter((m) => sectorDe(m) === sec && m.id !== orden.mesaId).map((m) => { const oc = mesaOcupada(mesas[m.id]); return (
+                        <button key={m.id} data-mesa={m.id} onClick={() => moverMesa(orden.mesaId, m.id)} className="cambio-destino rounded-lg py-2 flex flex-col items-center" style={{ background: oc ? C.red + "18" : C.base, border: "2px solid " + (oc ? C.red : C.green), color: C.text }}>
+                          <b style={{ fontSize: 16 }}>{m.id}</b><span style={{ fontSize: 10, color: oc ? C.red : C.green }}>{oc ? "juntar" : "libre"}</span>
+                        </button>
+                      ); })}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
       {showCobroModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.6)" }}>
           <div className="w-full max-w-xs rounded-xl p-5" style={{ background: C.raised2, border: "1px solid " + C.border }} onClick={(e) => e.stopPropagation()}>
