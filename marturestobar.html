@@ -1585,7 +1585,7 @@ const cancelarDelivery = (d) => {
               onPointerDown={editable ? (ev) => { ev.preventDefault(); const r = ev.currentTarget.parentElement.getBoundingClientRect(); setPlanoDrag({ id: m.id, dx: ((ev.clientX - r.left) / r.width) * 100 - p0.x, dy: ((ev.clientY - r.top) / r.height) * 100 - p0.y }); } : undefined}
               onClick={!editable && !esVisor ? () => abrirMesa(m.id) : undefined}
               style={{ position: "absolute", left: p.x + "%", top: p.y + "%", width: t.w + "%", height: t.h + "%", minWidth: 58, minHeight: 52, borderRadius: m.forma === "redonda" ? "50%" : 12, background: editable ? "#fff" : (e === "libre" ? C.raised : colorEstado(e) + "26"), border: "3px solid " + (editable ? (planoDrag && planoDrag.id === m.id ? "#a0785a" : C.border) : colorEstado(e)), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: editable ? "grab" : (esVisor ? "default" : "pointer"), userSelect: "none", boxShadow: "0 1px 3px rgba(0,0,0,.12)", zIndex: planoDrag && planoDrag.id === m.id ? 5 : 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 18, lineHeight: 1 }}>{m.id}</div>
+              <div style={{ fontWeight: 800, fontSize: 16, lineHeight: 1.1, whiteSpace: "nowrap" }}>Mesa {m.id}</div>
               <div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 11 }}><Users size={11} /> {m.asientos || 4}</div>
               {!editable && (e === "libre" ? null : <div style={{ fontSize: 11, fontWeight: 800 }}>{pesos(totalMesa)}</div>)}
             </div>
