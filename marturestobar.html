@@ -1222,7 +1222,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
                 // Si en el servidor ya hay otra caja (se cerro y se abrio una nueva), no se arrastran datos de la anterior
                 const prev = (prev0 && prev0.id && data.caja.id && prev0.id !== data.caja.id) ? null : prev0;
                 const borr = new Set(data.movimientosBorrados || []);
-                const localMovs = (prev?.movimientos || []).filter(m => !borr.has(m.id));
+                const enOtraCaja = new Set((data.historialCierres || []).flatMap((h) => (h.movimientos || []).map((m) => m.id))); const localMovs = (prev?.movimientos || []).filter(m => !borr.has(m.id) && !enOtraCaja.has(m.id));
                 const serverMovs = data.caja.movimientos || [];
                 const serverIds = new Set(serverMovs.map(m => m.id));
                 const localOnly = localMovs.filter(m => !serverIds.has(m.id));
@@ -1322,7 +1322,7 @@ const cancelarDelivery = (d) => {
           // Si en el servidor ya hay otra caja (se cerro y se abrio una nueva), no se arrastran datos de la anterior
           const prev = (prev0 && prev0.id && data.caja.id && prev0.id !== data.caja.id) ? null : prev0;
           const borr = new Set(data.movimientosBorrados || []);
-          const localMovs = (prev?.movimientos || []).filter(m => !borr.has(m.id));
+          const enOtraCaja = new Set((data.historialCierres || []).flatMap((h) => (h.movimientos || []).map((m) => m.id))); const localMovs = (prev?.movimientos || []).filter(m => !borr.has(m.id) && !enOtraCaja.has(m.id));
           const serverMovs = data.caja.movimientos || [];
           const srvPorId = Object.fromEntries(serverMovs.map((m) => [m.id, m]));
           for (let i = 0; i < localMovs.length; i++) { const sv = srvPorId[localMovs[i].id]; if (sv && (Number(sv.editado_ts) || 0) > (Number(localMovs[i].editado_ts) || 0)) localMovs[i] = { ...localMovs[i], ...sv }; }
