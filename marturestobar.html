@@ -767,8 +767,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   };
   const abrirDelivery = () => { setOrden({ tipo: "delivery", mesaId: null, lineas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }); setCat("Pizzas"); setVista("orden"); };
   const volver = () => { if (orden && orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: orden.lineas, datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); } setOrden(null); setVista("mapa"); };
+  // Bebidas de mesa: no pasan por cocina, asi que el stock se descuenta al cargarlas y se devuelve si se quitan
+  const stockBebida = (pid, cant, motivo) => { const rec = prodById[pid]?.receta || []; if (!rec.length || !cant) return; const sumar = {}; for (const [iid, c] of rec) sumar[iid] = (sumar[iid] || 0) - c * cant; cambiarStock({ sumar }, motivo); };
   const add = (pid) => {
     if (orden.tipo === "mesa" && String(prodById[pid]?.cat).toLowerCase() === "bebidas") {
+      stockBebida(pid, 1, "bebida mesa " + orden.mesaId);
       markMesaDirty(orden.mesaId);
       setMesas((ms) => {
         const bev = ms[orden.mesaId].bebidas || [];
@@ -2025,9 +2028,9 @@ const cancelarDelivery = (d) => {
                             <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}</span>
                             <div className="flex items-center gap-1">
                               <span style={{ color: C.muted, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
-                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
-                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
-                              {!esVisor && <button onClick={() => { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).filter((_, j) => j !== i) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.base, color: C.red, border: "none", cursor: "pointer" }}><X size={12} /></button>}
+                              {!esVisor && <button onClick={() => { stockBebida(l.pid, -1, "bebida quitada mesa " + orden.mesaId); markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant - 1 } : x).filter(x => x.cant > 0) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>−</button>}
+                              {!esVisor && <button onClick={() => { stockBebida(l.pid, 1, "bebida mesa " + orden.mesaId); markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).map((x, j) => j === i ? { ...x, cant: x.cant + 1 } : x) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "none", cursor: "pointer" }}>+</button>}
+                              {!esVisor && <button onClick={() => { stockBebida(l.pid, -(l.cant || 1), "bebida quitada mesa " + orden.mesaId); markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], bebidas: (ms[orden.mesaId].bebidas || []).filter((_, j) => j !== i) } }; postMesas(nm); return nm; }); }} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.base, color: C.red, border: "none", cursor: "pointer" }}><X size={12} /></button>}
                             </div>
                           </div>
                         ))}</div>
