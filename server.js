@@ -578,9 +578,18 @@ app.post("/api/caja", (req, res) => {
         }
         if (serverCaja) {
           if (caja.movimientos) {
-            for (const mov of caja.movimientos) db.addMovimiento(serverCaja.id, mov);
-            console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", serverCaja.id);
+            // Una pantalla que se quedo con la caja anterior (ej. corte de luz / sin conexion) manda sus movimientos
+            // despues de que se abrio la caja nueva: van a la caja de su fecha y turno, no a la que esta abierta
+            let destino = serverCaja.id;
+            const act = serverCaja.fecha !== undefined ? serverCaja : db.getCaja();
+            if (act && caja.fecha && caja.turno && (caja.fecha !== act.fecha || caja.turno !== act.turno)) {
+              const otra = db.getSesionPorFechaTurno(caja.fecha, caja.turno);
+              if (otra && otra.id !== serverCaja.id) { destino = otra.id; console.log("[POST /api/caja] Pantalla con caja vieja (" + caja.fecha + " " + caja.turno + "): movimientos a sesión", destino); }
+            }
+            for (const mov of caja.movimientos) db.addMovimiento(destino, mov);
+            console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", destino);
           }
+          if (caja.arqueo && caja.fecha && caja.turno && serverCaja.fecha !== undefined && (caja.fecha !== serverCaja.fecha || caja.turno !== serverCaja.turno)) caja.arqueo = null;
           if (caja.arqueo) db.updateSesionArqueo(serverCaja.id, caja.arqueo);
         }
       }
@@ -756,6 +765,18 @@ app.post("/api/clientes/ajuste", (req, res) => {
     console.error("[CLIENTES] ERROR:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+app.post("/api/caja/mover-movimientos", (req, res) => {
+  try {
+    const { ids, sesionId, clave, usuario } = req.body || {};
+    let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin");
+    if (!admins.length) admins = [{ nombre: "Admin", rol: "admin", clave: "1234" }];
+    if (!admins.some((u) => String(u.clave) === String(clave || ""))) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    if (!Array.isArray(ids) || !ids.length || !sesionId) return res.status(400).json({ ok: false, error: "Faltan datos." });
+    const n = db.moverMovimientos(ids, sesionId);
+    console.log("[CAJA] Movidos", n, "movimientos a sesión", sesionId, "por", usuario || "");
+    res.json({ ok: true, movidos: n });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.post("/api/stock/ajuste", (req, res) => {
   try {

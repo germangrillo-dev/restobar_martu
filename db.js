@@ -384,6 +384,20 @@ function updateSesionArqueo(sesionId, arqueo) {
   getDB().prepare("UPDATE caja_sesiones SET arqueo = ? WHERE id = ?").run(JSON.stringify(arqueo || {}), sesionId);
 }
 
+// Pasa movimientos a otra caja (correccion manual: ventas que quedaron en la caja equivocada)
+function moverMovimientos(ids, sesionId) {
+  const d = getDB();
+  const ses = d.prepare("SELECT id FROM caja_sesiones WHERE id = ?").get(sesionId);
+  if (!ses) throw new Error("No existe la caja " + sesionId);
+  let n = 0;
+  d.transaction(() => { for (const id of ids || []) n += d.prepare("UPDATE movimientos SET sesion_id = ? WHERE id = ?").run(sesionId, id).changes; })();
+  return n;
+}
+// Caja cerrada con esa fecha y turno (para movimientos de una pantalla que se quedo con la caja anterior)
+function getSesionPorFechaTurno(fecha, turno) {
+  return getDB().prepare("SELECT * FROM caja_sesiones WHERE fecha = ? AND turno = ? ORDER BY id DESC LIMIT 1").get(fecha, turno || "");
+}
+
 function closeCaja(sesionId, cierre, arqueo, diff) {
   getDB().prepare(
     "UPDATE caja_sesiones SET cierre = ?, arqueo = ?, diff = ?, fecha_cierre = ?, activa = 0 WHERE id = ?"
@@ -759,7 +773,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,
