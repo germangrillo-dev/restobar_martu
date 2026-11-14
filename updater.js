@@ -149,11 +149,20 @@ async function updateFromGitHub(token) {
   return { ok: true, backupDir, sha: sha || "desconocido" };
 }
 
-function restartServer() {
-  const installDir = process.cwd();
+// Reinicio del servidor.
+// Si corre dentro de INICIAR.bat (MARTU_SUPERVISADO=1), alcanza con salir: el bucle de INICIAR.bat lo vuelve a levantar.
+// Si no (lo arranco otra cosa), se lanza el arranque oculto (iniciar-oculto.vbs) para que quede supervisado y sin ventana.
+function restartServer(dir) {
+  const installDir = dir || process.cwd();
   setTimeout(() => {
-    const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: installDir });
-    bat.unref();
+    if (process.env.MARTU_SUPERVISADO !== "1") {
+      const vbs = require("path").join(installDir, "iniciar-oculto.vbs");
+      const args = require("fs").existsSync(vbs)
+        ? ["/c", "timeout /t 3 /nobreak >nul & wscript.exe \"" + vbs + "\""]
+        : ["/c", "timeout /t 3 /nobreak >nul & node server.js"];
+      const bat = spawn("cmd", args, { detached: true, stdio: "ignore", cwd: installDir, windowsHide: true });
+      bat.unref();
+    }
     process.exit(0);
   }, 1000);
 }

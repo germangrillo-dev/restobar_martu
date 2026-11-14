@@ -220,6 +220,40 @@ function saveConfig(cfg) {
   tx(cfg);
 }
 
+// ─── Cuenta corriente y clientes: cambios de a uno (antes cada pantalla mandaba su lista completa y pisaba lo de otra) ───
+function leerConfigLista(d, key) {
+  const r = d.prepare("SELECT value FROM config WHERE key = ?").get(key);
+  if (!r) return [];
+  try { const v = JSON.parse(r.value); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function agregarMovimientosCC(entries) {
+  const d = getDB();
+  let out = [];
+  d.transaction(() => {
+    const lista = leerConfigLista(d, "cuentaCorriente");
+    const ids = new Set(lista.map((e) => e && e.id));
+    for (const e of entries || []) if (e && e.id && !ids.has(e.id)) { lista.push(e); ids.add(e.id); }
+    d.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('cuentaCorriente', ?)").run(JSON.stringify(lista));
+    out = lista;
+  })();
+  return out;
+}
+function ajustarClientes({ guardar, borrar } = {}) {
+  const d = getDB();
+  let out = [];
+  d.transaction(() => {
+    let lista = leerConfigLista(d, "clientes");
+    if (guardar && guardar.id) {
+      const i = lista.findIndex((c) => c && c.id === guardar.id);
+      if (i >= 0) lista[i] = { ...lista[i], ...guardar }; else lista.push(guardar);
+    }
+    if (borrar) lista = lista.filter((c) => c && c.id !== borrar);
+    d.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('clientes', ?)").run(JSON.stringify(lista));
+    out = lista;
+  })();
+  return out;
+}
+
 // ─── Poner ventas y caja en cero (conserva usuarios, config y catálogo) ───
 function resetVentas() {
   const d = getDB();
@@ -723,7 +757,7 @@ function closeDB() {
 
 module.exports = {
   initDB, getDB, closeDB, backupDB,
-  getConfig, saveConfig, resetVentas,
+  getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes,
   getUsuarios, saveUsuarios,
   getCaja, createCaja, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,

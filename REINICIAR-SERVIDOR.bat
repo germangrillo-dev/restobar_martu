@@ -20,7 +20,8 @@ if not errorlevel 1 (
   echo El servidor ya se volvio a levantar solo con la version nueva.
 ) else (
   echo Levantando el servidor...
-  start "Martu Resto Bar - Servidor" cmd /c "%~dp0INICIAR.bat"
+  wscript.exe "%~dp0iniciar-oculto.vbs"
+  timeout /t 5 /nobreak >nul
 )
 echo.
 echo LISTO. Recarga el sistema en el navegador con Ctrl+F5.

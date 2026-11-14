@@ -611,7 +611,8 @@ app.post("/api/caja", (req, res) => {
     // Config
     if (config !== undefined && config !== null) {
       // El modo de facturacion (prueba/real) y el punto de venta solo se cambian con /api/afip/config (clave admin)
-      const { afipModo, afipPuntoVenta, ...configResto } = config;
+      // Cuenta corriente y clientes van por /api/cc/movimientos y /api/clientes/ajuste (si no, una pantalla con la lista vieja borraba los cargos de otra)
+      const { afipModo, afipPuntoVenta, cuentaCorriente: _cc, clientes: _cl, ...configResto } = config;
       db.saveConfig(configResto);
       delete MENU_CACHE.html;
     }
@@ -735,6 +736,27 @@ app.post("/api/caja/venta/cambiar-medio", (req, res) => {
   }
 });
 // --- API: Ajustar stock (atomico) ---
+app.post("/api/cc/movimientos", (req, res) => {
+  try {
+    const { entries } = req.body || {};
+    const lista = db.agregarMovimientosCC(Array.isArray(entries) ? entries : []);
+    console.log("[CC]", (entries || []).map((e) => e.tipo + " " + e.monto + " " + (e.concepto || "")).join(" | ").slice(0, 300));
+    res.json({ ok: true, cuentaCorriente: lista });
+  } catch (e) {
+    console.error("[CC] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+app.post("/api/clientes/ajuste", (req, res) => {
+  try {
+    const { guardar, borrar } = req.body || {};
+    const clientes = db.ajustarClientes({ guardar, borrar });
+    res.json({ ok: true, clientes });
+  } catch (e) {
+    console.error("[CLIENTES] ERROR:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 app.post("/api/stock/ajuste", (req, res) => {
   try {
     const { sumar, fijar, borrar, reemplazar, motivo } = req.body || {};
@@ -843,12 +865,7 @@ app.post("/api/backups/restaurar", async (req, res) => {
   const result = await backup.restaurarBackup(nombre);
   if (result.ok) {
     res.json({ ok: true, texto: "Restaurado. Reiniciando..." });
-    setTimeout(() => {
-      const { spawn } = require("child_process");
-      const bat = spawn("cmd", ["/c", "taskkill /F /IM node.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & node server.js"], { detached: true, stdio: "ignore", cwd: __dirname });
-      bat.unref();
-      process.exit(0);
-    }, 1000);
+    require("./updater").restartServer(__dirname);
   } else {
     res.json(result);
   }
@@ -872,7 +889,7 @@ app.post("/api/update", async (req, res) => {
     let version = {};
     try { version = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8")); } catch {}
     res.json({ ok: true, texto: "Actualizado correctamente. Reiniciando...", backup: result.backupDir, version });
-    updater.restartServer();
+    updater.restartServer(__dirname);
   } catch (e) {
     console.error("[UPDATE ERROR]", e);
     res.json({ ok: false, texto: "Error al actualizar: " + e.message });

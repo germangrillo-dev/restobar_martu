@@ -336,7 +336,7 @@ function App() {
   const postAlServer = (cajaVal, mesasVal, deliveriesVal) => {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
-    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, clientes: cfg.clientes, cuentaCorriente: cfg.cuentaCorriente, mesas: cfg.mesas } : undefined;
+    const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, mesas: cfg.mesas } : undefined;
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
     // Las mesas ya no viajan aca (cada pantalla mandaba su copia de TODAS las mesas y podia pisar pedidos de otra): van solo por /api/mesas
     const payload = { caja: cajaVal, historialCierres, orden, config: configLiviano, facturaXNum, productos };
@@ -777,7 +777,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       descuentaStock = false;
     }
     if (descuentaStock && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "envio a cocina");
-    const itemsTicket = orden.lineas.map((l) => ({ nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
+    const itemsTicket = orden.lineas.map((l) => ({ pid: l.pid, cat: prodById[l.pid]?.cat, nombre: prodById[l.pid].nombre, cant: l.cant, precio: prodById[l.pid].precio, nota: l.nota }));
     const total = sumLin(orden.lineas);
     const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
     if (orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
@@ -1027,22 +1027,36 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const ccEntries = (config.cuentaCorriente || []);
   const ccDeCliente = (clienteId) => ccEntries.filter((e) => e.clienteId === clienteId).sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "") || (a.id || "").localeCompare(b.id || ""));
   const saldoCliente = (clienteId) => ccDeCliente(clienteId).reduce((acc, e) => acc + (e.tipo === "cargo" ? e.monto : -e.monto), 0);
+  // Cada cargo/pago de cuenta corriente se manda solo (el servidor lo agrega a la lista); antes se mandaba la lista entera y otra pantalla con la lista vieja lo borraba
+  const unirCC = (a, b) => { const out = [...(a || [])]; const ids = new Set(out.map((e) => e && e.id)); for (const e of (b || [])) if (e && e.id && !ids.has(e.id)) { out.push(e); ids.add(e.id); } return out; };
+  const ccPendientesRef = React.useRef([]);
+  const agregarMovCC = (entry) => {
+    ccPendientesRef.current = [...ccPendientesRef.current, entry];
+    const base = (configRef.current || config).cuentaCorriente || [];
+    const nuevas = unirCC(base, [entry]);
+    configRef.current = { ...(configRef.current || config), cuentaCorriente: nuevas };
+    setConfig((c) => ({ ...c, cuentaCorriente: unirCC(c.cuentaCorriente, [entry]) }));
+    const mandar = (intento) => fetch(serverUrl + "/api/cc/movimientos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries: [entry] }) })
+      .then((r) => r.json()).then((d) => { if (!d || !d.ok) throw new Error((d && d.error) || "error"); ccPendientesRef.current = ccPendientesRef.current.filter((e) => e.id !== entry.id); if (Array.isArray(d.cuentaCorriente)) setConfig((c) => ({ ...c, cuentaCorriente: unirCC(d.cuentaCorriente, ccPendientesRef.current) })); })
+      .catch(() => { if (intento < 3) setTimeout(() => mandar(intento + 1), 3000 * (intento + 1)); else setToast({ tipo: "error", texto: "No se pudo guardar en el servidor el movimiento de cuenta corriente (" + (entry.concepto || "") + "). Revisá la conexión y volvé a cargarlo." }); });
+    mandar(0);
+  };
+  const guardarClienteServidor = (op) => {
+    fetch(serverUrl + "/api/clientes/ajuste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(op) })
+      .then((r) => r.json()).then((d) => { if (!d || !d.ok) throw new Error("error"); })
+      .catch(() => setToast({ tipo: "error", texto: "No se pudo guardar el cliente en el servidor. Revisá la conexión." }));
+  };
   const cargoACuenta = (clienteId, monto, concepto, extra) => {
     cajaDirtyUntilRef.current = Date.now() + 5000;
     const entry = { id: uid(), clienteId, fecha: (extra && extra.fecha) || hoy(), tipo: "cargo", monto: +monto, concepto: concepto || "Cargo", saldo: 0, ...(extra && extra.items ? { items: extra.items } : {}), ...(extra && extra.nota ? { nota: extra.nota } : {}) };
-    const nuevas = [...(config.cuentaCorriente || []), entry];
-    configRef.current = { ...(configRef.current || config), cuentaCorriente: nuevas };
-    setConfig((c) => ({ ...c, cuentaCorriente: nuevas }));
-    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { cuentaCorriente: nuevas } }) }).catch(() => {});
+    agregarMovCC(entry);
     return entry;
   };
   const pagoACuenta = (clienteId, monto, concepto, medio) => {
     cajaDirtyUntilRef.current = Date.now() + 5000;
     const medioPago = medio || "Efectivo";
     const entry = { id: uid(), clienteId, fecha: hoy(), tipo: "pago", monto: +monto, concepto: concepto || "Pago", saldo: 0 };
-    const nuevas = [...(config.cuentaCorriente || []), entry];
-    configRef.current = { ...(configRef.current || config), cuentaCorriente: nuevas };
-    setConfig((c) => ({ ...c, cuentaCorriente: nuevas }));
+    agregarMovCC(entry);
     // Also add caja movement
     const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
     setFacturaXNum((n) => n + 1);
@@ -1052,7 +1066,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const nuevaCaja = { ...base, movimientos: [...(base.movimientos || []), mov] };
     cajaRef.current = nuevaCaja;
     setCaja(nuevaCaja);
-    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: { cuentaCorriente: nuevas }, caja: nuevaCaja }) }).catch(() => {});
+    fetch(serverUrl + "/api/caja", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caja: nuevaCaja }) }).catch(() => {});
     return entry;
   };
 
@@ -1215,7 +1229,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
               });
             } else if (data.cajaIniciada === false) {
               setCaja((prev) => ({ fecha: hoy(), apertura: 0, movimientos: prev?.movimientos || [], cierre: null, saldoFinal: null, turno: "", usuario: prev?.usuario || data.caja?.usuario || "", arqueo: prev?.arqueo || {} }));
-            } if (data.cajaIniciada === false) { setMesas(() => { const nm = {}; (listaMesas || []).forEach((m) => { nm[m.id] = { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }; }); return nm; }); setDeliveries([]); setWaPedidos([]); try { localStorage.removeItem("elmo_mesas"); localStorage.removeItem("elmo_deliveries"); } catch {} } else if (data.mesas && typeof data.mesas === "object") { setMesas((prev) => { const merged = { ...prev }; for (const [id, sm] of Object.entries(data.mesas)) { const sid = String(id); const local = merged[id]; const tsL = (local && local.cobradaTs) || 0, tsS = (sm && sm.cobradaTs) || 0; if (tsS > tsL) { merged[id] = sm; dirtyMesasRef.current.delete(sid); continue; } const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0); const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0); if (dirtyMesasRef.current.has(sid)) { if (!serverHasItems) dirtyMesasRef.current.delete(sid); if (serverHasItems) continue; } if (localHasItems && !serverHasItems) continue; if (!localHasItems && serverHasItems) continue; merged[id] = sm; } return merged; }); } if (data.deliveries && Array.isArray(data.deliveries)) setDeliveries((prev) => unirDeliveries(prev, data.deliveries)); if (data.historialCierres && Array.isArray(data.historialCierres) && data.historialCierres.length > 0) setHistorialCierres(data.historialCierres); if (data.insumos && Array.isArray(data.insumos)) setInsumos(data.insumos); if (data.stock && typeof data.stock === "object") setStock(data.stock); if (data.costos && typeof data.costos === "object") setCostos(data.costos); if (data.productos && Array.isArray(data.productos)) setProductos(data.productos); if (data.proveedores && Array.isArray(data.proveedores)) setProveedores(data.proveedores); if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios); if (typeof data.facturaXNum === "number") setFacturaXNum(data.facturaXNum);         if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.publicUrl) setPublicUrl(data.config.publicUrl); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias(data.config.categorias); } }).catch(() => {}); fetch(serverUrl + "/api/facturas").then(r => r.json()).then(f => { if (Array.isArray(f)) setFacturas(f); }).catch(() => {}); fetch(serverUrl + "/api/version").then(r => r.json()).then(v => { if (v && v.sha) setVersionSistema(v); }).catch(() => {}); }, []);
+            } if (data.cajaIniciada === false) { setMesas(() => { const nm = {}; (listaMesas || []).forEach((m) => { nm[m.id] = { lineas: [], enviado: [], despachado: [], bebidas: [], datos: { cliente: "", direccion: "", telefono: "", cuit: "" } }; }); return nm; }); setDeliveries([]); setWaPedidos([]); try { localStorage.removeItem("elmo_mesas"); localStorage.removeItem("elmo_deliveries"); } catch {} } else if (data.mesas && typeof data.mesas === "object") { setMesas((prev) => { const merged = { ...prev }; for (const [id, sm] of Object.entries(data.mesas)) { const sid = String(id); const local = merged[id]; const tsL = (local && local.cobradaTs) || 0, tsS = (sm && sm.cobradaTs) || 0; if (tsS > tsL) { merged[id] = sm; dirtyMesasRef.current.delete(sid); continue; } const localHasItems = local && ((local.lineas || []).length > 0 || (local.enviado || []).length > 0 || (local.despachado || []).length > 0 || (local.bebidas || []).length > 0); const serverHasItems = sm && ((sm.lineas || []).length > 0 || (sm.enviado || []).length > 0 || (sm.despachado || []).length > 0 || (sm.bebidas || []).length > 0); if (dirtyMesasRef.current.has(sid)) { if (!serverHasItems) dirtyMesasRef.current.delete(sid); if (serverHasItems) continue; } if (localHasItems && !serverHasItems) continue; if (!localHasItems && serverHasItems) continue; merged[id] = sm; } return merged; }); } if (data.deliveries && Array.isArray(data.deliveries)) setDeliveries((prev) => unirDeliveries(prev, data.deliveries)); if (data.historialCierres && Array.isArray(data.historialCierres) && data.historialCierres.length > 0) setHistorialCierres(data.historialCierres); if (data.insumos && Array.isArray(data.insumos)) setInsumos(data.insumos); if (data.stock && typeof data.stock === "object") setStock(data.stock); if (data.costos && typeof data.costos === "object") setCostos(data.costos); if (data.productos && Array.isArray(data.productos)) setProductos(data.productos); if (data.proveedores && Array.isArray(data.proveedores)) setProveedores(data.proveedores); if (data.usuarios && Array.isArray(data.usuarios) && data.usuarios.length > 0) setUsuarios(data.usuarios); if (typeof data.facturaXNum === "number") setFacturaXNum(data.facturaXNum);         if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } if (Array.isArray(data.config.cuentaCorriente)) merged.cuentaCorriente = unirCC(data.config.cuentaCorriente, ccPendientesRef.current); return merged; }); if (data.config.publicUrl) setPublicUrl(data.config.publicUrl); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias(data.config.categorias); } }).catch(() => {}); fetch(serverUrl + "/api/facturas").then(r => r.json()).then(f => { if (Array.isArray(f)) setFacturas(f); }).catch(() => {}); fetch(serverUrl + "/api/version").then(r => r.json()).then(v => { if (v && v.sha) setVersionSistema(v); }).catch(() => {}); }, []);
   React.useEffect(() => { configRef.current = config; }, [config]);
   // Si hay una categoría en uso que no está guardada en config (ej: POSTRES), la persistimos en el servidor
   React.useEffect(() => {
@@ -1331,7 +1345,7 @@ const cancelarDelivery = (d) => {
             return serverOnly.length > 0 ? [...prev, ...serverOnly] : prev;
           });
         }
-        if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } return merged; }); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias((prev) => { const prodCats = (prodRef.current || []).map((p) => p.cat).filter(Boolean); const out = []; for (const c of [...(prev || []), ...data.config.categorias, ...prodCats]) if (c && out.indexOf(c) < 0) out.push(c); return out; }); }
+        if (data.config) { setConfig((c) => { const merged = { ...c }; for (const [k, v] of Object.entries(data.config)) { if (v !== "" && v !== null && v !== undefined) merged[k] = v; } if (Array.isArray(data.config.cuentaCorriente)) merged.cuentaCorriente = unirCC(data.config.cuentaCorriente, ccPendientesRef.current); return merged; }); if (data.config.categorias && Array.isArray(data.config.categorias)) setCategorias((prev) => { const prodCats = (prodRef.current || []).map((p) => p.cat).filter(Boolean); const out = []; for (const c of [...(prev || []), ...data.config.categorias, ...prodCats]) if (c && out.indexOf(c) < 0) out.push(c); return out; }); }
         if (typeof data.facturaXNum === "number") setFacturaXNum((prev) => Math.max(prev || 1, data.facturaXNum));
       }).catch(() => {});
       // Mesas from own endpoint - never overwrite local mesa with items with empty server mesa
@@ -1505,6 +1519,7 @@ const cancelarDelivery = (d) => {
       { t: t.tipo === "mesa" ? "MESA " + t.mesaId : "DELIVERY", bold: true, grande: true },
       { t: (t.hora || hora()) + " hs", grande: true }
     ];
+    if (t.agregado) l.push({ t: "** AGREGADO AL PEDIDO **", bold: true, grande: true });
     if (t.tipo === "delivery") {
       l.push({ t: "", rayita: true });
       l.push({ t: "Cliente: " + (t.cliente || ""), izq: true, bold: true, grande: true });
@@ -1542,8 +1557,12 @@ const cancelarDelivery = (d) => {
      return l;
    };
 
+  // Bebidas: solo van a la comanda de cocina si está activo Config → Bebidas → "Enviar bebidas a comandera"
+  const esBebidaItem = (it) => String((it && (prodById[it.pid]?.cat || it.cat)) || "").toLowerCase() === "bebidas";
   const mandarComanda = async (tk) => {
-    const ok = await imprimirTicket("comanda", lineasComanda(tk));
+    const items = (tk.items || []).filter((it) => config.enviarBebidas || !esBebidaItem(it));
+    if (!items.length) return true; // solo bebidas: no se imprime nada en cocina
+    const ok = await imprimirTicket("comanda", lineasComanda({ ...tk, items }));
     if (ok) setToast({ tipo: "ok", texto: "Comanda enviada a cocina." });
     return ok;
   };
@@ -2506,7 +2525,7 @@ const cancelarDelivery = (d) => {
                         <input style={inputStyle} placeholder="Teléfono" value={editCliente.telefono} onChange={(e) => setEditCliente({ ...editCliente, telefono: e.target.value })} />
                         <input style={inputStyle} placeholder="Email" value={editCliente.email} onChange={(e) => setEditCliente({ ...editCliente, email: e.target.value })} />
                         <div className="flex gap-2 mt-2">
-                          <button onClick={() => { if (!editCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const clean = { ...editCliente, nombre: editCliente.nombre.trim(), cuit: editCliente.cuit.trim(), direccion: editCliente.direccion.trim(), telefono: editCliente.telefono.trim(), email: editCliente.email.trim() }; if (editCliente.id) { setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).map((x) => x.id === clean.id ? clean : x) })); setToast({ tipo: "ok", texto: "Cliente actualizado." }); } else { setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), { ...clean, id: uid() }] })); setToast({ tipo: "ok", texto: "Cliente agregado." }); } setEditCliente(null); }} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar</button>
+                          <button onClick={() => { if (!editCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const clean = { ...editCliente, nombre: editCliente.nombre.trim(), cuit: editCliente.cuit.trim(), direccion: editCliente.direccion.trim(), telefono: editCliente.telefono.trim(), email: editCliente.email.trim() }; if (editCliente.id) { setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).map((x) => x.id === clean.id ? clean : x) })); guardarClienteServidor({ guardar: clean }); setToast({ tipo: "ok", texto: "Cliente actualizado." }); } else { const nuevoCli = { ...clean, id: uid() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevoCli] })); guardarClienteServidor({ guardar: nuevoCli }); setToast({ tipo: "ok", texto: "Cliente agregado." }); } setEditCliente(null); }} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar</button>
                           <button onClick={() => setEditCliente(null)} className="flex-1 py-2 rounded-lg text-sm" style={{ background: C.raised2, border: "1px solid " + C.border, color: C.muted }}>Cancelar</button>
                         </div>
                       </div>
@@ -2530,7 +2549,7 @@ const cancelarDelivery = (d) => {
                             </div>
                             <button onClick={() => { setShowCuentaCorriente({ clienteId: c.id, modo: "ver" }); }} style={{ color: C.amber, background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Ver cuenta</button>
                             <button onClick={() => setEditCliente({ ...c })} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><Pencil size={14} /></button>
-                            <button onClick={() => { if (!window.confirm("Eliminar cliente " + c.nombre + "?")) return; setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).filter((_, j) => j !== i) })); }} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+                            <button onClick={() => { if (!window.confirm("Eliminar cliente " + c.nombre + "?")) return; setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).filter((x) => x.id !== c.id) })); guardarClienteServidor({ borrar: c.id }); }} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
                           </div>
                         ))}
                       </div>
@@ -3262,6 +3281,13 @@ const cancelarDelivery = (d) => {
             <button key={p.id} onClick={() => {
               const cant = addItemCant || 1;
               const nuevoItem = { pid: p.id, nombre: p.nombre, cant, precio: p.precio, nota: "" };
+              // Igual que al enviar: descuenta insumos y manda a cocina solo lo agregado
+              const req = {};
+              for (const [iid, c] of (p.receta || [])) req[iid] = (req[iid] || 0) + c * cant;
+              const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
+              if (!faltan.length && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "agregado a delivery");
+              if (faltan.length) setToast({ tipo: "error", texto: "Stock bajo: " + faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ") + " — se envía sin descontar stock." });
+              mandarComanda({ tipo: "delivery", mesaId: null, cliente: showAddItemDelivery.cliente, direccion: showAddItemDelivery.direccion, telefono: showAddItemDelivery.telefono, hora: hora(), agregado: true, items: [{ ...nuevoItem, cat: p.cat }] });
               const nuevosItems = [...(showAddItemDelivery.items || []), nuevoItem];
               const nuevoTotal = nuevosItems.reduce((a, it) => a + (it.precio || 0) * (it.cant || 1), 0);
               const nd = { ...showAddItemDelivery, items: nuevosItems, total: nuevoTotal };
@@ -3508,7 +3534,7 @@ const cancelarDelivery = (d) => {
               <input style={inputStyle} placeholder="Dirección" value={nuevoCliente.direccion} onChange={(e) => setNuevoCliente({ ...nuevoCliente, direccion: e.target.value })} />
               <input style={inputStyle} placeholder="Teléfono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({ ...nuevoCliente, telefono: e.target.value })} />
               <input style={inputStyle} placeholder="Email" value={nuevoCliente.email} onChange={(e) => setNuevoCliente({ ...nuevoCliente, email: e.target.value })} />
-              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const nuevo = { id: uid(), nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setCcClienteSel(nuevo.id); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
+              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const nuevo = { id: uid(), nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); guardarClienteServidor({ guardar: nuevo }); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setCcClienteSel(nuevo.id); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
               <button onClick={() => setShowNuevoClienteModal(false)} className="w-full py-2 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Cancelar</button>
             </div>
           </div>

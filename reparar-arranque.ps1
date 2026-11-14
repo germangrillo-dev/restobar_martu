@@ -24,8 +24,8 @@ if (-not (Test-Path $desktop)) {
 $startup = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\Martu Resto Bar.lnk"
 if (-not (Test-Path $startup)) {
     $sc2 = $shell.CreateShortcut($startup)
-    $sc2.TargetPath = "cmd.exe"
-    $sc2.Arguments = "/c `"$dir\INICIAR.bat`""
+    $sc2.TargetPath = "wscript.exe"
+    $sc2.Arguments = "`"$dir\iniciar-oculto.vbs`""
     $sc2.WorkingDirectory = $dir
     $sc2.IconLocation = "$dir\icon-192.png"
     $sc2.Save()
@@ -51,7 +51,7 @@ if ($userStartup -and (Test-Path $userStartup)) {
 $up = (Test-NetConnection -ComputerName 127.0.0.1 -Port 3456 -WarningAction SilentlyContinue).TcpTestSucceeded
 if (-not $up) {
     Write-Host "Levantando servidor..." -ForegroundColor Cyan
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$dir\INICIAR.bat`"" -WorkingDirectory $dir
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$dir\iniciar-oculto.vbs`"" -WorkingDirectory $dir
     Start-Sleep -Seconds 6
 } else {
     Write-Host "Servidor ya corriendo" -ForegroundColor Yellow

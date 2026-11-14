@@ -84,8 +84,8 @@ Escribir-Texto "Acceso directo creado en el escritorio." "Green"
 # Acceso directo de inicio para todos los usuarios
 $startupFolder = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
 $startupShortcut = $shell.CreateShortcut("$startupFolder\Martu Resto Bar.lnk")
-$startupShortcut.TargetPath = "cmd.exe"
-$startupShortcut.Arguments = "/c `"$InstalarEn\INICIAR.bat`""
+$startupShortcut.TargetPath = "wscript.exe"
+$startupShortcut.Arguments = "`"$InstalarEn\iniciar-oculto.vbs`""
 $startupShortcut.WorkingDirectory = $InstalarEn
 $startupShortcut.IconLocation = "$InstalarEn\icon-192.png"
 $startupShortcut.Save()
@@ -105,7 +105,7 @@ Set-Content -Path "$InstalarEn\desinstalar.ps1" -Value $uninstallScript -Encodin
 # 8. Iniciar ahora
 if ($IniciarAhora) {
     Escribir-Texto "Iniciando servidor..." "Yellow"
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$InstalarEn\INICIAR.bat`"" -WorkingDirectory $InstalarEn
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$InstalarEn\iniciar-oculto.vbs`"" -WorkingDirectory $InstalarEn
     Start-Sleep -Seconds 3
 }
 

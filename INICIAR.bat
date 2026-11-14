@@ -23,13 +23,30 @@ echo.
 echo  Abri el sistema en el navegador:
 echo  http://localhost:3456/marturestobar.html
 echo.
-echo  Para detener: cerrar esta ventana
+echo  Para detener: DETENER-SERVIDOR.bat
 echo ============================================
 echo.
 
+rem El servidor sabe que corre dentro de este bucle (al actualizar solo sale y aca se vuelve a levantar)
+set "MARTU_SUPERVISADO=1"
+if not exist "data" mkdir "data"
+if exist "data\detener.flag" del /f /q "data\detener.flag" >nul 2>&1
+
 :restart
-node server.js
+if "%MARTU_OCULTO%"=="1" (
+  rem Sin ventana: lo que muestra el servidor queda en data\servidor.log, se rota a los 5 MB
+  for %%A in ("data\servidor.log") do if %%~zA GTR 5000000 move /y "data\servidor.log" "data\servidor-anterior.log" >nul 2>&1
+  echo [%date% %time%] Arranca el servidor >> "data\servidor.log"
+  node server.js >> "data\servidor.log" 2>&1
+) else (
+  node server.js
+)
 echo.
+rem Lo detuvieron a proposito con DETENER-SERVIDOR.bat
+if exist "data\detener.flag" (
+  del /f /q "data\detener.flag" >nul 2>&1
+  exit /b
+)
 rem Si otra instancia se quedo con el puerto, no reinciamos en bucle
 netstat -ano -p TCP | findstr /C:":3456 " | findstr /C:"LISTENING" >nul 2>&1
 if not errorlevel 1 (
