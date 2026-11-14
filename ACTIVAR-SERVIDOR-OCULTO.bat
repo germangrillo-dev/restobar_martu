@@ -1,5 +1,10 @@
 @echo off
 rem Pasa el servidor a modo "sin ventana" (una sola vez). Pide permiso de administrador.
+rem Si lo copiaron a otro lado (ej. el escritorio), se corre igual desde C:\MartuRestoBar
+if not exist "%~dp0iniciar-oculto.vbs" if exist "C:\MartuRestoBar\ACTIVAR-SERVIDOR-OCULTO.bat" (
+  call "C:\MartuRestoBar\ACTIVAR-SERVIDOR-OCULTO.bat"
+  exit /b
+)
 cd /d "%~dp0"
 net session >nul 2>&1
 if errorlevel 1 (
