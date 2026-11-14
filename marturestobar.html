@@ -1528,9 +1528,10 @@ const cancelarDelivery = (d) => {
       if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true, grande: true });
     }
     l.push({ t: "", rayita: true });
+    l.push({ t: "Cant.  Producto", izq: true, bold: true, grande: true });
     (t.items || []).forEach((it) => {
-      l.push({ t: "[" + it.cant + "]  " + it.nombre, izq: true, bold: true, grande: true });
-      if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
+      l.push({ t: String(it.cant).padStart(3) + "    " + it.nombre, izq: true, bold: true, grande: true });
+      if (it.nota) l.push({ t: "       > " + it.nota, izq: true, grande: true });
     });
     l.push({ t: "", rayita: true });
     l.push({ t: "" });
@@ -1548,9 +1549,10 @@ const cancelarDelivery = (d) => {
      if (t.telefono) l.push({ t: "Tel: " + t.telefono, izq: true, grande: true });
      if (t.cuit) l.push({ t: "CUIT: " + t.cuit, izq: true, grande: true });
      l.push({ t: "", rayita: true });
+     l.push({ t: "Cant.  Producto", izq: true, bold: true, grande: true });
      (t.items || []).forEach((it) => {
-       l.push({ t: "[" + it.cant + "]  " + it.nombre, izq: true, bold: true, grande: true });
-       if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
+       l.push({ t: String(it.cant).padStart(3) + "    " + it.nombre, izq: true, bold: true, grande: true });
+       if (it.nota) l.push({ t: "       > " + it.nota, izq: true, grande: true });
      });
      l.push({ t: "", rayita: true });
      l.push({ t: "Total: " + pesos(t.total), bold: true, grande: true });
