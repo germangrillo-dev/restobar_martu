@@ -911,7 +911,8 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     if (!clienteId) { setToast({ tipo: "error", texto: "Elegí un cliente para la cuenta corriente." }); return; }
     const cli = (config.clientes || []).find((c) => c.id === clienteId);
     markMesaDirty(id);
-    cargoACuenta(clienteId, total, "Mesa " + id + (cli ? " — " + cli.nombre : ""));
+    const itemsCC = [...(mesas[id]?.enviado || []), ...(mesas[id]?.lineas || []), ...(mesas[id]?.despachado || []), ...(mesas[id]?.bebidas || [])].map((l) => ({ nombre: prodById[l.pid]?.nombre || l.nombre || "Item", cant: l.cant || 1, precio: prodById[l.pid]?.precio ?? l.precio ?? 0 }));
+    cargoACuenta(clienteId, total, "Mesa " + id + (cli ? " — " + cli.nombre : ""), { items: itemsCC });
     // Registrar la venta en caja para que quede asentada en el cierre
     const movsACuenta = movsDePagosACuenta(id, mesas[id]?.pagosPend, "pagos a cuenta");
     const mov = { id: uid(), tipo: "venta", concepto: "Mesa " + id + " — Cuenta corriente" + (cli ? " (" + cli.nombre + ")" : ""), monto: total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
@@ -1007,6 +1008,45 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [ccClienteSel, setCcClienteSel] = useState("");
   const [ccMontoPago, setCcMontoPago] = useState("");
   const [ccPagoPrevio, setCcPagoPrevio] = useState({ on: false, fecha: "" });
+  const [ccDetalle, setCcDetalle] = useState({}); // items recuperados de cargos viejos { idCargo: items }
+  React.useEffect(() => { if (!showCuentaCorriente) return; setCcDetalle({}); fetch(serverUrl + "/api/cc/detalle?clienteId=" + encodeURIComponent(showCuentaCorriente.clienteId)).then((r) => r.json()).then((d) => { if (d && d.ok) setCcDetalle(d.detalle || {}); }).catch(() => {}); }, [showCuentaCorriente && showCuentaCorriente.clienteId]);
+  const itemsDeCargo = (e) => (Array.isArray(e.items) && e.items.length ? e.items : (ccDetalle[e.id] || []));
+  // Movimientos que forman la deuda actual (desde la ultima vez que quedo en cero). Si ya esta en cero, el ultimo ciclo (lo que acaba de pagar)
+  const ciclo = (rows) => { const ceros = []; rows.forEach((r, i) => { if (r.acum <= 0.009) ceros.push(i); }); const saldo = rows.length ? rows[rows.length - 1].acum : 0; let desde = 0; if (saldo > 0.009) desde = ceros.length ? ceros[ceros.length - 1] + 1 : 0; else desde = ceros.length >= 2 ? ceros[ceros.length - 2] + 1 : 0; return rows.slice(desde); };
+  const imprimirResumenCC = async (cli, rows) => {
+    const sel = ciclo(rows);
+    if (!sel.length) { setToast({ tipo: "error", texto: "No hay movimientos para imprimir." }); return; }
+    const saldo = rows.length ? rows[rows.length - 1].acum : 0;
+    const f = (d) => (d || "").split("-").reverse().join("/");
+    const l = [
+      { t: config.nombreLocal || "Martu Restobar", bold: true, grande: true },
+      { t: "RESUMEN DE CUENTA CORRIENTE", bold: true },
+      { t: new Date().toLocaleString("es-AR") },
+      { t: "", rayita: true },
+      { t: "Cliente: " + (cli ? cli.nombre : ""), izq: true, bold: true },
+      { t: "", rayita: true },
+    ];
+    for (const e of sel) {
+      if (e.tipo === "cargo") {
+        l.push({ t: f(e.fecha) + "  " + e.concepto, izq: true, bold: true });
+        const its = itemsDeCargo(e);
+        if (its.length) its.forEach((it) => l.push({ t: "  " + it.cant + " x " + it.nombre + "  " + pesos((Number(it.precio) || 0) * (Number(it.cant) || 1)), izq: true }));
+        else l.push({ t: "  (sin detalle)", izq: true });
+        l.push({ t: "Subtotal: " + pesos(e.monto), izq: true, bold: true });
+      } else {
+        l.push({ t: f(e.fecha) + "  PAGO " + pesos(e.monto), izq: true, bold: true });
+      }
+      l.push({ t: "" });
+    }
+    const totCargos = sel.filter((e) => e.tipo === "cargo").reduce((a, e) => a + e.monto, 0);
+    const totPagos = sel.filter((e) => e.tipo === "pago").reduce((a, e) => a + e.monto, 0);
+    l.push({ t: "", rayita: true });
+    l.push({ t: "Consumos: " + pesos(totCargos), izq: true });
+    if (totPagos) l.push({ t: "Pagos: " + pesos(totPagos), izq: true });
+    l.push({ t: (saldo > 0.009 ? "SALDO A PAGAR: " : saldo < -0.009 ? "SALDO A FAVOR: " : "SALDO: ") + pesos(Math.abs(saldo)), bold: true, grande: true });
+    l.push({ t: "" });
+    await imprimirTicket("facturacion", l);
+  };
   // Buscador de clientes (Config → Clientes y los selectores de cliente)
   const [buscaCli, setBuscaCli] = useState("");
   const normTxt = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -2671,6 +2711,7 @@ const cancelarDelivery = (d) => {
                       <div style={{ fontSize: 12, color: C.muted }}>Saldo actual</div>
                       <div style={{ fontSize: 24, fontWeight: 800, color: saldo > 0 ? C.red : saldo < 0 ? C.green : C.text }}>{pesos(Math.abs(saldo))} {saldo > 0 ? "(debe)" : saldo < 0 ? "(a favor)" : ""}</div>
                     </div>
+                    {entries.length > 0 && <button onClick={() => imprimirResumenCC(cli, rows)} className="w-full py-2 rounded-lg font-bold text-sm mb-3 flex items-center justify-center gap-2" style={{ background: C.raised2, border: "1px solid " + C.border, color: C.text }}><Printer size={14} /> {saldo > 0 ? "Imprimir resumen de lo que debe" : "Imprimir resumen de lo que pagó"}</button>}
                     {entries.length === 0 ? (
                       <p style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 12 }}>Sin movimientos en cuenta corriente.</p>
                     ) : (
@@ -2686,6 +2727,7 @@ const cancelarDelivery = (d) => {
                             <div style={{ flex: 2 }}>
                               <div style={{ fontWeight: 600 }}>{e.concepto}</div>
                               <div style={{ fontSize: 10, color: C.muted }}>{(e.fecha || "").split("-").reverse().join("/")}{e.nota ? " · " + e.nota : ""}</div>
+                              {e.tipo === "cargo" && itemsDeCargo(e).length > 0 && <div style={{ fontSize: 11, color: C.text, marginTop: 2 }}>{itemsDeCargo(e).map((it, k) => <div key={k}>{it.cant} x {it.nombre} <span style={{ color: C.muted }}>{pesos((Number(it.precio) || 0) * (Number(it.cant) || 1))}</span></div>)}</div>}
                             </div>
                             <span style={{ width: 90, textAlign: "right", color: e.tipo === "cargo" ? C.red : C.muted }}>{e.tipo === "cargo" ? pesos(e.monto) : "—"}</span>
                             <span style={{ width: 90, textAlign: "right", color: e.tipo === "pago" ? C.green : C.muted }}>{e.tipo === "pago" ? pesos(e.monto) : "—"}</span>
@@ -3515,7 +3557,7 @@ const cancelarDelivery = (d) => {
                 <button onClick={() => {
                     if (!ccClienteSel) { setToast({ tipo: "error", texto: "Elegí un cliente." }); return; }
                   const cli = (config.clientes || []).find((c) => c.id === ccClienteSel);
-                  cargoACuenta(ccClienteSel, showPagoDelivery.total, "Delivery: " + showPagoDelivery.cliente);
+                  cargoACuenta(ccClienteSel, showPagoDelivery.total, "Delivery: " + showPagoDelivery.cliente, { items: (showPagoDelivery.items || []).map((it) => ({ nombre: it.nombre || "Item", cant: it.cant || 1, precio: it.precio || 0 })) });
                   // Registrar la venta en caja (Cuenta corriente) para el cierre
                   const movCC = { id: uid(), tipo: "venta", concepto: "Delivery: " + showPagoDelivery.cliente + " — Cuenta corriente", monto: showPagoDelivery.total, metodo: "Cuenta corriente", ref: "", hora: hora(), comprobante: "CC" };
                   const nuevaCajaCC = { ...caja, movimientos: [...(caja.movimientos || []), movCC] };

@@ -756,6 +756,32 @@ app.post("/api/cc/movimientos", (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+// Detalle de los cargos de cuenta corriente que no guardaron sus items (cargos viejos de delivery):
+// se buscan en los deliveries (actuales y archivados) por nombre del cliente y total
+app.get("/api/cc/detalle", (req, res) => {
+  try {
+    const clienteId = String(req.query.clienteId || "");
+    const cfg = db.getConfig();
+    const cargos = (Array.isArray(cfg.cuentaCorriente) ? cfg.cuentaCorriente : []).filter((e) => e.clienteId === clienteId && e.tipo === "cargo" && !(Array.isArray(e.items) && e.items.length));
+    const norm = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    const dels = [...db.getDeliveries(), ...db.getDeliveriesArchivo()];
+    const usados = new Set();
+    const detalle = {};
+    for (const e of cargos) {
+      const m = String(e.concepto || "").match(/^Delivery:\s*(.+)$/i);
+      if (!m) continue;
+      const nombre = norm(m[1]);
+      const cands = dels.filter((d) => d && !usados.has(d.id) && norm(d.cliente) === nombre && Math.abs((Number(d.total) || 0) - (Number(e.monto) || 0)) < 1 && Array.isArray(d.items) && d.items.length);
+      if (!cands.length) continue;
+      // el mas cercano a la fecha del cargo
+      const fe = Date.parse(e.fecha || "") || 0;
+      cands.sort((a, b) => Math.abs((Date.parse(a.fecha || "") || a.archivadoTs || 0) - fe) - Math.abs((Date.parse(b.fecha || "") || b.archivadoTs || 0) - fe));
+      const d = cands[0]; usados.add(d.id);
+      detalle[e.id] = d.items.map((it) => ({ nombre: it.nombre, cant: it.cant, precio: it.precio }));
+    }
+    res.json({ ok: true, detalle });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.post("/api/clientes/ajuste", (req, res) => {
   try {
     const { guardar, borrar } = req.body || {};

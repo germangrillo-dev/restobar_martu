@@ -526,6 +526,11 @@ function deleteDelivery(id) {
 
 // Al abrir una caja nueva: guarda los deliveries actuales en deliveries_archivo,
 // los marca como borrados (para que ningun dispositivo los vuelva a subir) y limpia la lista.
+// Deliveries archivados (con sus items) para armar el detalle de la cuenta corriente
+function getDeliveriesArchivo() {
+  try { return getDB().prepare("SELECT datos, archivado_ts FROM deliveries_archivo").all().map((r) => { try { return { ...JSON.parse(r.datos), archivadoTs: r.archivado_ts }; } catch { return null; } }).filter(Boolean); } catch { return []; }
+}
+
 function archivarDeliveries() {
   const d = getDB();
   const actuales = getDeliveries();
@@ -773,7 +778,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,
