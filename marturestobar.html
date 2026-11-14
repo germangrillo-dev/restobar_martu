@@ -1529,7 +1529,7 @@ const cancelarDelivery = (d) => {
     }
     l.push({ t: "", rayita: true });
     (t.items || []).forEach((it) => {
-      l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true, grande: true });
+      l.push({ t: "[" + it.cant + "]  " + it.nombre, izq: true, bold: true, grande: true });
       if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
     });
     l.push({ t: "", rayita: true });
@@ -1549,7 +1549,7 @@ const cancelarDelivery = (d) => {
      if (t.cuit) l.push({ t: "CUIT: " + t.cuit, izq: true, grande: true });
      l.push({ t: "", rayita: true });
      (t.items || []).forEach((it) => {
-       l.push({ t: it.cant + "x " + it.nombre, izq: true, bold: true, grande: true });
+       l.push({ t: "[" + it.cant + "]  " + it.nombre, izq: true, bold: true, grande: true });
        if (it.nota) l.push({ t: "  > " + it.nota, izq: true, grande: true });
      });
      l.push({ t: "", rayita: true });
