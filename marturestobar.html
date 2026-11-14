@@ -781,8 +781,8 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const total = sumLin(orden.lineas);
     const comanda = { tipo: orden.tipo, mesaId: orden.mesaId, ...orden.datos, hora: hora(), total, items: itemsTicket };
     if (orden.tipo === "mesa") { markMesaDirty(orden.mesaId); setMesas((ms) => { const nm = { ...ms, [orden.mesaId]: { ...ms[orden.mesaId], lineas: [], enviado: [...(ms[orden.mesaId]?.enviado || []), ...orden.lineas], datos: { ...(ms[orden.mesaId]?.datos || { cliente: "", direccion: "", telefono: "", cuit: "" }), ...orden.datos } } }; postMesas(nm); return nm; }); setOrden((o) => ({ ...o, lineas: [] })); }
-    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), fecha: hoy(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [] })); setSalonVista("delivery"); setVista("mapa"); }
-    const okComanda = await mandarComanda(comanda);
+    else { const delItems = orden.lineas.map((l) => ({ pid: l.pid, nombre: prodById[l.pid]?.nombre || "—", cant: l.cant, precio: prodById[l.pid]?.precio || 0, nota: l.nota })); const nd = { id: uid(), cliente: orden.datos.cliente, direccion: orden.datos.direccion, telefono: orden.datos.telefono, cuit: orden.datos.cuit || "", hora: hora(), fecha: hoy(), total, items: delItems, estado: "cocina" }; setDeliveries((d) => { const nds = [nd, ...d]; postDeliveries(nds); return nds; }); setOrden((o) => ({ ...o, lineas: [], bebidasAComanda: undefined })); setSalonVista("delivery"); setVista("mapa"); }
+    const okComanda = await mandarComanda(comanda, orden.tipo === "delivery" ? (orden.bebidasAComanda ?? !!config.enviarBebidas) : undefined);
     if (okComanda && orden.tipo === "delivery") { await imprimirTicket("comanda", lineasDelivery(comanda)); setToast({ tipo: "ok", texto: "Comandas enviadas: cocina + delivery." }); }
   };
   const cerrarMesa = (id) => {
@@ -958,6 +958,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   // El neto recibido (comision de tarjeta / Mercado Pago) se limpia al cambiar de cobro o de medio
   React.useEffect(() => { setCobroNeto(""); }, [showCobroModal && showCobroModal.id, cobroMetodo, showPagoDelivery && showPagoDelivery.id, showPagoDelivery && showPagoDelivery._metodoSeleccionado]);
    const [showAddItemDelivery, setShowAddItemDelivery] = useState(null);
+   const [addItemBebACom, setAddItemBebACom] = useState(undefined);
    const [verDelivery, setVerDelivery] = useState(null);
    const [showEspecial, setShowEspecial] = useState(null);
    const [addItemProd, setAddItemProd] = useState("");
@@ -1559,8 +1560,9 @@ const cancelarDelivery = (d) => {
 
   // Bebidas: solo van a la comanda de cocina si está activo Config → Bebidas → "Enviar bebidas a comandera"
   const esBebidaItem = (it) => String((it && (prodById[it.pid]?.cat || it.cat)) || "").toLowerCase() === "bebidas";
-  const mandarComanda = async (tk) => {
-    const items = (tk.items || []).filter((it) => config.enviarBebidas || !esBebidaItem(it));
+  const mandarComanda = async (tk, bebidas) => {
+    const conBebidas = bebidas === undefined ? !!config.enviarBebidas : !!bebidas;
+    const items = (tk.items || []).filter((it) => conBebidas || !esBebidaItem(it));
     if (!items.length) return true; // solo bebidas: no se imprime nada en cocina
     const ok = await imprimirTicket("comanda", lineasComanda({ ...tk, items }));
     if (ok) setToast({ tipo: "ok", texto: "Comanda enviada a cocina." });
@@ -1906,7 +1908,7 @@ const cancelarDelivery = (d) => {
                 <div className="flex items-center justify-between mb-2"><span style={{ fontWeight: 800, fontSize: 14, color: "#000000" }}>{orden.tipo === "mesa" ? "Ronda actual" : "Pedido"}</span>{!esVisor && orden.lineas.length > 0 && <button onClick={() => setOrden((o) => ({ ...o, lineas: [] }))} style={{ color: C.muted }}><Trash2 size={16} /></button>}</div>
                 {orden.lineas.length === 0 ? (<p style={{ color: C.muted, fontSize: 14 }}>Elegí productos para agregar.</p>) : (<div className="flex flex-col gap-3">{orden.lineas.map((l) => (<div key={l.lid} className="rounded-lg p-2" style={{ background: C.base }}><div className="flex items-center justify-between gap-2"><div style={{ fontSize: 13, fontWeight: 600 }} className="flex-1">{prodById[l.pid] ? prodById[l.pid].nombre : (l.nombre || "—")}{l.especial && <span style={{ fontSize: 10, fontWeight: 700, color: "#a0785a", marginLeft: 6 }}>ESPECIAL {pesos(l.precio)}</span>}</div><div className="flex items-center gap-1">{!esVisor && <button onClick={() => cant(l.lid, -1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Minus size={14} /></button>}<span style={{ width: 18, textAlign: "center", fontWeight: 700 }}>{l.cant}</span>{!esVisor && <button onClick={() => cant(l.lid, 1)} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.raised2 }}><Plus size={14} /></button>}{!esVisor && <button onClick={() => setOrden((o) => ({ ...o, lineas: o.lineas.filter((x) => x.lid !== l.lid) }))} className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.base, color: C.red, border: "1px solid " + C.red }}><X size={13} /></button>}</div></div>{!esVisor && String(prodById[l.pid]?.cat).toLowerCase() !== "bebidas" && <div className="flex items-center gap-2 mt-2"><span style={{ color: C.muted, flexShrink: 0 }}><MsgIcon size={14} /></span><input value={l.nota} onChange={(e) => setNota(l.lid, e.target.value)} placeholder="Observación: sin aderezo, a punto…" style={{ background: "transparent", border: "none", color: C.text, fontSize: 12, width: "100%", outline: "none" }} /></div>}</div>))}</div>)}
                 <div className="flex justify-between items-baseline mt-3 pt-3" style={{ borderTop: "1px solid " + C.border }}><span style={{ color: C.muted, fontSize: 13, fontWeight: 700 }}>{orden.tipo === "mesa" ? "Total mesa" : "Total"}</span><span style={{ fontWeight: 900, fontSize: 20, color: C.text }}>{pesos(orden.tipo === "mesa" ? mesaTotal(orden.mesaId, orden.lineas) : sumLin(orden.lineas))}</span></div>{orden.tipo === "mesa" && ((mesas[orden.mesaId] || {}).pagosPend || []).length > 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "right" }}>Pagos a cuenta: {pesos(totalPagosACuenta(mesas[orden.mesaId]))} · el total es el saldo</div>}
-                {!esVisor && (() => { const hayComidas = orden.lineas.some((l) => prodById[l.pid]?.cat !== "Bebidas"); return hayComidas && <button onClick={enviar} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-2" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><Send size={16} /> Enviar a cocina</button>; })()}
+                {!esVisor && (() => { const hayComidas = orden.lineas.some((l) => !esBebidaItem(l)); const hayBebidas = orden.tipo === "delivery" && orden.lineas.some((l) => esBebidaItem(l)); const bebACom = orden.bebidasAComanda ?? !!config.enviarBebidas; return (hayComidas || hayBebidas) && <>{hayBebidas && <label className="flex items-center gap-2 mt-2 p-2 rounded-lg" style={{ background: C.base, border: "1px solid " + C.border, fontSize: 13, fontWeight: 700, cursor: "pointer" }}><input type="checkbox" checked={bebACom} onChange={(e) => setOrden((o) => ({ ...o, bebidasAComanda: e.target.checked }))} style={{ width: 18, height: 18 }} /> Mandar las bebidas a la comanda</label>}<button onClick={enviar} className="flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-2" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><Send size={16} /> Enviar a cocina</button></>; })()}
                 {!esVisor && orden.tipo === "mesa" && (mesas[orden.mesaId]?.enviado || []).length === 0 && orden.lineas.length === 0 && ((mesas[orden.mesaId]?.despachado || []).length > 0 || (mesas[orden.mesaId]?.bebidas || []).length > 0) && (<button onClick={() => cerrarMesa(orden.mesaId)} className="flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold mt-2 w-full" style={{ background: "transparent", border: "1px solid " + C.border, color: C.text }}>Cobrar y cerrar mesa</button>)}
               </aside>
             </div>
@@ -3287,7 +3289,7 @@ const cancelarDelivery = (d) => {
               const faltan = Object.entries(req).filter(([iid, c]) => (stock[iid] || 0) < c);
               if (!faltan.length && Object.keys(req).length) cambiarStock({ sumar: Object.fromEntries(Object.entries(req).map(([iid, c]) => [iid, -c])) }, "agregado a delivery");
               if (faltan.length) setToast({ tipo: "error", texto: "Stock bajo: " + faltan.map(([iid, c]) => nombreIns(iid) + " (faltan " + numExacto(c - (stock[iid] || 0)) + " " + unidadDe(iid) + ")").join(", ") + " — se envía sin descontar stock." });
-              mandarComanda({ tipo: "delivery", mesaId: null, cliente: showAddItemDelivery.cliente, direccion: showAddItemDelivery.direccion, telefono: showAddItemDelivery.telefono, hora: hora(), agregado: true, items: [{ ...nuevoItem, cat: p.cat }] });
+              mandarComanda({ tipo: "delivery", mesaId: null, cliente: showAddItemDelivery.cliente, direccion: showAddItemDelivery.direccion, telefono: showAddItemDelivery.telefono, hora: hora(), agregado: true, items: [{ ...nuevoItem, cat: p.cat }] }, addItemBebACom ?? !!config.enviarBebidas);
               const nuevosItems = [...(showAddItemDelivery.items || []), nuevoItem];
               const nuevoTotal = nuevosItems.reduce((a, it) => a + (it.precio || 0) * (it.cant || 1), 0);
               const nd = { ...showAddItemDelivery, items: nuevosItems, total: nuevoTotal };
@@ -3309,6 +3311,7 @@ const cancelarDelivery = (d) => {
           <label style={{ fontSize: 12, color: C.muted }}>Cantidad:</label>
           <input style={{ ...inputStyle, width: 60 }} type="number" min="1" value={addItemCant} onChange={(e) => setAddItemCant(parseInt(e.target.value) || 1)} />
         </div>
+        <label className="flex items-center gap-2 mt-1" style={{ fontSize: 12, fontWeight: 700, cursor: "pointer" }}><input type="checkbox" checked={addItemBebACom ?? !!config.enviarBebidas} onChange={(e) => setAddItemBebACom(e.target.checked)} style={{ width: 16, height: 16 }} /> Si es bebida, mandarla a la comanda</label>
       </div>
     </div>
   </div>
