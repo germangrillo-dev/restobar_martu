@@ -88,6 +88,9 @@ const Eye = (p) => <Ic {...p} paths={["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11
 const C = { base: "#f5f0eb", raised: "#ffffff", raised2: "#f0ebe6", border: "#e5ddd5", text: "#1a1715", muted: "#8a7a6a", amber: "#b8860b", green: "#4a8c3f", red: "#d9543f", blue: "#5b8fd6" };
 const UNIDADES = ["g", "kg", "ml", "L", "u"];
 const CONDICIONES = ["Responsable Inscripto", "Monotributo", "Exento", "Consumidor Final"];
+// Condicion frente al IVA del cliente para la factura electronica (codigos de ARCA)
+const COND_IVA_CLIENTE = [[5, "Consumidor Final"], [4, "IVA Exento (municipio, escuela, etc.)"], [6, "Responsable Monotributo"], [1, "IVA Responsable Inscripto"], [15, "IVA No Alcanzado"], [10, "IVA Liberado"], [7, "Sujeto no categorizado"]];
+const nombreCondIva = (c) => ({ 1: "IVA Responsable Inscripto", 4: "IVA Exento", 6: "Responsable Monotributo", 7: "Sujeto no categorizado", 10: "IVA Liberado", 15: "IVA No Alcanzado" })[Number(c)] || "Consumidor Final";
 
 const INSUMOS_INI = [];
 const COSTOS_INI = {};
@@ -657,7 +660,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const esEgresoEfectivo = (m) => !m.metodo || m.metodo === "Efectivo";
   // Comision de tarjeta / Mercado Pago: la venta queda por el total y se registra lo que realmente se recibe
   // QR obligatorio de ARCA (RG 4892) para facturas electronicas
-  const qrAfip = (a, totalFallback) => { if (!a || !a.cae) return ""; const f = String(a.fecha || ""); const hoy = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); const fecha = /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : hoy; const j = { ver: 1, fecha, cuit: Number(a.cuit) || 27213414475, ptoVta: Number(a.ptoVenta) || 2, tipoCmp: Number(a.cbteTipo) || 11, nroCmp: Number(a.cbteNro) || 0, importe: Number(a.total) || Number(totalFallback) || 0, moneda: "PES", ctz: 1, tipoDocRec: 99, nroDocRec: 0, tipoCodAut: "E", codAut: Number(a.cae) }; return "https://www.afip.gob.ar/fe/qr/?p=" + btoa(JSON.stringify(j)); };
+  const qrAfip = (a, totalFallback) => { if (!a || !a.cae) return ""; const f = String(a.fecha || ""); const hoy = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); const fecha = /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : hoy; const j = { ver: 1, fecha, cuit: Number(a.cuit) || 27213414475, ptoVta: Number(a.ptoVenta) || 2, tipoCmp: Number(a.cbteTipo) || 11, nroCmp: Number(a.cbteNro) || 0, importe: Number(a.total) || Number(totalFallback) || 0, moneda: "PES", ctz: 1, tipoDocRec: Number(a.docTipo) || 99, nroDocRec: Number(a.docNro) || 0, tipoCodAut: "E", codAut: Number(a.cae) }; return "https://www.afip.gob.ar/fe/qr/?p=" + btoa(JSON.stringify(j)); };
   const fechaAfip = (f) => { const x = String(f || ""); return /^\d{8}$/.test(x) ? x.slice(6, 8) + "/" + x.slice(4, 6) + "/" + x.slice(0, 4) : x; };
   const datosFiscales = () => ({ titular: config.afipRazonSocial || "IBAÑEZ SILVINA PAOLA", domicilio: config.afipDomicilio || config.direccion || "", iibb: config.afipIIBB || "", inicio: config.afipInicio || "" });
   const MEDIOS_COMISION = ["Tarjeta débito", "Tarjeta crédito", "Mercado Pago"];
@@ -1003,6 +1006,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [showCuentaCorriente, setShowCuentaCorriente] = useState(null); // { clienteId, modo: "ver"|"pagar" }
   const [ccClienteSel, setCcClienteSel] = useState("");
   const [ccMontoPago, setCcMontoPago] = useState("");
+  const [ccPagoPrevio, setCcPagoPrevio] = useState({ on: false, fecha: "" });
   const [ccConcepto, setCcConcepto] = useState("");
   const [ccMedio, setCcMedio] = useState("Efectivo");
   const [ccCarga, setCcCarga] = useState(null); // consumo a cargar en cuenta corriente: { items, q, libreNombre, libreMonto, fecha, nota }
@@ -1090,11 +1094,13 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     agregarMovCC(entry);
     return entry;
   };
-  const pagoACuenta = (clienteId, monto, concepto, medio) => {
+  const pagoACuenta = (clienteId, monto, concepto, medio, opts) => {
     cajaDirtyUntilRef.current = Date.now() + 5000;
     const medioPago = medio || "Efectivo";
-    const entry = { id: uid(), clienteId, fecha: hoy(), tipo: "pago", monto: +monto, concepto: concepto || "Pago", saldo: 0 };
+    const entry = { id: uid(), clienteId, fecha: (opts && opts.fecha) || hoy(), tipo: "pago", monto: +monto, concepto: concepto || "Pago", saldo: 0, ...(opts && opts.sinCaja ? { sinCaja: true } : {}) };
     agregarMovCC(entry);
+    // Pago que ya se cobro otro dia (y ya entro en la caja de ese dia): solo baja la deuda, no entra en la caja de hoy
+    if (opts && opts.sinCaja) return entry;
     // Also add caja movement
     const numComp = "FAX " + String(facturaXNum).padStart(8, "0");
     setFacturaXNum((n) => n + 1);
@@ -1735,7 +1741,7 @@ const cancelarDelivery = (d) => {
       l.push({ t: "FACTURA C", bold: true, grande: true });
       if (m.afip.fecha && /^\d{8}$/.test(String(m.afip.fecha))) { const f = String(m.afip.fecha); l.push({ t: "Fecha: " + f.slice(6, 8) + "/" + f.slice(4, 6) + "/" + f.slice(0, 4) }); }
       l.push({ t: "PV: " + String(m.afip.ptoVenta || 2).padStart(4, "0") + " · Nº " + String(m.afip.cbteNro || facturaXNum - 1).padStart(8, "0") });
-      l.push({ t: "A CONSUMIDOR FINAL" });
+      l.push({ t: "A " + nombreCondIva(m.afip.condicionIva).toUpperCase() });
       if (m.afip.produccion === false) l.push({ t: "PRUEBA - SIN VALIDEZ FISCAL", bold: true });
       l.push({ t: "", rayita: true });
     }
@@ -2601,11 +2607,14 @@ const cancelarDelivery = (d) => {
                       <div className="flex flex-col gap-2">
                         <input style={inputStyle} placeholder="Nombre *" value={editCliente.nombre} onChange={(e) => setEditCliente({ ...editCliente, nombre: e.target.value })} />
                         <input style={inputStyle} placeholder="CUIT / DNI" value={editCliente.cuit} onChange={(e) => setEditCliente({ ...editCliente, cuit: e.target.value })} />
+                        <label style={{ fontSize: 12, color: C.muted, marginBottom: -4 }}>Condición frente al IVA (para la factura)</label>
+                        <select style={inputStyle} value={editCliente.condicionIva || 5} onChange={(e) => setEditCliente({ ...editCliente, condicionIva: Number(e.target.value) })}>{COND_IVA_CLIENTE.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                        {Number(editCliente.condicionIva || 5) !== 5 && String(editCliente.cuit || "").replace(/[^0-9]/g, "").length !== 11 && <div style={{ fontSize: 11, color: C.red }}>Para facturar a {nombreCondIva(editCliente.condicionIva)} hace falta el CUIT (11 números).</div>}
                         <input style={inputStyle} placeholder="Dirección" value={editCliente.direccion} onChange={(e) => setEditCliente({ ...editCliente, direccion: e.target.value })} />
                         <input style={inputStyle} placeholder="Teléfono" value={editCliente.telefono} onChange={(e) => setEditCliente({ ...editCliente, telefono: e.target.value })} />
                         <input style={inputStyle} placeholder="Email" value={editCliente.email} onChange={(e) => setEditCliente({ ...editCliente, email: e.target.value })} />
                         <div className="flex gap-2 mt-2">
-                          <button onClick={() => { if (!editCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const clean = { ...editCliente, nombre: editCliente.nombre.trim(), cuit: editCliente.cuit.trim(), direccion: editCliente.direccion.trim(), telefono: editCliente.telefono.trim(), email: editCliente.email.trim() }; if (editCliente.id) { setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).map((x) => x.id === clean.id ? clean : x) })); guardarClienteServidor({ guardar: clean }); setToast({ tipo: "ok", texto: "Cliente actualizado." }); } else { const nuevoCli = { ...clean, id: uid() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevoCli] })); guardarClienteServidor({ guardar: nuevoCli }); setToast({ tipo: "ok", texto: "Cliente agregado." }); } setEditCliente(null); }} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar</button>
+                          <button onClick={() => { if (!editCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } if (Number(editCliente.condicionIva || 5) !== 5 && String(editCliente.cuit || "").replace(/[^0-9]/g, "").length !== 11) { setToast({ tipo: "error", texto: "Para un cliente " + nombreCondIva(editCliente.condicionIva) + " cargá el CUIT de 11 números." }); return; } const clean = { ...editCliente, condicionIva: Number(editCliente.condicionIva) || 5, nombre: editCliente.nombre.trim(), cuit: editCliente.cuit.trim(), direccion: editCliente.direccion.trim(), telefono: editCliente.telefono.trim(), email: editCliente.email.trim() }; if (editCliente.id) { setConfig((prev) => ({ ...prev, clientes: (prev.clientes || []).map((x) => x.id === clean.id ? clean : x) })); guardarClienteServidor({ guardar: clean }); setToast({ tipo: "ok", texto: "Cliente actualizado." }); } else { const nuevoCli = { ...clean, id: uid() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevoCli] })); guardarClienteServidor({ guardar: nuevoCli }); setToast({ tipo: "ok", texto: "Cliente agregado." }); } setEditCliente(null); }} className="flex-1 py-2 rounded-lg font-semibold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar</button>
                           <button onClick={() => setEditCliente(null)} className="flex-1 py-2 rounded-lg text-sm" style={{ background: C.raised2, border: "1px solid " + C.border, color: C.muted }}>Cancelar</button>
                         </div>
                       </div>
@@ -2624,7 +2633,7 @@ const cancelarDelivery = (d) => {
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, fontSize: 13 }}>{c.nombre}</div>
-                              <div style={{ fontSize: 11, color: C.muted }}>{c.cuit ? "CUIT: " + c.cuit : "Sin CUIT"}{c.direccion ? " · " + c.direccion : ""}{c.telefono ? " · " + c.telefono : ""}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{c.cuit ? "CUIT: " + c.cuit : "Sin CUIT"}{Number(c.condicionIva || 5) !== 5 ? " · " + nombreCondIva(c.condicionIva) : ""}{c.direccion ? " · " + c.direccion : ""}{c.telefono ? " · " + c.telefono : ""}</div>
                               {saldoCliente(c.id) !== 0 && <div style={{ fontSize: 12, fontWeight: 700, color: saldoCliente(c.id) > 0 ? C.red : C.green, marginTop: 2 }}>Saldo: {pesos(saldoCliente(c.id))} {saldoCliente(c.id) > 0 ? "(debe)" : "(a favor)"}</div>}
                             </div>
                             <button onClick={() => { setShowCuentaCorriente({ clienteId: c.id, modo: "ver" }); }} style={{ color: C.amber, background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Ver cuenta</button>
@@ -2732,14 +2741,21 @@ const cancelarDelivery = (d) => {
                         <input style={{ ...inputStyle, flex: 1 }} type="text" inputMode="decimal" placeholder="Monto" value={ccMontoPago} onChange={(e) => setCcMontoPago(e.target.value)} />
                         <input style={{ ...inputStyle, flex: 2 }} placeholder="Concepto (opcional)" value={ccConcepto} onChange={(e) => setCcConcepto(e.target.value)} />
                       </div>
+                      <label className="flex items-center gap-2 mb-2" style={{ fontSize: 12, fontWeight: 700, cursor: "pointer" }}><input type="checkbox" checked={!!(ccPagoPrevio && ccPagoPrevio.on)} onChange={(e) => setCcPagoPrevio((x) => ({ ...(x || {}), on: e.target.checked }))} style={{ width: 16, height: 16 }} /> Lo pagaron otro día (ya entró en la caja de ese día)</label>
+                      {ccPagoPrevio && ccPagoPrevio.on && <div className="flex items-center gap-2 mb-2"><span style={{ fontSize: 12, color: C.muted }}>Fecha en que pagó:</span><input type="date" max={hoy()} style={{ ...inputStyle, flex: 1 }} value={ccPagoPrevio.fecha || ""} onChange={(e) => setCcPagoPrevio((x) => ({ ...(x || {}), fecha: e.target.value }))} /></div>}
+                      {ccPagoPrevio && ccPagoPrevio.on && <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Solo baja la deuda del cliente. No suma en la caja de hoy ni en el cierre.</div>}
                       <button onClick={() => {
                         const monto = numDec(ccMontoPago);
                         if (!monto || monto <= 0) { setToast({ tipo: "error", texto: "Ingresá un monto válido." }); return; }
                         if (!puedeCobrar()) return;
-                        pagoACuenta(showCuentaCorriente.clienteId, monto, (ccConcepto || "Pago a cuenta") + " (" + ccMedio + ")", ccMedio);
-                        setCcMontoPago(""); setCcConcepto("");
-                        setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " en " + ccMedio + " asentado: entra en el cierre de caja." });
-                      }} className="w-full py-2.5 rounded-lg font-bold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Asentar pago</button>
+                        const previo = ccPagoPrevio && ccPagoPrevio.on;
+                        if (previo && !ccPagoPrevio.fecha) { setToast({ tipo: "error", texto: "Poné la fecha en que lo cobraron." }); return; }
+                        if (previo && ccPagoPrevio.fecha > hoy()) { setToast({ tipo: "error", texto: "La fecha no puede ser futura." }); return; }
+                        const fTxt = previo ? ccPagoPrevio.fecha.split("-").reverse().join("/") : "";
+                        pagoACuenta(showCuentaCorriente.clienteId, monto, (ccConcepto || "Pago a cuenta") + " (" + ccMedio + ")" + (previo ? " — cobrado el " + fTxt + ", no entra en la caja de hoy" : ""), ccMedio, previo ? { sinCaja: true, fecha: ccPagoPrevio.fecha } : undefined);
+                        setCcMontoPago(""); setCcConcepto(""); setCcPagoPrevio({ on: false, fecha: "" });
+                        setToast({ tipo: "ok", texto: previo ? "Pago de " + pesos(monto) + " del " + fTxt + " asentado en la cuenta. No suma en la caja de hoy." : "Pago de " + pesos(monto) + " en " + ccMedio + " asentado: entra en el cierre de caja." });
+                      }} className="w-full py-2.5 rounded-lg font-bold text-sm" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>{ccPagoPrevio && ccPagoPrevio.on ? "Asentar pago (sin caja)" : "Asentar pago"}</button>
                     </div>
                   </div>
                 </div>
@@ -3563,7 +3579,7 @@ const cancelarDelivery = (d) => {
                   <div style={{ fontSize: 11 }}>{datosFiscales().titular} · Responsable Monotributo</div>
                   {datosFiscales().iibb && <div style={{ fontSize: 11 }}>IIBB: {datosFiscales().iibb}</div>}
                   {datosFiscales().inicio && <div style={{ fontSize: 11 }}>Inicio de actividades: {datosFiscales().inicio}</div>}
-                  <div style={{ fontSize: 11 }}>A CONSUMIDOR FINAL</div>
+                  <div style={{ fontSize: 11 }}>A {nombreCondIva(showComprobanteModal.afip.condicionIva).toUpperCase()}</div>
                   {showComprobanteModal.afip.produccion === false && <div style={{ fontWeight: 800, fontSize: 11 }}>PRUEBA - SIN VALIDEZ FISCAL</div>}
                 </div>
               )}
@@ -3637,10 +3653,11 @@ const cancelarDelivery = (d) => {
             <div className="flex flex-col gap-2">
               <input style={inputStyle} placeholder="Nombre *" value={nuevoCliente.nombre} onChange={(e) => setNuevoCliente({ ...nuevoCliente, nombre: e.target.value })} />
               <input style={inputStyle} placeholder="CUIT / DNI" value={nuevoCliente.cuit} onChange={(e) => setNuevoCliente({ ...nuevoCliente, cuit: e.target.value })} />
+              <select style={inputStyle} value={nuevoCliente.condicionIva || 5} onChange={(e) => setNuevoCliente({ ...nuevoCliente, condicionIva: Number(e.target.value) })}>{COND_IVA_CLIENTE.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
               <input style={inputStyle} placeholder="Dirección" value={nuevoCliente.direccion} onChange={(e) => setNuevoCliente({ ...nuevoCliente, direccion: e.target.value })} />
               <input style={inputStyle} placeholder="Teléfono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({ ...nuevoCliente, telefono: e.target.value })} />
               <input style={inputStyle} placeholder="Email" value={nuevoCliente.email} onChange={(e) => setNuevoCliente({ ...nuevoCliente, email: e.target.value })} />
-              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } const nuevo = { id: uid(), nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); guardarClienteServidor({ guardar: nuevo }); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setCcClienteSel(nuevo.id); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
+              <button onClick={() => { if (!nuevoCliente.nombre.trim()) { setToast({ tipo: "error", texto: "Poné el nombre del cliente." }); return; } if (Number(nuevoCliente.condicionIva || 5) !== 5 && String(nuevoCliente.cuit || "").replace(/[^0-9]/g, "").length !== 11) { setToast({ tipo: "error", texto: "Para un cliente " + nombreCondIva(nuevoCliente.condicionIva) + " cargá el CUIT de 11 números." }); return; } const nuevo = { id: uid(), condicionIva: Number(nuevoCliente.condicionIva) || 5, nombre: nuevoCliente.nombre.trim(), cuit: nuevoCliente.cuit.trim(), direccion: nuevoCliente.direccion.trim(), telefono: nuevoCliente.telefono.trim(), email: nuevoCliente.email.trim() }; setConfig((prev) => ({ ...prev, clientes: [...(prev.clientes || []), nuevo] })); guardarClienteServidor({ guardar: nuevo }); setOrden((o) => ({ ...o, datos: { ...o.datos, cliente: nuevo.nombre, direccion: nuevo.direccion, telefono: nuevo.telefono, cuit: nuevo.cuit } })); setNuevoCliente({ nombre: "", cuit: "", direccion: "", telefono: "", email: "" }); setShowNuevoClienteModal(false); setCcClienteSel(nuevo.id); setToast({ tipo: "ok", texto: "Cliente agregado y seleccionado." }); }} className="w-full py-2.5 rounded-lg font-semibold text-sm mt-1" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}>Guardar y seleccionar</button>
               <button onClick={() => setShowNuevoClienteModal(false)} className="w-full py-2 rounded-lg text-sm" style={{ background: C.base, border: "1px solid " + C.border, color: C.muted }}>Cancelar</button>
             </div>
           </div>

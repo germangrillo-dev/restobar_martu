@@ -1114,9 +1114,14 @@ app.post("/api/afip/facturar", async (req, res) => {
     const accessToken = data.accessToken || cfg.afipAccessToken || "";
     delete data.accessToken;
     const o = afipOpts(cfg);
+    // Condicion frente al IVA del receptor: la que viene, o la del cliente cargado con ese CUIT/DNI, o Consumidor Final
+    const cli = data.cliente || {};
+    const docCli = String(cli.cuit || "").replace(/[^0-9]/g, "");
+    const delListado = docCli ? (Array.isArray(cfg.clientes) ? cfg.clientes : []).find((c) => String(c.cuit || "").replace(/[^0-9]/g, "") === docCli) : null;
+    data.condicionIvaReceptor = Number(cli.condicionIva) || Number(delListado && delListado.condicionIva) || 5;
     const result = await afip.facturar(data, o.produccion, accessToken, o);
     console.log("[AFIP] Factura", result.cbteTipo === 11 ? "C" : result.cbteTipo, o.produccion ? "REAL" : "PRUEBA", "PV", result.ptoVenta, "Nro", result.cbteNro, "CAE", result.cae);
-    res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta, cbteTipo: result.cbteTipo, produccion: result.produccion, fecha: result.fecha, total: result.total, cuit: result.cuit });
+    res.json({ ok: true, cae: result.cae, vencimiento: result.vencimiento, cbteNro: result.cbteNro, ptoVenta: result.ptoVenta, cbteTipo: result.cbteTipo, produccion: result.produccion, fecha: result.fecha, total: result.total, cuit: result.cuit, docTipo: result.docTipo, docNro: result.docNro, condicionIva: result.condicionIva });
   } catch (e) {
     console.error("[AFIP] Error facturando:", e.message);
     res.json({ ok: false, error: e.message });
@@ -1173,7 +1178,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     if (afipData && afipData.cae) {
       try {
         const f = String(afipData.fecha || "");
-        const j = { ver: 1, fecha: /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10), cuit: Number(afipData.cuit) || 27213414475, ptoVta: Number(afipData.ptoVenta) || 2, tipoCmp: Number(afipData.cbteTipo) || 11, nroCmp: Number(afipData.cbteNro) || 0, importe: Number(afipData.total) || Number(total) || 0, moneda: "PES", ctz: 1, tipoDocRec: 99, nroDocRec: 0, tipoCodAut: "E", codAut: Number(afipData.cae) };
+        const j = { ver: 1, fecha: /^\d{8}$/.test(f) ? f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8) : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10), cuit: Number(afipData.cuit) || 27213414475, ptoVta: Number(afipData.ptoVenta) || 2, tipoCmp: Number(afipData.cbteTipo) || 11, nroCmp: Number(afipData.cbteNro) || 0, importe: Number(afipData.total) || Number(total) || 0, moneda: "PES", ctz: 1, tipoDocRec: Number(afipData.docTipo) || 99, nroDocRec: Number(afipData.docNro) || 0, tipoCodAut: "E", codAut: Number(afipData.cae) };
         afipQrImg = await require("qrcode").toDataURL("https://www.afip.gob.ar/fe/qr/?p=" + Buffer.from(JSON.stringify(j)).toString("base64"), { margin: 1, width: 240 });
       } catch (e) { console.warn("[QR] factura:", e.message); }
       afipHtml = `<div style="border-top:1px dashed #ccc;margin-top:12px;padding-top:8px;font-size:11px;color:#555">
@@ -1184,6 +1189,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
         <div>Pto Venta: ${afipData.ptoVenta || "2"}</div>
         <div>CUIT: ${cuit}</div>
         <div>Régimen: Monotributo</div>
+        <div>A ${({ 1: "IVA Responsable Inscripto", 4: "IVA Exento", 6: "Responsable Monotributo", 7: "Sujeto no categorizado", 10: "IVA Liberado", 15: "IVA No Alcanzado" })[Number(afipData.condicionIva)] || "Consumidor Final"}</div>
         ${afipQrImg ? `<div style="text-align:center;margin-top:8px"><img src="${afipQrImg}" style="width:120px;height:120px"></div><div style="text-align:center">Comprobante autorizado por ARCA</div>` : ""}
       </div>`;
     }

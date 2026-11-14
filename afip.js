@@ -96,9 +96,13 @@ async function facturar(data, produccion, accessToken, opts = {}) {
   } = data;
 
   const cuitLimpio = (cliente.cuit || "").replace(/[^0-9]/g, "");
-  const finalDocTipo = cuitLimpio ? 80 : 99;
-  const finalDocNro = cuitLimpio ? parseInt(cuitLimpio, 10) : 0;
-  const finalCondicionIva = 5; // Consumidor Final
+  // 11 digitos = CUIT/CUIL (80); 7-8 digitos = DNI (96); sin documento = consumidor final anonimo (99)
+  const finalDocTipo = cuitLimpio.length === 11 ? 80 : (cuitLimpio.length >= 7 && cuitLimpio.length <= 8 ? 96 : 99);
+  const finalDocNro = finalDocTipo === 99 ? 0 : parseInt(cuitLimpio, 10);
+  // Condicion frente al IVA del receptor (RG 5616): 5 Consumidor Final, 4 IVA Exento, 6 Monotributo, 1 Resp. Inscripto, 7 No categorizado, 10 Liberado, 15 No alcanzado
+  const condValidas = [1, 4, 5, 6, 7, 10, 13, 15, 16];
+  const finalCondicionIva = condValidas.includes(Number(condicionIvaReceptor)) ? Number(condicionIvaReceptor) : 5;
+  if (finalCondicionIva !== 5 && finalDocTipo !== 80) throw new Error("Para facturar a un cliente que no es Consumidor Final hace falta su CUIT (11 números).");
 
   const total = items.reduce((a, it) => a + (it.precio || 0) * (it.cant || 1), 0);
   // Los precios de la carta son finales (IVA incluido). Factura C: sin IVA discriminado (neto = total).
@@ -170,7 +174,7 @@ async function facturar(data, produccion, accessToken, opts = {}) {
 
   if (resultado === "A" && cae) {
     console.log("[AFIP] CAE:", cae, "Vto:", vto, "Nro:", nextNum);
-    return { cae, vencimiento: vto, cbteNro: nextNum, ptoVenta: puntoVenta, cbteTipo, produccion: !!produccion, fecha, total: impTotal, cuit };
+    return { cae, vencimiento: vto, cbteNro: nextNum, ptoVenta: puntoVenta, cbteTipo, produccion: !!produccion, fecha, total: impTotal, cuit, docTipo: finalDocTipo, docNro: finalDocNro, condicionIva: finalCondicionIva };
   }
 
   throw new Error("AFIP rechazó: " + (errMsg || resultado || response.substring(0, 300)));
