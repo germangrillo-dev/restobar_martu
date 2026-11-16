@@ -183,6 +183,9 @@ function initDB() {
   try { getDB().exec("ALTER TABLE movimientos ADD COLUMN editado_ts INTEGER DEFAULT 0"); } catch {}
   // Facturas de compra: guardar tambien insumo, subtotal y unitario de cada item
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN insumo TEXT DEFAULT ''"); } catch {}
+  // Pagos de facturas de compra: JSON [{id, fecha, monto, medio, nota}] (NULL = factura vieja, sin dato de pago)
+  try { getDB().exec("ALTER TABLE facturas ADD COLUMN pagos TEXT"); } catch {}
+  try { getDB().exec("ALTER TABLE facturas ADD COLUMN vence TEXT DEFAULT ''"); } catch {}
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN subtotal REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN unitario REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE movimientos ADD COLUMN cambios TEXT DEFAULT ''"); } catch {}
@@ -686,10 +689,26 @@ function agregarFactura(f) {
   const d = getDB();
   d.transaction(() => {
     d.prepare("DELETE FROM factura_items WHERE factura_id = ?").run(f.id);
-    d.prepare("INSERT OR REPLACE INTO facturas (id, proveedor, tipo, numero, fecha, total) VALUES (?, ?, ?, ?, ?, ?)").run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0);
+    d.prepare("INSERT OR REPLACE INTO facturas (id, proveedor, tipo, numero, fecha, total, pagos, vence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0, Array.isArray(f.pagos) ? JSON.stringify(f.pagos) : null, f.vence || "");
     const insI = d.prepare("INSERT INTO factura_items (factura_id, desc, bulto, cantidad, ingreso, insumo_un, insumo, subtotal, unitario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const i of (f.items || [])) insI.run(f.id, i.desc || "", i.bulto || "", i.cantidad || 0, i.ingreso || 0, i.insumoUn || "", i.insumo || "", i.subtotal || 0, i.unitario || 0);
   })();
+}
+// Agregar / borrar un pago de una factura de compra (o marcarla "sin pagos" = pendiente)
+function ajustarPagoFactura(id, { agregar, borrar, vence } = {}) {
+  const d = getDB();
+  let out = null;
+  d.transaction(() => {
+    const r = d.prepare("SELECT pagos FROM facturas WHERE id = ?").get(id);
+    if (!r) throw new Error("No existe la factura");
+    let pagos = []; try { pagos = JSON.parse(r.pagos || "[]") || []; } catch { pagos = []; }
+    if (agregar && agregar.id && !pagos.some((p) => p.id === agregar.id)) pagos.push(agregar);
+    if (borrar) pagos = pagos.filter((p) => p.id !== borrar);
+    d.prepare("UPDATE facturas SET pagos = ? WHERE id = ?").run(JSON.stringify(pagos), id);
+    if (vence !== undefined) d.prepare("UPDATE facturas SET vence = ? WHERE id = ?").run(vence || "", id);
+    out = pagos;
+  })();
+  return out;
 }
 function borrarFactura(id) {
   const d = getDB();
@@ -734,7 +753,8 @@ function getFacturas() {
     const items = getDB().prepare("SELECT * FROM factura_items WHERE factura_id = ?").all(f.id);
     return {
       id: f.id, proveedor: f.proveedor, tipo: f.tipo, numero: f.numero,
-      fecha: f.fecha, total: f.total,
+      fecha: f.fecha, total: f.total, vence: f.vence || "",
+      pagos: f.pagos == null ? null : (() => { try { const p = JSON.parse(f.pagos); return Array.isArray(p) ? p : []; } catch { return []; } })(),
       items: items.map(i => ({ desc: i.desc, bulto: i.bulto, cantidad: i.cantidad, ingreso: i.ingreso, insumoUn: i.insumo_un, insumo: i.insumo || undefined, subtotal: i.subtotal || 0, unitario: i.unitario || 0 }))
     };
   });
@@ -743,12 +763,12 @@ function getFacturas() {
 function saveFacturas(facturas) {
   const delF = getDB().prepare("DELETE FROM facturas");
   const delI = getDB().prepare("DELETE FROM factura_items");
-  const insF = getDB().prepare("INSERT INTO facturas (id, proveedor, tipo, numero, fecha, total) VALUES (?, ?, ?, ?, ?, ?)");
+  const insF = getDB().prepare("INSERT INTO facturas (id, proveedor, tipo, numero, fecha, total, pagos, vence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   const insI = getDB().prepare("INSERT INTO factura_items (factura_id, desc, bulto, cantidad, ingreso, insumo_un, insumo, subtotal, unitario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   const tx = getDB().transaction((list) => {
     delF.run(); delI.run();
     for (const f of list) {
-      insF.run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0);
+      insF.run(f.id, f.proveedor || "", f.tipo || "", f.numero || "", f.fecha || "", f.total || 0, Array.isArray(f.pagos) ? JSON.stringify(f.pagos) : null, f.vence || "");
       for (const i of (f.items || [])) insI.run(f.id, i.desc || "", i.bulto || "", i.cantidad || 0, i.ingreso || 0, i.insumoUn || "", i.insumo || "", i.subtotal || 0, i.unitario || 0);
     }
   });
@@ -795,7 +815,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes, ajustarNotas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, ajustarPagoFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,

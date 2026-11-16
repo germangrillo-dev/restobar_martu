@@ -389,6 +389,11 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [facturas, setFacturas] = useState(() => []);
   const [fac, setFac] = useState({ provId: "", tipo: TIPOS_FAC[0], numero: "", fecha: hoy(), conIva: false, items: [lineaVacia()] });
   const [facExpanded, setFacExpanded] = useState(null);
+  // Pagos de facturas de compra
+  const MEDIOS_PAGO_FAC = ["Efectivo de la caja del turno", "Efectivo aparte (fuera de caja)", "Transferencia", "Cheque", "Tarjeta", "Mercado Pago", "Lo pagó el dueño", "Otro"];
+  const [facPagoCarga, setFacPagoCarga] = useState({ medio: "Pendiente", vence: "" });
+  const [facFiltro, setFacFiltro] = useState({ prov: "", desde: "", hasta: "", estado: "todas", q: "" });
+  const [pagoFac, setPagoFac] = useState(null); // { facId, fecha, monto, medio, nota, egresoCaja }
   const [mesas, setMesas] = useState(() => ({}));
   const [deliveries, setDeliveries] = useState(() => { try { const saved = localStorage.getItem("elmo_deliveries"); if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed.filter((d) => d.fecha === hoy()); } } catch {} return []; });
   const [vista, setVista] = useState("mapa");
@@ -1285,19 +1290,56 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const calcItem = (it) => { const a = it.codigo ? artByCodigo[it.codigo] : null; const cantB = numDec(it.cantidad) || 0, unit = numDec(it.unitario) || 0, bruto = cantB * unit * (fac.precioPorUnidad && a ? (a.factor || 1) : 1), desc = (fac.dctoPct || esPorcentaje(it.descuento)) ? bruto * ((numDec(it.descuento) || 0) / 100) : (numDec(it.descuento) || 0), internos = numDec(it.internos) || 0; const base = bruto - desc, neto = (esA && fac.conIva) ? (base - internos) / 1.21 : base, ivaL = esA ? neto * 0.21 : 0, sub = neto + internos + ivaL, ingreso = a ? cantB * a.factor : 0; return { a, cantB, unit, desc, internos, neto, ivaL, sub, ingreso }; };
   const tot = fac.items.reduce((acc, it) => { const c = calcItem(it); return { neto: acc.neto + c.neto, internos: acc.internos + c.internos, iva: acc.iva + c.ivaL, total: acc.total + c.sub }; }, { neto: 0, internos: 0, iva: 0, total: 0 });
   const provSel = proveedores.find((p) => p.id === fac.provId);
+  const pagadoFac = (f) => (f.pagos || []).reduce((a, p) => a + (Number(p.monto) || 0), 0);
+  const saldoFac = (f) => Math.max(0, (Number(f.total) || 0) - pagadoFac(f));
+  const estadoFac = (f) => f.pagos == null ? "sin dato" : saldoFac(f) <= 0.5 ? "pagada" : pagadoFac(f) > 0 ? "parcial" : "pendiente";
+  // Egreso en la caja abierta por un pago de factura en efectivo de caja
+  const egresoPorFactura = (concepto, monto) => {
+    const egId = uid();
+    cajaDirtyUntilRef.current = Date.now() + 10000;
+    const prevCaja = cajaRef.current || caja;
+    const nuevaCaja = { ...prevCaja, movimientos: [...(prevCaja.movimientos || []), { id: egId, tipo: "egreso", concepto, monto, metodo: "Efectivo", hora: hora(), usuario: usuario?.nombre || "" }] };
+    cajaRef.current = nuevaCaja; setCaja(nuevaCaja);
+    setTimeout(() => postAlServer(nuevaCaja, mesasRef.current, deliveriesRef.current), 100);
+    return egId;
+  };
+  const registrarPagoFactura = () => {
+    const f = facturas.find((x) => x.id === pagoFac.facId); if (!f) return;
+    const monto = numDec(pagoFac.monto) || 0;
+    if (!(monto > 0)) { setToast({ tipo: "error", texto: "Poné el monto pagado." }); return; }
+    const deCaja = pagoFac.medio === "Efectivo de la caja del turno" && pagoFac.egresoCaja;
+    if (deCaja && !cajaIniciada) { setToast({ tipo: "error", texto: "No hay caja abierta: elegí otro medio o abrí la caja." }); return; }
+    const pago = { id: uid(), fecha: pagoFac.fecha || hoy(), monto, medio: pagoFac.medio, nota: (pagoFac.nota || "").trim(), usuario: usuario?.nombre || "", ts: Date.now() };
+    if (deCaja) pago.egresoId = egresoPorFactura("Pago factura " + f.proveedor + (f.numero ? " N° " + f.numero : ""), monto);
+    setFacturas((fs) => fs.map((x) => x.id === f.id ? { ...x, pagos: [...(x.pagos || []), pago] } : x));
+    fetch(serverUrl + "/api/facturas/pago", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, agregar: pago }) })
+      .then((r) => r.json()).then((d) => { if (!d || !d.ok) throw new Error(); if (Array.isArray(d.pagos)) setFacturas((fs) => fs.map((x) => x.id === f.id ? { ...x, pagos: d.pagos } : x)); })
+      .catch(() => setToast({ tipo: "error", texto: "No se pudo guardar el pago en el servidor." }));
+    setPagoFac(null);
+    setToast({ tipo: "ok", texto: "Pago de " + pesos(monto) + " registrado" + (deCaja ? " (y egreso en la caja)." : ".") });
+  };
+  const borrarPagoFactura = (f, p) => {
+    if (!window.confirm("¿Borrar el pago de " + pesos(p.monto) + " del " + (p.fecha || "").split("-").reverse().join("/") + "?" + (p.egresoId ? "\n\nEl egreso de caja NO se borra (sacalo desde Caja si hace falta)." : ""))) return;
+    setFacturas((fs) => fs.map((x) => x.id === f.id ? { ...x, pagos: (x.pagos || []).filter((y) => y.id !== p.id) } : x));
+    fetch(serverUrl + "/api/facturas/pago", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, borrar: p.id }) }).catch(() => setToast({ tipo: "error", texto: "No se pudo borrar en el servidor." }));
+  };
   const cargarFactura = () => {
     if (!fac.provId) { setToast({ tipo: "error", texto: "Elegí un proveedor." }); return; }
     const validos = fac.items.filter((it) => it.codigo && (numDec(it.cantidad) || 0) > 0);
     if (validos.length === 0) { setToast({ tipo: "error", texto: "Agregá al menos un artículo con cantidad." }); return; }
+    if (facPagoCarga.medio === "Efectivo de la caja del turno" && !cajaIniciada) { setToast({ tipo: "error", texto: "No hay caja abierta para pagar con efectivo de caja. Elegí otro medio o dejala pendiente." }); return; }
     { const sumar = {}; for (const it of validos) { const c = calcItem(it); if (c.a && c.a.insumo) sumar[c.a.insumo] = +((sumar[c.a.insumo] || 0) + c.ingreso).toFixed(2); } cambiarStock({ sumar }, "factura " + (provSel ? provSel.nombre : "")); }
     { const fijar = {}; for (const it of validos) { const c = calcItem(it); if (c.a && c.a.insumo && c.sub > 0 && c.cantB > 0) fijar[c.a.insumo] = +((c.sub / c.cantB) / c.a.factor).toFixed(4); } if (Object.keys(fijar).length) cambiarCostos(fijar); }
+    const pagado = facPagoCarga.medio !== "Pendiente";
+    const pagos = pagado ? [{ id: uid(), fecha: hoy(), monto: +tot.total.toFixed(2), medio: facPagoCarga.medio, nota: "", usuario: usuario?.nombre || "", ts: Date.now(), ...(facPagoCarga.medio === "Efectivo de la caja del turno" && cajaIniciada ? { egresoId: egresoPorFactura("Pago factura " + provSel.nombre + (fac.numero ? " N° " + fac.numero : ""), +tot.total.toFixed(2)) } : {}) }] : [];
     setFacturas((fs) => {
-      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, subtotal: c.sub, unitario: c.unit, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
+      const nueva = { id: uid(), proveedor: provSel.nombre, tipo: fac.tipo, numero: fac.numero, fecha: fac.fecha, total: tot.total, pagos, vence: pagado ? "" : (facPagoCarga.vence || ""), items: validos.map((it) => { const c = calcItem(it); return { desc: c.a.desc, bulto: c.a.bulto, cantidad: c.cantB, ingreso: c.ingreso, subtotal: c.sub, unitario: c.unit, insumo: c.a.insumo, insumoUn: unidadDe(c.a.insumo) }; }) };
       const nfs = [nueva, ...fs];
       fetch(serverUrl + "/api/facturas/agregar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nueva) }).catch(() => setToast({ tipo: "error", texto: "No se pudo guardar la factura en el servidor." }));
       return nfs;
     });
     setFac({ provId: fac.provId, tipo: fac.tipo, numero: "", fecha: hoy(), conIva: false, items: [lineaVacia()], precioPorUnidad: !!fac.precioPorUnidad, dctoPct: !!fac.dctoPct });
+    setFacPagoCarga({ medio: "Pendiente", vence: "" });
     setToast({ tipo: "ok", texto: validos.length + " artículo(s) cargados. Stock y costos actualizados." });
   };
   const borrarFactura = (id) => {
@@ -2207,32 +2249,73 @@ const cancelarDelivery = (d) => {
 <button onClick={addFacItem} className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: C.base, border: "1px dashed " + C.border, color: C.amber }}><Plus size={15} /> Agregar artículo</button>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>{fac.dctoPct ? <>Bonif.: escribí <b style={{ color: C.amber }}>3</b> para descontar el 3% de esa fila (como en la factura).</> : <>Dcto.: escribí <b style={{ color: C.amber }}>722</b> para descontar $722, o <b style={{ color: C.amber }}>7%</b> para el 7%.</>} {fac.precioPorUnidad ? "Cant. = bultos y el precio es por botella: el sistema multiplica por las unidades del bulto del insumo." : "Cant. = bultos y el precio es el del bulto entero."} Se aceptan comas decimales. Debajo de cada artículo se ve el <b style={{ color: C.amber }}>precio actual al público</b> de los productos que usan ese insumo, con su costo de receta: cambiá el <b>% de ganancia</b> y tocá <b>Poner precio</b> si querés actualizarlo.</div>{esA && <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, color: C.muted, marginTop: 6, cursor: "pointer", lineHeight: 1.5 }}><input type="checkbox" checked={!!fac.conIva} onChange={(e) => setFacCab("conIva", e.target.checked)} style={{ marginTop: 2 }} /> <span><b style={{ color: C.amber }}>Unitario con IVA</b> (como sale en el papel): el sistema saca el neto solo con <b>(cant × unitario − int.) ÷ 1,21</b> y el Total cierra igual que la factura.</span></label>}
               <div className="mt-4 pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid " + C.border }}><div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Neto</span><span>{dinero(tot.neto)}</span></div>{tot.internos > 0 && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>Impuestos internos</span><span>{dinero(tot.internos)}</span></div>}{esA && <div className="flex justify-between" style={{ fontSize: 13, color: C.muted }}><span>IVA 21%</span><span>{dinero(tot.iva)}</span></div>}<div className="flex justify-between items-baseline"><span style={{ fontWeight: 700 }}>Total</span><span style={{ fontWeight: 800, fontSize: 20, color: C.amber }}>{dinero(tot.total)}</span></div></div>
+              <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                <div><label style={{ fontSize: 12, color: C.muted }}>¿Cómo se pagó esta factura?</label><select style={inputStyle} value={facPagoCarga.medio} onChange={(e) => setFacPagoCarga((x) => ({ ...x, medio: e.target.value }))}><option value="Pendiente">Pendiente (se paga después)</option>{MEDIOS_PAGO_FAC.map((m) => <option key={m} value={m}>Pagada: {m}</option>)}</select></div>
+                {facPagoCarga.medio === "Pendiente" ? <div><label style={{ fontSize: 12, color: C.muted }}>Vence (opcional)</label><input type="date" style={inputStyle} value={facPagoCarga.vence} onChange={(e) => setFacPagoCarga((x) => ({ ...x, vence: e.target.value }))} /></div>
+                  : facPagoCarga.medio === "Efectivo de la caja del turno" ? <div style={{ fontSize: 12, color: cajaIniciada ? C.muted : C.red, alignSelf: "end", paddingBottom: 8 }}>{cajaIniciada ? "Se registra el egreso en la caja abierta." : "No hay caja abierta."}</div> : <div />}
+              </div>
               <button onClick={cargarFactura} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-bold mt-3" style={{ background: "#a0785a", color: "#fff", fontWeight: 700 }}><CheckCircle2 size={16} /> Cargar y sumar al stock</button>
             </div>
             <div>
-<h3 style={{ fontWeight: 700, marginBottom: 12 }}>Facturas cargadas</h3>
-{facturas.length === 0 ? (
-  <p style={{ color: C.muted, fontSize: 14 }}>Cargá una factura y la vas a ver acá; el stock se actualiza solo.</p>
+{(() => {
+  const ff = facFiltro;
+  const q = (ff.q || "").toLowerCase().trim();
+  const lista = facturas.filter((f) => (!ff.prov || f.proveedor === ff.prov) && (!ff.desde || (f.fecha || "") >= ff.desde) && (!ff.hasta || (f.fecha || "") <= ff.hasta) && (ff.estado === "todas" || (ff.estado === "impagas" ? ["pendiente", "parcial"].includes(estadoFac(f)) : estadoFac(f) === ff.estado)) && (!q || ((f.numero || "") + " " + (f.proveedor || "") + " " + (f.tipo || "")).toLowerCase().includes(q)))
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  const tTotal = lista.reduce((a, f) => a + (Number(f.total) || 0), 0);
+  const tPag = lista.reduce((a, f) => a + pagadoFac(f), 0);
+  const tPend = lista.filter((f) => f.pagos != null).reduce((a, f) => a + saldoFac(f), 0);
+  const deudaProv = {}; facturas.forEach((f) => { if (f.pagos != null && saldoFac(f) > 0.5) deudaProv[f.proveedor] = (deudaProv[f.proveedor] || 0) + saldoFac(f); });
+  const provs = [...new Set(facturas.map((f) => f.proveedor).filter(Boolean))].sort();
+  const colorEst = { pagada: C.green, parcial: C.amber, pendiente: C.red, "sin dato": C.muted };
+  const hoyS = hoy();
+  return (<>
+<h3 style={{ fontWeight: 800, marginBottom: 8 }}>Facturas de compra</h3>
+<div className="rounded-xl p-3 mb-3 flex flex-col gap-2" style={{ background: C.raised, border: "1px solid " + C.border }}>
+  <div className="grid sm:grid-cols-5 gap-2">
+    <select style={inputStyle} value={ff.prov} onChange={(e) => setFacFiltro((x) => ({ ...x, prov: e.target.value }))}><option value="">Todos los proveedores</option>{provs.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+    <div><input type="date" style={inputStyle} value={ff.desde} onChange={(e) => setFacFiltro((x) => ({ ...x, desde: e.target.value }))} title="Desde" /></div>
+    <div><input type="date" style={inputStyle} value={ff.hasta} onChange={(e) => setFacFiltro((x) => ({ ...x, hasta: e.target.value }))} title="Hasta" /></div>
+    <select style={inputStyle} value={ff.estado} onChange={(e) => setFacFiltro((x) => ({ ...x, estado: e.target.value }))}><option value="todas">Todas</option><option value="impagas">Sin pagar (pendientes y parciales)</option><option value="pendiente">Pendientes</option><option value="parcial">Pagadas en parte</option><option value="pagada">Pagadas</option><option value="sin dato">Sin dato de pago (viejas)</option></select>
+    <input style={inputStyle} placeholder="N° de factura..." value={ff.q} onChange={(e) => setFacFiltro((x) => ({ ...x, q: e.target.value }))} />
+  </div>
+  <div className="flex flex-wrap gap-x-5 gap-y-1" style={{ fontSize: 13 }}>
+    <span>{lista.length} factura(s) · Total <b>{dinero(tTotal)}</b></span>
+    <span style={{ color: C.green }}>Pagado <b>{dinero(tPag)}</b></span>
+    <span style={{ color: C.red }}>A pagar <b>{dinero(tPend)}</b></span>
+    {(ff.prov || ff.desde || ff.hasta || ff.estado !== "todas" || ff.q) && <button onClick={() => setFacFiltro({ prov: "", desde: "", hasta: "", estado: "todas", q: "" })} style={{ fontSize: 12, color: C.amber, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Limpiar filtros</button>}
+  </div>
+  {Object.keys(deudaProv).length > 0 && <div style={{ fontSize: 12, color: C.muted }}>Deuda por proveedor: {Object.entries(deudaProv).sort((a, b) => b[1] - a[1]).map(([p, m]) => <button key={p} onClick={() => setFacFiltro((x) => ({ ...x, prov: p, estado: "impagas" }))} style={{ marginRight: 10, color: C.red, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>{p}: {dinero(m)}</button>)}</div>}
+</div>
+{lista.length === 0 ? (
+  <p style={{ color: C.muted, fontSize: 14 }}>{facturas.length ? "Ninguna factura coincide con el filtro." : "Cargá una factura y la vas a ver acá; el stock se actualiza solo."}</p>
 ) : (
   <div style={{ overflowX: "auto", border: "1px solid " + C.border, borderRadius: 8 }}>
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
       <thead><tr style={{ background: C.raised2, color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "6px 8px" }}>Proveedor</th>
         <th style={{ textAlign: "left", padding: "6px 8px", width: 90 }}>Fecha</th>
-        <th style={{ textAlign: "left", padding: "6px 8px", width: 80 }}>Tipo</th>
+        <th style={{ textAlign: "left", padding: "6px 8px", width: 110 }}>Comprobante</th>
         <th style={{ textAlign: "right", padding: "6px 8px", width: 100 }}>Total</th>
-        <th style={{ width: 100 }}></th>
+        <th style={{ textAlign: "left", padding: "6px 8px", width: 130 }}>Pago</th>
+        <th style={{ width: 150 }}></th>
       </tr></thead>
       <tbody>
-        {facturas.map((f) => (
+        {lista.map((f) => { const est = estadoFac(f); const vencida = est !== "pagada" && est !== "sin dato" && f.vence && f.vence < hoyS; return (
           <React.Fragment key={f.id}>
           <tr style={{ borderTop: "1px solid " + C.border }}>
             <td style={{ padding: "6px 8px", fontWeight: 600 }}>{f.proveedor}</td>
-            <td style={{ padding: "6px 8px", color: C.muted }}>{f.fecha}</td>
+            <td style={{ padding: "6px 8px", color: C.muted }}>{(f.fecha || "").split("-").reverse().join("/")}</td>
             <td style={{ padding: "6px 8px", color: C.muted }}>{f.tipo}{f.numero ? " " + f.numero : ""}</td>
             <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: C.text }}>{f.total > 0 ? dinero(f.total) : "—"}</td>
+            <td style={{ padding: "6px 8px" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: colorEst[est], textTransform: "uppercase" }}>{est === "parcial" ? "Pagada en parte" : est}</span>
+              {(est === "pendiente" || est === "parcial") && <div style={{ fontSize: 11, color: vencida ? C.red : C.muted }}>Debe {dinero(saldoFac(f))}{f.vence ? " · vence " + f.vence.split("-").reverse().join("/") + (vencida ? " (VENCIDA)" : "") : ""}</div>}
+              {est === "pagada" && (f.pagos || []).length > 0 && <div style={{ fontSize: 11, color: C.muted }}>{[...new Set(f.pagos.map((p) => p.medio))].join(", ")}</div>}
+            </td>
             <td style={{ padding: "6px 8px", textAlign: "center" }}>
               <span style={{ display: "inline-flex", gap: 4 }}>
+                {est !== "pagada" && <button onClick={() => setPagoFac({ facId: f.id, fecha: hoy(), monto: String(+(f.pagos == null ? f.total : saldoFac(f)).toFixed(2)), medio: "Transferencia", nota: "", egresoCaja: true })} style={{ background: "#a0785a", color: "#fff", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pagar</button>}
                 <button onClick={() => setFacExpanded(facExpanded === f.id ? null : f.id)} style={{ background: C.base, color: C.amber, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   {facExpanded === f.id ? "Cerrar" : "Ver"}
                 </button>
@@ -2242,27 +2325,51 @@ const cancelarDelivery = (d) => {
               </span>
             </td>
           </tr>
-          {facExpanded === f.id && f.items && (
+          {pagoFac && pagoFac.facId === f.id && (
+          <tr style={{ background: C.base }}><td colSpan={6} style={{ padding: "8px 12px" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Registrar pago · {f.proveedor} {f.numero || ""}</div>
+            <div className="grid sm:grid-cols-4 gap-2">
+              <input type="date" max={hoy()} style={inputStyle} value={pagoFac.fecha} onChange={(e) => setPagoFac((x) => ({ ...x, fecha: e.target.value }))} />
+              <input style={inputStyle} inputMode="decimal" placeholder="Monto" value={pagoFac.monto} onChange={(e) => setPagoFac((x) => ({ ...x, monto: e.target.value }))} />
+              <select style={inputStyle} value={pagoFac.medio} onChange={(e) => setPagoFac((x) => ({ ...x, medio: e.target.value }))}>{MEDIOS_PAGO_FAC.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+              <input style={inputStyle} placeholder="Nota (ej: N° de transferencia)" value={pagoFac.nota} onChange={(e) => setPagoFac((x) => ({ ...x, nota: e.target.value }))} />
+            </div>
+            {pagoFac.medio === "Efectivo de la caja del turno" && <label className="flex items-center gap-2 mt-2" style={{ fontSize: 12, fontWeight: 700 }}><input type="checkbox" checked={!!pagoFac.egresoCaja} onChange={(e) => setPagoFac((x) => ({ ...x, egresoCaja: e.target.checked }))} /> Registrar el egreso en la caja abierta {!cajaIniciada && <span style={{ color: C.red }}>(no hay caja abierta)</span>}</label>}
+            <div className="flex gap-2 mt-2"><button onClick={registrarPagoFactura} className="px-4 py-2 rounded-lg text-sm font-bold" style={{ background: "#a0785a", color: "#fff" }}>Guardar pago</button><button onClick={() => setPagoFac(null)} className="px-4 py-2 rounded-lg text-sm" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>Cancelar</button></div>
+          </td></tr>
+          )}
+          {facExpanded === f.id && (
           <tr style={{ background: C.base }}>
-            <td colSpan={5} style={{ padding: "8px 12px" }}>
+            <td colSpan={6} style={{ padding: "8px 12px" }}>
               <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                {f.items.map((it, k) => (
+                {(f.items || []).map((it, k) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span style={{ color: C.muted }}>{numExacto(it.cantidad)} {it.bulto} · {it.desc}</span>
                     <span style={{ color: C.text, fontWeight: 600, whiteSpace: "nowrap" }}>{it.subtotal != null ? dinero(it.subtotal) : ""}</span>
                     <span style={{ color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>+{numExacto(it.ingreso)} {it.insumoUn}</span>
                   </div>
                 ))}
+                <div style={{ marginTop: 6, fontWeight: 800 }}>Pagos</div>
+                {f.pagos == null ? <div style={{ color: C.muted }}>Factura cargada antes de registrar pagos. Si ya está paga, tocá "Pagar" y poné cómo se pagó.</div>
+                  : (f.pagos || []).length === 0 ? <div style={{ color: C.red }}>Sin pagos todavía.</div>
+                  : f.pagos.map((p) => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                      <span>{(p.fecha || "").split("-").reverse().join("/")} · {p.medio}{p.nota ? " · " + p.nota : ""}{p.usuario ? " · " + p.usuario : ""}{p.egresoId ? " (egreso en caja)" : ""}</span>
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><b style={{ color: C.green }}>{dinero(p.monto)}</b><button onClick={() => borrarPagoFactura(f, p)} style={{ color: C.red, background: "none", border: "none", cursor: "pointer" }}><X size={13} /></button></span>
+                    </div>
+                  ))}
+                {f.pagos != null && <div style={{ color: C.muted }}>Pagado {dinero(pagadoFac(f))} · Saldo {dinero(saldoFac(f))}</div>}
               </div>
             </td>
           </tr>
           )}
           </React.Fragment>
-        ))}
+        ); })}
       </tbody>
     </table>
   </div>
 )}
+</>); })()}
 </div>
           </div>
         )}
