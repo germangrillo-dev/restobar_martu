@@ -254,6 +254,23 @@ function ajustarClientes({ guardar, borrar } = {}) {
   return out;
 }
 
+// Bitacora / notas del local: cambios de a uno
+function ajustarNotas({ guardar, borrar } = {}) {
+  const d = getDB();
+  let out = [];
+  d.transaction(() => {
+    let lista = leerConfigLista(d, "notas");
+    if (guardar && guardar.id) {
+      const i = lista.findIndex((n) => n && n.id === guardar.id);
+      if (i >= 0) lista[i] = { ...lista[i], ...guardar }; else lista.push(guardar);
+    }
+    if (borrar) lista = lista.filter((n) => n && n.id !== borrar);
+    d.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('notas', ?)").run(JSON.stringify(lista));
+    out = lista;
+  })();
+  return out;
+}
+
 // ─── Poner ventas y caja en cero (conserva usuarios, config y catálogo) ───
 function resetVentas() {
   const d = getDB();
@@ -776,7 +793,7 @@ function closeDB() {
 
 module.exports = {
   initDB, getDB, closeDB, backupDB,
-  getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes,
+  getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes, ajustarNotas,
   getUsuarios, saveUsuarios,
   getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,

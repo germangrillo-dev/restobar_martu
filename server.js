@@ -621,7 +621,7 @@ app.post("/api/caja", (req, res) => {
     if (config !== undefined && config !== null) {
       // El modo de facturacion (prueba/real) y el punto de venta solo se cambian con /api/afip/config (clave admin)
       // Cuenta corriente y clientes van por /api/cc/movimientos y /api/clientes/ajuste (si no, una pantalla con la lista vieja borraba los cargos de otra)
-      const { afipModo, afipPuntoVenta, cuentaCorriente: _cc, clientes: _cl, ...configResto } = config;
+      const { afipModo, afipPuntoVenta, cuentaCorriente: _cc, clientes: _cl, notas: _nt, ...configResto } = config;
       db.saveConfig(configResto);
       delete MENU_CACHE.html;
     }
@@ -780,6 +780,12 @@ app.get("/api/cc/detalle", (req, res) => {
       detalle[e.id] = d.items.map((it) => ({ nombre: it.nombre, cant: it.cant, precio: it.precio }));
     }
     res.json({ ok: true, detalle });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post("/api/notas/ajuste", (req, res) => {
+  try {
+    const { guardar, borrar } = req.body || {};
+    res.json({ ok: true, notas: db.ajustarNotas({ guardar, borrar }) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.post("/api/clientes/ajuste", (req, res) => {
