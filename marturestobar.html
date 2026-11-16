@@ -1057,6 +1057,21 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   const [ccConcepto, setCcConcepto] = useState("");
   const [ccMedio, setCcMedio] = useState("Efectivo");
   const [ccCarga, setCcCarga] = useState(null); // consumo a cargar en cuenta corriente: { items, q, libreNombre, libreMonto, fecha, nota }
+  // Quitar un item ya enviado a cocina (cargado por error): avisa a cocina y pregunta si devolver los insumos
+  const quitarEnviado = (mesaId, idx, cant) => {
+    const l = (mesas[mesaId]?.enviado || [])[idx];
+    if (!l) return;
+    const nombre = prodById[l.pid]?.nombre || l.nombre || "item";
+    if (!window.confirm("¿Quitar " + cant + " x " + nombre + " de la Mesa " + mesaId + "?")) return;
+    const rec = prodById[l.pid]?.receta || [];
+    if (rec.length && window.confirm("¿Devolver los insumos al stock?\n\nAceptar = sí (no se llegó a preparar)\nCancelar = no (ya se preparó / se tiró)")) {
+      const sumar = {}; for (const [iid, c] of rec) sumar[iid] = (sumar[iid] || 0) + c * cant; cambiarStock({ sumar }, "quitado de mesa " + mesaId);
+    }
+    markMesaDirty(mesaId);
+    setMesas((ms) => { const nm = { ...ms, [mesaId]: { ...ms[mesaId], enviado: (ms[mesaId].enviado || []).map((x, j) => j === idx ? { ...x, cant: x.cant - cant } : x).filter((x) => x.cant > 0) } }; postMesas(nm); return nm; });
+    imprimirTicket("comanda", [{ t: "*** ANULAR ***", bold: true, grande: true }, { t: "MESA " + mesaId, bold: true, grande: true }, { t: hora() + " hs" }, { t: "", rayita: true }, { t: String(cant).padStart(3) + "    " + nombre, izq: true, bold: true, grande: true }, { t: "" }]);
+    setToast({ tipo: "ok", texto: cant + " x " + nombre + " quitado de la Mesa " + mesaId + ". Se avisó a cocina." });
+  };
   const despacharMesa = (id) => { markMesaDirty(id); const nuevasMesas = { ...mesas, [id]: { ...mesas[id], despachado: [...(mesas[id].despachado || []), ...mesas[id].enviado], enviado: [] } }; setMesas(nuevasMesas); setToast({ tipo: "ok", texto: "Mesa " + id + " despachada." }); postMesas(nuevasMesas); };
 
   // ABM Insumos
@@ -1999,7 +2014,9 @@ const cancelarDelivery = (d) => {
                         <div className="flex flex-col gap-1">{mesas[orden.mesaId].enviado.map((l, i) => (
                           <div key={i} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ flex: 1 }}>{l.cant}x {prodById[l.pid]?.nombre || "—"}{l.nota ? <span style={{ color: C.muted, fontStyle: "italic" }}> ({l.nota})</span> : ""}</span>
-                            <span style={{ color: C.muted, fontWeight: 700 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                            <span style={{ color: C.muted, fontWeight: 700, marginRight: 6 }}>{pesos((prodById[l.pid]?.precio || 0) * l.cant)}</span>
+                            {!esVisor && l.cant > 1 && <button title="Quitar uno" onClick={() => quitarEnviado(orden.mesaId, i, 1)} className="w-6 h-6 rounded flex items-center justify-center" style={{ background: C.raised2, color: C.muted, border: "1px solid " + C.border, cursor: "pointer", marginRight: 2 }}>−</button>}
+                            {!esVisor && <button title="Quitar de la mesa" onClick={() => quitarEnviado(orden.mesaId, i, l.cant)} className="w-5 h-5 rounded flex items-center justify-center" style={{ background: "transparent", color: C.red, border: "none", cursor: "pointer" }}><X size={14} /></button>}
                           </div>
                         ))}</div>
                       </div>
