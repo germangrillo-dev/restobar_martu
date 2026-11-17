@@ -810,6 +810,93 @@ app.post("/api/caja/mover-movimientos", (req, res) => {
     res.json({ ok: true, movidos: n });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ─── Mercado Pago Point (API Orders): cobrar con el lector ───
+// Credenciales en data/mercadopago.json { accessToken, terminalId } (data/ no se toca al actualizar). El token nunca va al navegador.
+const MP_FILE = path.join(__dirname, "data", "mercadopago.json");
+function mpConfig() { try { return JSON.parse(fs.readFileSync(MP_FILE, "utf8")) || {}; } catch { return {}; } }
+function mpGuardar(c) { fs.mkdirSync(path.dirname(MP_FILE), { recursive: true }); fs.writeFileSync(MP_FILE, JSON.stringify(c, null, 2)); }
+function mpApi(method, url, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const { accessToken } = mpConfig();
+    if (!accessToken) return reject(new Error("Mercado Pago no está configurado (falta el Access Token en Config → Mercado Pago)."));
+    const data = body ? JSON.stringify(body) : null;
+    const h = { Authorization: "Bearer " + accessToken, "Content-Type": "application/json", ...headers };
+    if (method === "POST") h["X-Idempotency-Key"] = require("crypto").randomUUID();
+    if (data) h["Content-Length"] = Buffer.byteLength(data);
+    const req = require("https").request({ hostname: "api.mercadopago.com", path: url, method, headers: h, timeout: 15000 }, (r) => {
+      let txt = ""; r.on("data", (c) => (txt += c)); r.on("end", () => {
+        let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch {}
+        if (r.statusCode >= 400) return reject(new Error("Mercado Pago: " + ((j.errors && j.errors[0] && (j.errors[0].message || j.errors[0].code)) || j.message || j.error || r.statusCode)));
+        resolve(j);
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Mercado Pago no respondió (timeout).")));
+    req.on("error", reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+function esAdminClave(clave) { let admins = (db.getUsuarios() || []).filter((u) => u.rol === "admin"); if (!admins.length) admins = [{ clave: "1234" }]; return admins.some((u) => String(u.clave) === String(clave || "")); }
+const mpCobros = new Map(); // id orden MP -> { monto, desc, estado, ts }
+app.get("/api/mp/estado", (req, res) => { const c = mpConfig(); res.json({ ok: true, configurado: !!(c.accessToken && c.terminalId), tieneToken: !!c.accessToken, tokenFin: c.accessToken ? String(c.accessToken).slice(-4) : "", terminalId: c.terminalId || "" }); });
+app.post("/api/mp/config", (req, res) => {
+  try {
+    const { clave, accessToken, terminalId } = req.body || {};
+    if (!esAdminClave(clave)) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    const c = mpConfig();
+    if (accessToken !== undefined && String(accessToken).trim()) c.accessToken = String(accessToken).trim();
+    if (terminalId !== undefined) c.terminalId = String(terminalId || "").trim();
+    mpGuardar(c);
+    console.log("[MP] Configuración guardada (terminal " + (c.terminalId || "-") + ")");
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get("/api/mp/terminales", async (req, res) => {
+  try { const r = await mpApi("GET", "/terminals/v1/list"); res.json({ ok: true, terminalId: mpConfig().terminalId || "", terminales: (r.data && r.data.terminals) || [] }); }
+  catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.post("/api/mp/terminal/modo", async (req, res) => {
+  try {
+    const { clave, id, modo } = req.body || {};
+    if (!esAdminClave(clave)) return res.status(403).json({ ok: false, error: "Clave de administrador incorrecta." });
+    await mpApi("PATCH", "/terminals/v1/setup", { terminals: [{ id, operating_mode: modo === "STANDALONE" ? "STANDALONE" : "PDV" }] });
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.post("/api/mp/cobrar", async (req, res) => {
+  try {
+    const { monto, descripcion } = req.body || {};
+    const m = Math.round((Number(monto) || 0) * 100) / 100;
+    if (!(m > 0)) return res.json({ ok: false, error: "Monto inválido." });
+    const { terminalId } = mpConfig();
+    if (!terminalId) return res.json({ ok: false, error: "Falta elegir el lector en Config → Mercado Pago." });
+    const o = await mpApi("POST", "/v1/orders", {
+      type: "point",
+      external_reference: ("martu-" + Date.now()).replace(/[^\w-]/g, ""),
+      expiration_time: "PT5M",
+      transactions: { payments: [{ amount: m.toFixed(2) }] },
+      config: { point: { terminal_id: terminalId } },
+      description: String(descripcion || "Martu Restobar").slice(0, 150),
+    });
+    mpCobros.set(o.id, { monto: m, desc: descripcion || "", estado: "pendiente", ts: Date.now() });
+    console.log("[MP] Cobro enviado al lector:", o.id, m, descripcion || "");
+    res.json({ ok: true, id: o.id });
+  } catch (e) { console.error("[MP] cobrar:", e.message); res.json({ ok: false, error: e.message }); }
+});
+app.get("/api/mp/cobro/:id", async (req, res) => {
+  try {
+    const o = await mpApi("GET", "/v1/orders/" + encodeURIComponent(req.params.id));
+    const pay = (o.transactions && o.transactions.payments && o.transactions.payments[0]) || {};
+    const pagado = o.status === "processed" || pay.status === "processed" || pay.status === "approved";
+    const estado = pagado ? "pagado" : ["canceled", "expired", "failed", "refunded"].includes(o.status) ? (o.status === "expired" ? "vencido" : o.status === "failed" ? "rechazado" : "cancelado") : "pendiente";
+    const reg = mpCobros.get(req.params.id); if (reg) reg.estado = estado;
+    res.json({ ok: true, estado, detalle: o.status_detail || o.status || "", pagoId: pay.reference_id || pay.id || "", medio: (pay.payment_method && (pay.payment_method.type || pay.payment_method.id)) || "", monto: Number(pay.amount || (reg && reg.monto) || 0) });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.post("/api/mp/cobro/:id/cancelar", async (req, res) => {
+  try { await mpApi("POST", "/v1/orders/" + encodeURIComponent(req.params.id) + "/cancel", null, { "x-allow-cancelable-status": "at_terminal" }); const reg = mpCobros.get(req.params.id); if (reg) reg.estado = "cancelado"; res.json({ ok: true }); }
+  catch (e) { res.json({ ok: false, error: e.message }); }
+});
 app.post("/api/stock/ajuste", (req, res) => {
   try {
     const { sumar, fijar, borrar, reemplazar, motivo } = req.body || {};

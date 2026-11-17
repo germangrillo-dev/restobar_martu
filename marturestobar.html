@@ -1070,6 +1070,50 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
   // Buscador de clientes (Config → Clientes y los selectores de cliente)
   const [buscaCli, setBuscaCli] = useState("");
   const [buscaCliSel, setBuscaCliSel] = useState("");
+  // ── Mercado Pago Point: cobrar con el lector ──
+  const [mpEstado, setMpEstado] = useState({ configurado: false });
+  const [mpCobro, setMpCobro] = useState(null); // { id, estado, monto, desc, error, pagoId }
+  const [mpCfg, setMpCfg] = useState({ token: "", terminales: null, terminalId: "", cargando: false, error: "" });
+  const cargarMpEstado = () => fetch(serverUrl + "/api/mp/estado").then((r) => r.json()).then((d) => { if (d && d.ok) setMpEstado(d); }).catch(() => {});
+  React.useEffect(() => { cargarMpEstado(); }, []);
+  const cobrarConLector = async (monto, desc) => {
+    setMpCobro({ id: null, estado: "enviando", monto, desc });
+    try {
+      const r = await fetch(serverUrl + "/api/mp/cobrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monto, descripcion: desc }) }).then((x) => x.json());
+      if (!r.ok) { setMpCobro({ estado: "error", monto, desc, error: r.error || "No se pudo enviar al lector." }); return; }
+      setMpCobro({ id: r.id, estado: "pendiente", monto, desc });
+    } catch (e) { setMpCobro({ estado: "error", monto, desc, error: "Sin conexión con el servidor." }); }
+  };
+  React.useEffect(() => {
+    if (!mpCobro || mpCobro.estado !== "pendiente" || !mpCobro.id) return;
+    const t = setInterval(async () => {
+      try {
+        const d = await fetch(serverUrl + "/api/mp/cobro/" + encodeURIComponent(mpCobro.id)).then((x) => x.json());
+        if (!d.ok) return;
+        if (d.estado === "pagado") { setMpCobro((c) => c && c.id === mpCobro.id ? { ...c, estado: "pagado", pagoId: d.pagoId, medio: d.medio } : c); setCobroRef("MP " + (d.pagoId || mpCobro.id)); setToast({ tipo: "ok", texto: "✅ Pago aprobado en el lector: " + pesos(mpCobro.monto) + ". Ahora elegí ticket / factura." }); }
+        else if (d.estado !== "pendiente") setMpCobro((c) => c && c.id === mpCobro.id ? { ...c, estado: d.estado } : c);
+      } catch {}
+    }, 3000);
+    return () => clearInterval(t);
+  }, [mpCobro && mpCobro.id, mpCobro && mpCobro.estado]);
+  // Al cerrar el cobro: si el lector quedo esperando, se cancela; si ya cobro, se avisa
+  React.useEffect(() => {
+    if (showCobroModal || showPagoDelivery || !mpCobro) return;
+    if (mpCobro.estado === "pendiente" || mpCobro.estado === "enviando") { if (mpCobro.id) fetch(serverUrl + "/api/mp/cobro/" + encodeURIComponent(mpCobro.id) + "/cancelar", { method: "POST" }).catch(() => {}); }
+    setMpCobro(null);
+  }, [!!showCobroModal, !!showPagoDelivery]);
+  const cancelarLector = async () => { if (mpCobro && mpCobro.id) { try { await fetch(serverUrl + "/api/mp/cobro/" + encodeURIComponent(mpCobro.id) + "/cancelar", { method: "POST" }); } catch {} } setMpCobro(null); };
+  // Boton / estado del lector dentro del cobro (mesa o delivery)
+  const lectorMP = (monto, desc) => {
+    if (!mpEstado.configurado) return null;
+    const c = mpCobro && mpCobro.desc === desc ? mpCobro : null;
+    if (!c) return <button type="button" onClick={() => cobrarConLector(monto, desc)} className="w-full py-3 rounded-lg font-bold" style={{ background: "#009ee3", color: "#fff" }}>📟 Cobrar {pesos(monto)} con el lector</button>;
+    const box = (bg, txt, extra) => <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: bg, border: "1px solid " + C.border, fontSize: 13 }}><div style={{ fontWeight: 700 }}>{txt}</div>{extra}</div>;
+    if (c.estado === "enviando") return box("#e6f6fd", "Enviando " + pesos(c.monto) + " al lector…");
+    if (c.estado === "pendiente") return box("#e6f6fd", "📟 Esperando el pago en el lector (" + pesos(c.monto) + ")… Pasá la tarjeta o el QR.", <button type="button" onClick={cancelarLector} className="py-2 rounded-lg text-sm font-bold" style={{ background: "#fff", color: C.red, border: "1px solid " + C.red }}>Cancelar cobro en el lector</button>);
+    if (c.estado === "pagado") return box("#e8f7ec", "✅ Pago aprobado " + pesos(c.monto) + (c.pagoId ? " · operación " + c.pagoId : "") + ". Elegí ticket o factura abajo para terminar.");
+    return box("#fdecec", (c.estado === "error" ? "⚠️ " + (c.error || "Error") : c.estado === "vencido" ? "⌛ El cobro venció en el lector (5 min)." : c.estado === "rechazado" ? "❌ Pago rechazado." : "Cobro cancelado."), <button type="button" onClick={() => cobrarConLector(monto, desc)} className="py-2 rounded-lg text-sm font-bold" style={{ background: "#009ee3", color: "#fff" }}>Reintentar</button>);
+  };
   const normTxt = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const cliFiltrados = (q) => { const n = normTxt(q).trim(); const lista = [...(config.clientes || [])].sort((a, b) => normTxt(a.nombre).localeCompare(normTxt(b.nombre))); if (!n) return lista; const nd = n.replace(/[^0-9]/g, ""); return lista.filter((c) => normTxt(c.nombre).includes(n) || (nd && (String(c.cuit || "").replace(/[^0-9]/g, "").includes(nd) || String(c.telefono || "").replace(/[^0-9]/g, "").includes(nd)))); };
   const [ccConcepto, setCcConcepto] = useState("");
@@ -2401,6 +2445,40 @@ const cancelarDelivery = (d) => {
 
         {/* PROVEEDORES (ABM) */}
         {/* NOTAS DEL LOCAL */}
+        {activeTab === "config" && configModal === "mp" && (() => {
+          const pedirClave = () => window.prompt("Clave de administrador");
+          const buscarLectores = async () => { setMpCfg((x) => ({ ...x, cargando: true, error: "" })); try { const d = await fetch(serverUrl + "/api/mp/terminales").then((r) => r.json()); if (!d.ok) setMpCfg((x) => ({ ...x, cargando: false, error: d.error })); else setMpCfg((x) => ({ ...x, cargando: false, terminales: d.terminales, terminalId: x.terminalId || d.terminalId || (d.terminales[0] && d.terminales[0].id) || "" })); } catch { setMpCfg((x) => ({ ...x, cargando: false, error: "Sin conexión con el servidor." })); } };
+          const guardar = async (datos) => { const clave = pedirClave(); if (clave == null) return; const d = await fetch(serverUrl + "/api/mp/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave, ...datos }) }).then((r) => r.json()).catch(() => ({ ok: false, error: "Sin conexión" })); if (!d.ok) { setToast({ tipo: "error", texto: d.error || "No se pudo guardar." }); return false; } setToast({ tipo: "ok", texto: "Guardado." }); cargarMpEstado(); return true; };
+          const modo = async (id, m) => { const clave = pedirClave(); if (clave == null) return; const d = await fetch(serverUrl + "/api/mp/terminal/modo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave, id, modo: m }) }).then((r) => r.json()).catch(() => ({ ok: false, error: "Sin conexión" })); if (!d.ok) setToast({ tipo: "error", texto: d.error || "No se pudo cambiar el modo." }); else { setToast({ tipo: "ok", texto: m === "PDV" ? "Lector en modo integrado (PDV). Reinicialo si te lo pide." : "Lector en modo normal (independiente)." }); buscarLectores(); } };
+          return (
+          <div onMouseDown={cerrarSiFondo(() => setConfigModal(null))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl p-5 max-h-[92vh] overflow-y-auto flex flex-col gap-3" style={{ background: C.base, border: "1px solid " + C.border }}>
+            <div className="flex items-center justify-between"><h3 style={{ fontWeight: 800, fontSize: 17, color: "#000" }}>📟 Mercado Pago Point (lector)</h3><button onClick={() => setConfigModal(null)} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button></div>
+            <div className="rounded-lg p-3" style={{ background: mpEstado.configurado ? "#e8f7ec" : "#fff6e5", fontSize: 13 }}>{mpEstado.configurado ? "✅ Listo: al cobrar con Tarjeta o Mercado Pago aparece el botón “Cobrar con el lector”." : "Falta configurar: " + (!mpEstado.tieneToken ? "Access Token" : "elegir el lector") + "."}{mpEstado.tieneToken && <div style={{ color: C.muted, fontSize: 12 }}>Token cargado (termina en …{mpEstado.tokenFin}){mpEstado.terminalId ? " · Lector: " + mpEstado.terminalId : ""}</div>}</div>
+            <div><label style={{ fontSize: 12, color: C.muted }}>1. Access Token de producción (Mercado Pago Developers → Tus integraciones → Credenciales de producción)</label>
+              <div className="flex gap-2"><input type="password" autoComplete="off" style={{ ...inputStyle, flex: 1 }} placeholder={mpEstado.tieneToken ? "Ya cargado — pegá uno nuevo solo para cambiarlo" : "APP_USR-…"} value={mpCfg.token} onChange={(e) => setMpCfg((x) => ({ ...x, token: e.target.value }))} /><button onClick={async () => { if (!mpCfg.token.trim()) return; if (await guardar({ accessToken: mpCfg.token.trim() })) setMpCfg((x) => ({ ...x, token: "" })); }} className="px-3 rounded-lg text-sm font-bold" style={{ background: "#a0785a", color: "#fff" }}>Guardar</button></div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Se guarda solo en el servidor del local (no se muestra en las pantallas ni se sube a internet).</div></div>
+            <div><label style={{ fontSize: 12, color: C.muted }}>2. Elegí el lector</label>
+              <button onClick={buscarLectores} disabled={!mpEstado.tieneToken || mpCfg.cargando} className="w-full py-2 rounded-lg text-sm font-bold" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text, opacity: mpEstado.tieneToken ? 1 : .5 }}>{mpCfg.cargando ? "Buscando…" : "Buscar lectores de la cuenta"}</button>
+              {mpCfg.error && <div style={{ color: C.red, fontSize: 12, marginTop: 4 }}>{mpCfg.error}</div>}
+              {mpCfg.terminales && (mpCfg.terminales.length === 0 ? <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>No hay lectores vinculados a esta cuenta. Vinculalo desde la app de Mercado Pago (Point) y volvé a buscar.</div> :
+                <div className="flex flex-col gap-2 mt-2">{mpCfg.terminales.map((t) => (
+                  <div key={t.id} className="rounded-lg p-2" style={{ background: C.raised, border: "1px solid " + (mpEstado.terminalId === t.id ? "#009ee3" : C.border), fontSize: 12 }}>
+                    <div style={{ fontWeight: 700 }}>{t.id}</div>
+                    <div style={{ color: C.muted }}>Modo: {t.operating_mode === "PDV" ? "integrado (PDV) — recibe cobros del sistema" : "normal (independiente)"}</div>
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      {mpEstado.terminalId !== t.id && <button onClick={() => guardar({ terminalId: t.id })} className="px-2 py-1 rounded text-xs font-bold" style={{ background: "#009ee3", color: "#fff" }}>Usar este lector</button>}
+                      {t.operating_mode !== "PDV" ? <button onClick={() => modo(t.id, "PDV")} className="px-2 py-1 rounded text-xs font-bold" style={{ background: C.base, border: "1px solid " + C.border }}>Pasar a modo integrado (PDV)</button>
+                        : <button onClick={() => { if (window.confirm("En modo normal el lector deja de recibir cobros del sistema (se cobra a mano en el lector). ¿Seguro?")) modo(t.id, "STANDALONE"); }} className="px-2 py-1 rounded text-xs" style={{ background: C.base, border: "1px solid " + C.border }}>Volver a modo normal</button>}
+                    </div>
+                  </div>))}</div>)}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted }}>Para que el sistema le mande el cobro, el lector tiene que estar en <b>modo integrado (PDV)</b>. En ese modo el monto lo pone el sistema: no se puede cobrar escribiendo el importe a mano en el lector. Si en algún momento querés usarlo solo, volvelo a modo normal.</div>
+          </div>
+          </div>
+          );
+        })()}
+
         {activeTab === "config" && configModal === "notas" && (() => {
           const todas = [...(config.notas || [])].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.ts || 0) - (a.ts || 0));
           const q = (buscaNota || "").toLowerCase().trim();
@@ -2594,6 +2672,10 @@ const cancelarDelivery = (d) => {
                }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                  <Printer size={24} />
                  <span style={{ fontSize: 13, fontWeight: 600 }}>Menú A4</span>
+               </button>
+               <button onClick={() => { setConfigModal("mp"); cargarMpEstado(); setMpCfg({ token: "", terminales: null, terminalId: "", cargando: false, error: "" }); }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
+                 <span style={{ fontSize: 22 }}>📟</span>
+                 <span style={{ fontSize: 13, fontWeight: 600 }}>Mercado Pago</span>
                </button>
                <button onClick={() => setConfigModal("notas")} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl" style={{ background: C.raised, border: "1px solid " + C.border, color: C.text }}>
                  <NotebookIc size={24} />
@@ -3666,6 +3748,7 @@ const cancelarDelivery = (d) => {
               </div>
             ) : (cobroMetodo === "Transferencia" || cobroMetodo === "Tarjeta crédito" || cobroMetodo === "Tarjeta débito" || cobroMetodo === "Mercado Pago") ? (
               <div className="flex flex-col gap-3">
+                {cobroMetodo !== "Transferencia" && lectorMP(mesaTotal(showCobroModal.id), "Mesa " + showCobroModal.id)}
                 <input autoFocus style={inputStyle} placeholder="N° comprobante" value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
                 {campoNeto(cobroMetodo, mesaTotal(showCobroModal.id), cobroNeto, setCobroNeto)}
                 <div className="flex flex-col gap-2">
@@ -3826,6 +3909,7 @@ const cancelarDelivery = (d) => {
               </div>
             ) : (showPagoDelivery._metodoSeleccionado === "Transferencia" || showPagoDelivery._metodoSeleccionado === "Tarjeta crédito" || showPagoDelivery._metodoSeleccionado === "Tarjeta débito" || showPagoDelivery._metodoSeleccionado === "Mercado Pago") ? (
               <div className="flex flex-col gap-3">
+                {showPagoDelivery._metodoSeleccionado !== "Transferencia" && lectorMP(showPagoDelivery.total, "Delivery " + (showPagoDelivery.cliente || ""))}
                 <input autoFocus style={inputStyle} placeholder={showPagoDelivery._metodoSeleccionado === "Transferencia" ? "N° comprobante / operación" : "N° comprobante"} value={cobroRef} onChange={(e) => setCobroRef(e.target.value)} />
                 {campoNeto(showPagoDelivery._metodoSeleccionado, showPagoDelivery.total, cobroNeto, setCobroNeto)}
                 <div className="flex flex-col gap-2">
