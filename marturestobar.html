@@ -341,6 +341,8 @@ function App() {
     if (!initialSyncDoneRef.current) return;
     const cfg = configRef.current || config;
     const configLiviano = cfg ? { nombreLocal: cfg.nombreLocal, logo: cfg.logo, direccion: cfg.direccion, destinoComanda: cfg.destinoComanda, destinoFacturacion: cfg.destinoFacturacion, nombresDestinos: cfg.nombresDestinos, enviarBebidas: cfg.enviarBebidas, githubToken: cfg.githubToken, afipAccessToken: cfg.afipAccessToken, publicUrl: cfg.publicUrl, qrUrl: cfg.qrUrl, visorPin: cfg.visorPin, backupDriveDir: cfg.backupDriveDir, impresoras: cfg.impresoras, categorias: cfg.categorias, mesas: cfg.mesas } : undefined;
+    // Hora real en que se cargo cada movimiento (si se manda tarde, el servidor lo ubica en la caja de ese momento)
+    if (cajaVal && Array.isArray(cajaVal.movimientos)) cajaVal.movimientos.forEach((m) => { if (m && !m.ts) m.ts = Date.now(); });
     const mesasLimpias = mesasVal ? Object.fromEntries(Object.entries(mesasVal).filter(([id]) => !dirtyMesasRef.current.has(id))) : mesasVal;
     // Las mesas ya no viajan aca (cada pantalla mandaba su copia de TODAS las mesas y podia pisar pedidos de otra): van solo por /api/mesas
     const payload = { caja: cajaVal, historialCierres, orden, config: configLiviano, facturaXNum, productos };

@@ -586,7 +586,17 @@ app.post("/api/caja", (req, res) => {
               const otra = db.getSesionPorFechaTurno(caja.fecha, caja.turno);
               if (otra && otra.id !== serverCaja.id) { destino = otra.id; console.log("[POST /api/caja] Pantalla con caja vieja (" + caja.fecha + " " + caja.turno + "): movimientos a sesión", destino); }
             }
-            for (const mov of caja.movimientos) db.addMovimiento(destino, mov);
+            // Mejor todavia: si el movimiento trae la hora real en que se cargo (ts) y es de antes de que se abriera
+            // la caja actual, va a la caja que estaba abierta en ese momento
+            const actSes = db.getSesion(serverCaja.id);
+            for (const mov of caja.movimientos) {
+              let dst = destino;
+              if (mov && mov.ts && actSes && actSes.abierta_ts && Number(mov.ts) < actSes.abierta_ts - 30000) {
+                const ses = db.getSesionEnMomento(Number(mov.ts));
+                if (ses && ses.id !== serverCaja.id) { dst = ses.id; console.log("[POST /api/caja] Movimiento de antes de abrir esta caja (" + new Date(Number(mov.ts)).toLocaleString("es-AR") + "): va a la sesión", dst); }
+              }
+              db.addMovimiento(dst, mov);
+            }
             console.log("[POST /api/caja] Sync", caja.movimientos.length, "movimientos a sesión", destino);
           }
           if (caja.arqueo && caja.fecha && caja.turno && serverCaja.fecha !== undefined && (caja.fecha !== serverCaja.fecha || caja.turno !== serverCaja.turno)) caja.arqueo = null;

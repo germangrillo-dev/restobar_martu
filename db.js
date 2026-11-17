@@ -185,6 +185,9 @@ function initDB() {
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN insumo TEXT DEFAULT ''"); } catch {}
   // Pagos de facturas de compra: JSON [{id, fecha, monto, medio, nota}] (NULL = factura vieja, sin dato de pago)
   try { getDB().exec("ALTER TABLE facturas ADD COLUMN pagos TEXT"); } catch {}
+  // Hora real (ms) de apertura y cierre de cada caja: para ubicar movimientos que llegan tarde (pantalla sin conexion)
+  try { getDB().exec("ALTER TABLE caja_sesiones ADD COLUMN abierta_ts INTEGER"); } catch {}
+  try { getDB().exec("ALTER TABLE caja_sesiones ADD COLUMN cerrada_ts INTEGER"); } catch {}
   try { getDB().exec("ALTER TABLE facturas ADD COLUMN vence TEXT DEFAULT ''"); } catch {}
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN subtotal REAL DEFAULT 0"); } catch {}
   try { getDB().exec("ALTER TABLE factura_items ADD COLUMN unitario REAL DEFAULT 0"); } catch {}
@@ -329,8 +332,8 @@ function getCaja() {
 function createCaja(sesion) {
   getDB().prepare("UPDATE caja_sesiones SET activa = 0 WHERE activa = 1").run();
   const result = getDB().prepare(
-    "INSERT INTO caja_sesiones (fecha, turno, usuario, apertura, arqueo, activa) VALUES (?, ?, ?, ?, ?, 1)"
-  ).run(sesion.fecha, sesion.turno || "", sesion.usuario || "", sesion.apertura || 0, JSON.stringify(sesion.arqueo || {}));
+    "INSERT INTO caja_sesiones (fecha, turno, usuario, apertura, arqueo, activa, abierta_ts) VALUES (?, ?, ?, ?, ?, 1, ?)"
+  ).run(sesion.fecha, sesion.turno || "", sesion.usuario || "", sesion.apertura || 0, JSON.stringify(sesion.arqueo || {}), Date.now());
   return result.lastInsertRowid;
 }
 
@@ -414,14 +417,20 @@ function moverMovimientos(ids, sesionId) {
   return n;
 }
 // Caja cerrada con esa fecha y turno (para movimientos de una pantalla que se quedo con la caja anterior)
+// Caja que estaba abierta en ese momento (ms). null si no se sabe (cajas viejas sin hora de apertura)
+function getSesionEnMomento(ts) {
+  if (!ts) return null;
+  return getDB().prepare("SELECT * FROM caja_sesiones WHERE abierta_ts IS NOT NULL AND abierta_ts <= ? ORDER BY abierta_ts DESC LIMIT 1").get(ts) || null;
+}
+function getSesion(id) { return getDB().prepare("SELECT * FROM caja_sesiones WHERE id = ?").get(id) || null; }
 function getSesionPorFechaTurno(fecha, turno) {
   return getDB().prepare("SELECT * FROM caja_sesiones WHERE fecha = ? AND turno = ? ORDER BY id DESC LIMIT 1").get(fecha, turno || "");
 }
 
 function closeCaja(sesionId, cierre, arqueo, diff) {
   getDB().prepare(
-    "UPDATE caja_sesiones SET cierre = ?, arqueo = ?, diff = ?, fecha_cierre = ?, activa = 0 WHERE id = ?"
-  ).run(cierre, JSON.stringify(arqueo || {}), diff, new Date().toLocaleString("es-AR"), sesionId);
+    "UPDATE caja_sesiones SET cierre = ?, arqueo = ?, diff = ?, fecha_cierre = ?, activa = 0, cerrada_ts = ? WHERE id = ?"
+  ).run(cierre, JSON.stringify(arqueo || {}), diff, new Date().toLocaleString("es-AR"), Date.now(), sesionId);
 }
 
 function deleteCajaSession(id) {
@@ -815,7 +824,7 @@ module.exports = {
   initDB, getDB, closeDB, backupDB,
   getConfig, saveConfig, resetVentas, agregarMovimientosCC, ajustarClientes, ajustarNotas,
   getUsuarios, saveUsuarios,
-  getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, ajustarStock, agregarFactura, ajustarPagoFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
+  getCaja, createCaja, getDeliveriesArchivo, moverMovimientos, getSesionPorFechaTurno, getSesionEnMomento, getSesion, ajustarStock, agregarFactura, ajustarPagoFactura, borrarFactura, ajustarCostos, addMovimiento, deleteMovimiento, getMovimientosBorrados, getMovimientoById, getVentasEliminadas, cambiarMedioMovimiento, closeCaja, deleteCajaSession, getHistorialCierres, updateSesionArqueo,
   getFacturaXNum, setFacturaXNum,
   getMesas, saveMesas, saveMesa,
   getDeliveries, saveDeliveries, deleteDelivery, getDeliveriesBorrados, archivarDeliveries,
