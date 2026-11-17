@@ -1090,7 +1090,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       try {
         const d = await fetch(serverUrl + "/api/mp/cobro/" + encodeURIComponent(mpCobro.id)).then((x) => x.json());
         if (!d.ok) return;
-        if (d.estado === "pagado") { setMpCobro((c) => c && c.id === mpCobro.id ? { ...c, estado: "pagado", pagoId: d.pagoId, medio: d.medio } : c); setCobroRef("MP " + (d.pagoId || mpCobro.id)); setToast({ tipo: "ok", texto: "✅ Pago aprobado en el lector: " + pesos(mpCobro.monto) + ". Ahora elegí ticket / factura." }); }
+        if (d.estado === "pagado") { setMpCobro((c) => c && c.id === mpCobro.id ? { ...c, estado: "pagado", pagoId: d.pagoId, medio: d.medio, neto: d.neto, cargos: d.cargos || [] } : c); setCobroRef("MP " + (d.pagoId || mpCobro.id)); if (d.neto != null && d.neto < mpCobro.monto - 0.009) setCobroNeto(String(d.neto)); setToast({ tipo: "ok", texto: "✅ Pago aprobado en el lector: " + pesos(mpCobro.monto) + (d.neto != null && d.neto < mpCobro.monto ? " (neto " + pesos(d.neto) + ")" : "") + ". Ahora elegí ticket / factura." }); }
         else if (d.estado !== "pendiente") setMpCobro((c) => c && c.id === mpCobro.id ? { ...c, estado: d.estado } : c);
       } catch {}
     }, 3000);
@@ -1111,7 +1111,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const box = (bg, txt, extra) => <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: bg, border: "1px solid " + C.border, fontSize: 13 }}><div style={{ fontWeight: 700 }}>{txt}</div>{extra}</div>;
     if (c.estado === "enviando") return box("#e6f6fd", "Enviando " + pesos(c.monto) + " al lector…");
     if (c.estado === "pendiente") return box("#e6f6fd", "📟 Esperando el pago en el lector (" + pesos(c.monto) + ")… Pasá la tarjeta o el QR.", <button type="button" onClick={cancelarLector} className="py-2 rounded-lg text-sm font-bold" style={{ background: "#fff", color: C.red, border: "1px solid " + C.red }}>Cancelar cobro en el lector</button>);
-    if (c.estado === "pagado") return box("#e8f7ec", "✅ Pago aprobado " + pesos(c.monto) + (c.pagoId ? " · operación " + c.pagoId : "") + ". Elegí ticket o factura abajo para terminar.");
+    if (c.estado === "pagado") return box("#e8f7ec", "✅ Pago aprobado " + pesos(c.monto) + (c.pagoId ? " · operación " + c.pagoId : "") + ". Elegí ticket o factura abajo para terminar.", (c.cargos || []).length > 0 ? <div style={{ fontSize: 12, fontWeight: 400 }}>{c.cargos.map((x, i) => <div key={i} className="flex justify-between"><span>{x.tipo}</span><span>− {pesos(x.monto)}</span></div>)}{c.neto != null && <div className="flex justify-between" style={{ fontWeight: 700, borderTop: "1px solid " + C.border, marginTop: 2 }}><span>Recibís</span><span>{pesos(c.neto)}</span></div>}</div> : (c.neto == null ? <div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>Mercado Pago todavía no informó los cargos; si querés, cargá el neto a mano.</div> : null));
     return box("#fdecec", (c.estado === "error" ? "⚠️ " + (c.error || "Error") : c.estado === "vencido" ? "⌛ El cobro venció en el lector (5 min)." : c.estado === "rechazado" ? "❌ Pago rechazado." : "Cobro cancelado."), <button type="button" onClick={() => cobrarConLector(monto, desc)} className="py-2 rounded-lg text-sm font-bold" style={{ background: "#009ee3", color: "#fff" }}>Reintentar</button>);
   };
   const normTxt = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");

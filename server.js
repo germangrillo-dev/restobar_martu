@@ -890,7 +890,23 @@ app.get("/api/mp/cobro/:id", async (req, res) => {
     const pagado = o.status === "processed" || pay.status === "processed" || pay.status === "approved";
     const estado = pagado ? "pagado" : ["canceled", "expired", "failed", "refunded"].includes(o.status) ? (o.status === "expired" ? "vencido" : o.status === "failed" ? "rechazado" : "cancelado") : "pendiente";
     const reg = mpCobros.get(req.params.id); if (reg) reg.estado = estado;
-    res.json({ ok: true, estado, detalle: o.status_detail || o.status || "", pagoId: pay.reference_id || pay.id || "", medio: (pay.payment_method && (pay.payment_method.type || pay.payment_method.id)) || "", monto: Number(pay.amount || (reg && reg.monto) || 0) });
+    // Pago aprobado: se busca el detalle del pago para saber comision + retenciones y el neto que queda
+    let neto = null, cargos = [];
+    if (pagado && pay.reference_id) {
+      try {
+        const p = await mpApi("GET", "/v1/payments/" + encodeURIComponent(pay.reference_id));
+        const bruto = Number(p.transaction_amount) || Number(pay.amount) || 0;
+        // charges_details (lo que paga el vendedor: comision + retenciones). Si no viene, fee_details (solo comision)
+        const ch = (p.charges_details || []).filter((c) => c.accounts && c.accounts.from === "collector");
+        if (ch.length) ch.forEach((c) => { const m = Number(c.amounts && c.amounts.original) - Number((c.amounts && c.amounts.refunded) || 0); if (m > 0) cargos.push({ tipo: c.type === "fee" ? "Cargo de Mercado Pago" : c.type === "tax" ? "Retención " + String(c.name || "impuesto").replace(/_/g, " ") : (c.name || c.type || "Cargo"), monto: Math.round(m * 100) / 100 }); });
+        else (p.fee_details || []).forEach((f) => { const m = Number(f.amount) || 0; if (m > 0) cargos.push({ tipo: "Cargo de Mercado Pago", monto: m }); });
+        const sumCargos = cargos.reduce((a, c) => a + c.monto, 0);
+        const netoMP = Number(p.transaction_details && p.transaction_details.net_received_amount) || 0;
+        neto = Math.round((cargos.length ? bruto - sumCargos : (netoMP > 0 ? netoMP : bruto)) * 100) / 100;
+        if (!(neto > 0) || neto > bruto) neto = null;
+      } catch (e) { console.error("[MP] detalle de pago:", e.message); }
+    }
+    res.json({ ok: true, estado, detalle: o.status_detail || o.status || "", pagoId: pay.reference_id || pay.id || "", medio: (pay.payment_method && (pay.payment_method.type || pay.payment_method.id)) || "", monto: Number(pay.amount || (reg && reg.monto) || 0), neto, cargos });
   } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 app.post("/api/mp/cobro/:id/cancelar", async (req, res) => {
