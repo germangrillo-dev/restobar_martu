@@ -686,14 +686,17 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
     const comisiones = r2(movs.filter((m) => m.tipo === "venta" && m.metodo !== "Cuenta corriente").reduce((a, m) => a + (Number(m.comision) || 0), 0));
     const egresosEf = sum((m) => m.tipo === "egreso" && esEgresoEfectivo(m));
     const egresosOtros = sum((m) => m.tipo === "egreso" && !esEgresoEfectivo(m));
+    // Egresos pagados por transferencia / Mercado Pago: salen de esa cuenta, se restan de lo que tiene que haber ahi
+    const egresosMedio = {}; MEDIOS_ELEC.forEach((md) => { egresosMedio[md] = sum((m) => m.tipo === "egreso" && medioDeVenta(m) === md); });
     const billetes = r2(BILLETES_ARQ.reduce((a, b) => a + b * (Number(ar[b]) || 0), 0));
     const filas = [{ medio: "Efectivo", sistema: r2(apertura + ventasEf - egresosEf), contado: billetes, manual: true }];
-    MEDIOS_ELEC.forEach((md) => { const manual = ar[md] != null && ar[md] !== ""; const neto = r2(ventasMedio[md] - comMedio[md]); filas.push({ medio: md, sistema: neto, contado: manual ? r2(ar[md]) : neto, manual }); });
+    MEDIOS_ELEC.forEach((md) => { const manual = ar[md] != null && ar[md] !== ""; const neto = r2(ventasMedio[md] - comMedio[md] - egresosMedio[md]); filas.push({ medio: md, sistema: neto, contado: manual ? r2(ar[md]) : neto, manual }); });
+    filas.forEach((f) => { if (egresosMedio[f.medio]) f.egresos = egresosMedio[f.medio]; });
     if (Math.abs(ventasOtros) >= 0.01) filas.push({ medio: "Otros", sistema: ventasOtros, contado: ventasOtros, manual: false });
     filas.forEach((f) => { f.dif = r2(f.contado - f.sistema); f.cuadra = Math.abs(f.dif) < 0.01; });
     const esperado = r2(filas.reduce((a, f) => a + f.sistema, 0));
     const contado = r2(filas.reduce((a, f) => a + f.contado, 0));
-    return { apertura, ventasSinCC, ventasCC, ventasEf, ventasMedio, comMedio, comisiones, egresosEf, egresosOtros, egresos: r2(egresosEf + egresosOtros), billetes, medios: r2(contado - billetes), filas, esperado, contado, dif: r2(contado - esperado), cuadraTodo: filas.every((f) => f.cuadra), resultado: r2(ventasSinCC - comisiones - egresosEf - egresosOtros) };
+    return { apertura, ventasSinCC, ventasCC, ventasEf, ventasMedio, comMedio, comisiones, egresosEf, egresosOtros, egresosMedio, egresos: r2(egresosEf + egresosOtros), billetes, medios: r2(contado - billetes), filas, esperado, contado, dif: r2(contado - esperado), cuadraTodo: filas.every((f) => f.cuadra), resultado: r2(ventasSinCC - comisiones - egresosEf - egresosOtros) };
   };
   // Arqueo final: deja grabados los montos de medios electronicos que se usaron en el control
   const arqueoConMedios = (cj) => { const k = calcControlCierre(cj); const ar = { ...((cj && cj.arqueo) || {}) }; MEDIOS_ELEC.forEach((md) => { const f = k.filas.find((x) => x.medio === md); ar[md] = f ? f.contado : 0; }); return ar; };
@@ -709,7 +712,8 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       { t: "Ventas (sin CC): " + dinero(k.ventasSinCC), izq: true },
       { t: "Cuenta corriente: " + dinero(k.ventasCC), izq: true },
       { t: "Egresos efectivo: " + dinero(k.egresosEf), izq: true },
-      { t: "Egresos transf/otros: " + dinero(k.egresosOtros), izq: true },
+      ...MEDIOS_ELEC.filter((md) => (k.egresosMedio || {})[md] > 0).map((md) => ({ t: "Egresos " + md + ": " + dinero(k.egresosMedio[md]), izq: true })),
+      ...(k.egresosOtros - MEDIOS_ELEC.reduce((a, md) => a + ((k.egresosMedio || {})[md] || 0), 0) > 0.009 ? [{ t: "Egresos otros: " + dinero(k.egresosOtros - MEDIOS_ELEC.reduce((a, md) => a + ((k.egresosMedio || {})[md] || 0), 0)), izq: true }] : []),
       ...(k.comisiones > 0 ? [{ t: "Comisiones tarjeta/MP: " + dinero(k.comisiones), izq: true }] : []),
       { t: "Resultado turno: " + dinero(k.resultado), izq: true, bold: true },
       { t: "", rayita: true },
@@ -3215,7 +3219,8 @@ const cancelarDelivery = (d) => {
                         {controlCaja.ventasCC > 0 && <div className="flex justify-between"><span>Cuenta corriente (no entra plata)</span><span>{dinero(controlCaja.ventasCC)}</span></div>}
                       </div>
                       <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos en efectivo</span><span style={{ color: C.red, fontWeight: 700 }}>{dinero(controlCaja.egresosEf)}</span></div>
-                      {controlCaja.egresosOtros > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos por transferencia/otro</span><span style={{ color: C.muted, fontWeight: 700 }}>{dinero(controlCaja.egresosOtros)}</span></div>}
+                      {MEDIOS_ELEC.map((md) => (controlCaja.egresosMedio || {})[md] > 0 && <div key={"eg" + md} className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos por {md} <span style={{ color: C.muted, fontSize: 11 }}>(se restan de {md})</span></span><span style={{ color: C.red, fontWeight: 700 }}>{dinero(controlCaja.egresosMedio[md])}</span></div>)}
+                      {controlCaja.egresosOtros - MEDIOS_ELEC.reduce((a, md) => a + ((controlCaja.egresosMedio || {})[md] || 0), 0) > 0.009 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 4 }}><span>Egresos otros (no salen de caja)</span><span style={{ color: C.muted, fontWeight: 700 }}>{dinero(controlCaja.egresosOtros - MEDIOS_ELEC.reduce((a, md) => a + ((controlCaja.egresosMedio || {})[md] || 0), 0))}</span></div>}
                       <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
                       <div className="flex justify-between items-center" style={{ fontSize: 13 }}><span style={{ fontWeight: 800 }}>Efectivo que tiene que haber en caja</span><span style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>{dinero((controlCaja.filas.find((f) => f.medio === "Efectivo") || {}).sistema || 0)}</span></div>
                       <div style={{ fontSize: 11, color: C.muted }}>Apertura + ventas en efectivo − egresos en efectivo</div>
@@ -3249,7 +3254,7 @@ const cancelarDelivery = (d) => {
                     <div className="flex justify-between" style={{ fontSize: 13 }}><span>Apertura</span><span>{dinero(controlCaja.apertura)}</span></div>
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Ventas (sin cuenta corriente)</span><span style={{ color: C.green }}>{dinero(controlCaja.ventasSinCC)}</span></div>
                     <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos en efectivo</span><span style={{ color: C.red }}>{dinero(controlCaja.egresosEf)}</span></div>
-                    {controlCaja.egresosOtros > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos por transferencia/otro <span style={{ color: C.muted, fontSize: 11 }}>(no salen de caja)</span></span><span style={{ color: C.muted }}>{dinero(controlCaja.egresosOtros)}</span></div>}
+                    {controlCaja.egresosOtros > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Egresos por transferencia/MP/otro <span style={{ color: C.muted, fontSize: 11 }}>(transferencia y MP se restan de esa cuenta)</span></span><span style={{ color: C.muted }}>{dinero(controlCaja.egresosOtros)}</span></div>}
                     {controlCaja.comisiones > 0 && <div className="flex justify-between" style={{ fontSize: 13, marginTop: 3 }}><span>Comisiones tarjeta / Mercado Pago <span style={{ color: C.muted, fontSize: 11 }}>(no entran a la cuenta)</span></span><span style={{ color: C.red }}>{dinero(controlCaja.comisiones)}</span></div>}
                     <hr style={{ border: "none", borderTop: "1px solid " + C.border, margin: "8px 0" }} />
                     <div className="flex justify-between" style={{ fontSize: 13 }}><span style={{ fontWeight: 700 }}>Esperado (efectivo + medios)</span><span style={{ fontWeight: 800, color: C.text }}>{dinero(controlCaja.esperado)}</span></div>
@@ -4257,10 +4262,10 @@ const cancelarDelivery = (d) => {
               <div><label style={lbl}>Concepto</label><input style={inputStyle} placeholder="Ej: Pan, verduras..." value={egresoConcepto} onChange={(e) => setEgresoConcepto(e.target.value)} autoFocus /></div>
               <div><label style={lbl}>Monto ($)</label><input style={inputStyle} type="text" inputMode="decimal" placeholder="0" value={egresoMonto} onChange={(e) => setEgresoMonto(e.target.value)} /></div>
               <div><label style={lbl}>¿Cómo se pagó?</label>
-                <div className="flex gap-2">{[["Efectivo", "Efectivo de caja"], ["Transferencia", "Transferencia / otro"]].map(([val, txt]) => (
+                <div className="flex gap-2">{[["Efectivo", "Efectivo de caja"], ["Transferencia", "Transferencia"], ["Mercado Pago", "Mercado Pago"], ["Otro", "Otro (no sale de caja)"]].map(([val, txt]) => (
                   <button key={val} type="button" onClick={() => setEgresoMetodo(val)} className="flex-1 py-2 rounded-lg text-sm font-semibold" style={{ background: egresoMetodo === val ? C.red : C.base, color: egresoMetodo === val ? "#fff" : C.text, border: "1px solid " + (egresoMetodo === val ? C.red : C.border) }}>{txt}</button>
                 ))}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{egresoMetodo === "Efectivo" ? "Se descuenta del efectivo de la caja." : "No sale de la caja: no se descuenta del efectivo."}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{egresoMetodo === "Efectivo" ? "Se descuenta del efectivo de la caja." : egresoMetodo === "Otro" ? "No sale de la caja ni de las cuentas del local (ej: lo pagó el dueño)." : "Se descuenta de lo que tiene que haber en " + egresoMetodo + " al cerrar la caja."}</div>
               </div>
               <button onClick={() => {
                 if (!puedeCobrar()) return;
