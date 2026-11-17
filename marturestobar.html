@@ -1050,7 +1050,7 @@ if (cajaAbierta) { payload.cajaIniciada = true; payload.deliveries = deliveriesV
       if (e.tipo === "cargo") {
         l.push({ t: f(e.fecha) + "  " + e.concepto, izq: true, bold: true });
         const its = itemsDeCargo(e);
-        if (its.length) its.forEach((it) => l.push({ t: "  " + it.cant + " x " + it.nombre + "  " + pesos((Number(it.precio) || 0) * (Number(it.cant) || 1)), izq: true }));
+        if (its.length) its.forEach((it) => l.push({ t: String(it.cant).padStart(3) + "   " + it.nombre + "  " + pesos((Number(it.precio) || 0) * (Number(it.cant) || 1)), izq: true }));
         else l.push({ t: "  (sin detalle)", izq: true });
         l.push({ t: "Subtotal: " + pesos(e.monto), izq: true, bold: true });
       } else {
@@ -1851,7 +1851,8 @@ const cancelarDelivery = (d) => {
       ...(m.datos && m.datos.cliente ? [{ t: "Cliente: " + m.datos.cliente, izq: true }] : []),
       { t: "", rayita: true },
     ];
-    items.forEach((it) => { l.push({ t: it.cant + "x " + it.nombre + "  " + pesos(it.precio * it.cant), izq: true }); });
+    l.push(encabTicket(true));
+    items.forEach((it) => { l.push(filaTicket(it.cant, it.nombre, pesos(it.precio * it.cant))); });
     l.push({ t: "", rayita: true });
     if (aCuenta > 0) {
       l.push({ t: "Pendiente: " + pesos(Math.max(0, consumido - pagado)), izq: true });
@@ -1870,6 +1871,9 @@ const cancelarDelivery = (d) => {
     l.push({ t: "" });
     return l;
   };
+  // Renglon de producto en tickets: cantidad en su columna (como la comanda) para no confundir "1x 1/2 Pizza"
+  const filaTicket = (cant, nombre, importe) => ({ t: String(cant).padStart(3) + "   " + nombre + (importe != null ? "  " + importe : ""), izq: true });
+  const encabTicket = (conImporte) => ({ t: "Cant.  Producto" + (conImporte ? "  (importe)" : ""), izq: true, bold: true });
   const lineasComprobante = (m) => {
     if (!m) return [];
     const cfg = config;
@@ -1897,8 +1901,9 @@ const cancelarDelivery = (d) => {
     if (m.cliente) l.push({ t: "Cliente: " + m.cliente, izq: true, bold: true });
     if (m.clienteData && m.clienteData.cuit) l.push({ t: "CUIT: " + m.clienteData.cuit, izq: true });
     if (m.cliente) l.push({ t: "", rayita: true });
+    if ((m.items || []).length) l.push(encabTicket(true));
     (m.items || []).forEach((it) => {
-      l.push({ t: it.cant + "x " + it.nombre + "  " + pesos((it.precio || 0) * (it.cant || 1)), izq: true });
+      l.push(filaTicket(it.cant || 1, it.nombre, pesos((it.precio || 0) * (it.cant || 1))));
     });
     l.push({ t: "", rayita: true });
     l.push({ t: "TOTAL", izq: true, bold: true, grande: true });
@@ -3882,7 +3887,7 @@ const cancelarDelivery = (d) => {
               <div style={{ borderBottom: "1px dashed #ccc", paddingBottom: 6, marginBottom: 6 }}>
                 {(showComprobanteModal.items || []).map((it, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>{it.cant}x {it.nombre}</span>
+                    <span><b style={{ display: "inline-block", minWidth: 26 }}>{it.cant}</b> {it.nombre}</span>
                     <span style={{ fontWeight: 600 }}>{pesos(it.precio * it.cant)}</span>
                   </div>
                 ))}

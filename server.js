@@ -1203,7 +1203,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
     const now = new Date();
     const fecha = now.toLocaleDateString("es-AR");
     const hora = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-    let itemsHtml = (items || []).map(it => `<tr><td style="padding:4px 0">${it.cant || 1}x ${it.nombre}</td><td style="text-align:right;padding:4px 0">$${((it.precio || 0) * (it.cant || 1)).toLocaleString("es-AR")}</td></tr>`).join("");
+    let itemsHtml = (items || []).map(it => `<tr><td style="padding:4px 6px 4px 0;text-align:center;font-weight:bold;width:30px">${it.cant || 1}</td><td style="padding:4px 0">${it.nombre}</td><td style="text-align:right;padding:4px 0">$${((it.precio || 0) * (it.cant || 1)).toLocaleString("es-AR")}</td></tr>`).join("");
     let clienteHtml = "";
     if (cliente || (clienteData && (clienteData.cuit || clienteData.direccion || clienteData.telefono))) {
       clienteHtml = `<div style="margin-bottom:8px;font-size:11px;color:#555">
@@ -1248,7 +1248,7 @@ app.post("/api/whatsapp/comprobante", async (req, res) => {
       <div class="center small" style="margin-bottom:8px">${fecha} ${hora}</div>
       ${clienteHtml}
       <div style="border-top:1px dashed #000;margin:8px 0"></div>
-      <table>${itemsHtml}</table>
+      <table style="width:100%"><tr style="font-size:10px;color:#777"><td style="text-align:center">Cant.</td><td>Producto</td><td style="text-align:right">Importe</td></tr>${itemsHtml}</table>
       <div style="border-top:1px dashed #000;margin:8px 0"></div>
       <table><tr><td class="bold">TOTAL</td><td style="text-align:right;font-weight:700;font-size:15px">$${(total || 0).toLocaleString("es-AR")}</td></tr></table>
       <div class="center small" style="margin-top:4px">Pago: ${metodo || "Efectivo"}</div>
