@@ -549,7 +549,7 @@ app.post("/api/caja", (req, res) => {
   try {
     const { caja, cajaIniciada, historialCierres, mesas, deliveries, config, insumos, stock, costos, proveedores, facturaXNum, usuarios, productos, abrirCaja } = req.body;
     let sinCaja = false;
-    console.log("[POST /api/caja] cajaIniciada:", cajaIniciada, "fecha:", caja?.fecha, "turno:", caja?.turno, "movimientos:", caja?.movimientos?.length || 0);
+    console.log("[POST /api/caja] " + new Date().toLocaleString("es-AR") + " cajaIniciada:", cajaIniciada, "fecha:", caja?.fecha, "turno:", caja?.turno, "movimientos:", caja?.movimientos?.length || 0);
 
     // Caja
     if (caja !== undefined && caja !== null) {
@@ -922,6 +922,17 @@ app.get("/api/mp/cobro/:id", async (req, res) => {
 app.post("/api/mp/cobro/:id/cancelar", async (req, res) => {
   try { await mpApi("POST", "/v1/orders/" + encodeURIComponent(req.params.id) + "/cancel", null, { "x-allow-cancelable-status": "at_terminal" }); const reg = mpCobros.get(req.params.id); if (reg) reg.estado = "cancelado"; res.json({ ok: true }); }
   catch (e) { res.json({ ok: false, error: e.message }); }
+});
+// Diagnostico: ultimas lineas del log del servidor sobre caja (aperturas, cierres, sincronizaciones). Sin datos sensibles.
+app.get("/api/diag/caja-log", (req, res) => {
+  try {
+    const n = Math.min(2000, Number(req.query.n) || 600);
+    const leer = (f) => { try { return fs.readFileSync(path.join(__dirname, "data", f), "utf8").split(/\r?\n/); } catch { return []; } };
+    const lineas = [...leer("servidor-anterior.log"), ...leer("servidor.log")];
+    const ok = /\[POST \/api\/caja\]|\[CAJA\]|Arranca el servidor|Nueva sesi|Caja cerrada|Sync ignorado|Pantalla con caja vieja|Movimiento de antes|listening|Servidor (iniciado|corriendo)/i;
+    const out = lineas.filter((l) => ok.test(l) && !/movimientos: 0$/.test(l)).slice(-n);
+    res.type("text/plain").send(out.join("\n") || "(log vacío o no encontrado)");
+  } catch (e) { res.status(500).send(e.message); }
 });
 app.post("/api/stock/ajuste", (req, res) => {
   try {
